@@ -72,9 +72,13 @@ async function main() {
   }
 }
 
-main().then((r) => {
-  if (r && r.ok === false) process.exit(2);
-}).catch((e) => {
+async function shutdown() { try { await require('./generator/htmlRender').close(); } catch {} }
+
+main().then(async (r) => {
+  await shutdown();
+  process.exit(r && r.ok === false ? 2 : 0);
+}).catch(async (e) => {
   console.error(e);
+  await shutdown();
   process.exit(1);
 });

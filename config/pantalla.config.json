@@ -89,6 +89,9 @@
     "logs": "logs",
     "uploads": "data/uploads"
   },
+  "video": {
+    "fps": 25
+  },
   "ftp": {
     "remoteDir": "/",
     "clearRemoteFirst": false,

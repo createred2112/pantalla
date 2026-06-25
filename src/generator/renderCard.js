@@ -200,4 +200,12 @@ async function renderToFile(card) {
   return file;
 }
 
-module.exports = { renderToBuffer, renderToFile, resolveForEditor };
+// Prepara ctx + plantilla + frame resuelto (para el motor de vídeo).
+function prepare(card) {
+  const tpl = templates.get(card.template);
+  if (typeof tpl.build !== 'function') return null;
+  const ctx = buildCtx(card, tpl);
+  return { ctx, tpl, frame: resolveFrame(card, ctx, tpl) };
+}
+
+module.exports = { renderToBuffer, renderToFile, resolveForEditor, prepare };

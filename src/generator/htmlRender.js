@@ -144,7 +144,8 @@ const AUTOFIT = `
   });
 })();`;
 
-async function renderFrame(card, ctx, tpl, frame) {
+// Construye el HTML completo de un frame (fondo + elementos + logo + fuentes).
+async function buildHtml(card, ctx, tpl, frame, opts = {}) {
   const { W, H } = ctx;
   if (!frame) frame = tpl.build(card, ctx);
   const bg = frame.background || { type: 'solid', color: ctx.theme.bg };
@@ -153,7 +154,7 @@ async function renderFrame(card, ctx, tpl, frame) {
   let bodyBg = '#000';
   if (bg.type === 'photo' && card.photo) {
     const uri = await imgDataUri(card.photo, W, H, 'cover');
-    if (uri) bgHtml = `<img src="${uri}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover"/>`;
+    if (uri) bgHtml = `<img id="bgimg" src="${uri}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover"/>`;
     else bodyBg = bg.color || ctx.theme.bg;
   } else {
     bodyBg = bg.color || ctx.theme.bg;
@@ -163,14 +164,17 @@ async function renderFrame(card, ctx, tpl, frame) {
   for (const el of (frame.elements || [])) parts.push(await elHtml(el, ctx));
   parts.push(await logoHtml(ctx, tpl));
 
-  const html =
-    `<!doctype html><html><head><meta charset="utf-8"><style>` +
+  return `<!doctype html><html><head><meta charset="utf-8"><style>` +
     fontFaceCss() +
     `*{margin:0;padding:0;box-sizing:border-box}html,body{width:${W}px;height:${H}px;overflow:hidden}` +
     `body{background:${bodyBg};position:relative}</style></head><body>` +
     bgHtml + parts.join('') +
     `<script>${AUTOFIT}</script></body></html>`;
+}
 
+async function renderFrame(card, ctx, tpl, frame) {
+  const { W, H } = ctx;
+  const html = await buildHtml(card, ctx, tpl, frame);
   const b = await browser();
   const page = await b.newPage();
   try {
@@ -188,4 +192,4 @@ async function renderFrame(card, ctx, tpl, frame) {
 
 async function close() { if (_browser) { try { await _browser.close(); } catch {} _browser = null; } }
 
-module.exports = { renderFrame, close, invalidateFonts };
+module.exports = { renderFrame, buildHtml, browser, AUTOFIT, close, invalidateFonts };

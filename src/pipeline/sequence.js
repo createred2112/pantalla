@@ -17,7 +17,7 @@ function pad(n) {
 // Resuelve el archivo de origen de una card según su tipo.
 function sourceFile(card) {
   if (card.type === 'generated') {
-    const ext = (cfg.screen.format || 'jpg').toLowerCase().replace('jpeg', 'jpg');
+    const ext = card.video ? 'mp4' : (cfg.screen.format || 'jpg').toLowerCase().replace('jpeg', 'jpg');
     return path.join(paths.output, `${card.id}.${ext}`);
   }
   // image | video: archivo ya listo (del worker de codex o subido a mano)

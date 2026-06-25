@@ -226,6 +226,7 @@ function openEditor(card) {
   $('#edFile').value = card?.file || '';
   $('#edDuration').value = card?.duration || 10;
   $('#edEnabled').checked = card?.enabled !== false;
+  $('#edVideo').checked = card?.video === true;
   $('#edPreview').style.display = 'none';
   $('#edUrl').value = '';
   $('#urlHint').textContent = 'Pega el enlace y rellenamos los campos. Luego edítalos a tu gusto.';
@@ -259,6 +260,7 @@ function collect() {
     file: $('#edFile').value || null,
     duration: Number($('#edDuration').value) || 10,
     enabled: $('#edEnabled').checked,
+    video: $('#edVideo').checked,
   };
 }
 

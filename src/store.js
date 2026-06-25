@@ -45,6 +45,7 @@ function normalize(card) {
     template: card.template || cfg.defaults.template,
     theme: card.theme || null,   // clave de paleta; null = la que trae la plantilla
     layout: card.layout || null, // diseño editado (elementos) de esta cartela; null = el de la plantilla
+    video: card.video === true,  // si true, se genera MP4 animado en vez de JPG
     title: card.title || '',
     subtitle: card.subtitle || '',
     body: card.body || '',
