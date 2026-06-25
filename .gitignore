@@ -14,3 +14,4 @@ data/worker-inbox/
 assets/fonts/.cache/
 assets/fonts/fonts.conf
 data/template-layouts.json
+config/pantalla.config.json

@@ -6,6 +6,13 @@ require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
 const ROOT = path.resolve(__dirname, '..');
 const CONFIG_PATH = path.join(ROOT, 'config', 'pantalla.config.json');
+const CONFIG_DEFAULT = path.join(ROOT, 'config', 'pantalla.config.default.json');
+
+// La config es "viva" (editable desde el panel) y NO está en git. Si no existe
+// (clon nuevo), se crea a partir de la plantilla por defecto.
+if (!fs.existsSync(CONFIG_PATH) && fs.existsSync(CONFIG_DEFAULT)) {
+  fs.copyFileSync(CONFIG_DEFAULT, CONFIG_PATH);
+}
 
 function load() {
   const cfg = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
