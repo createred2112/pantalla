@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Acceso · LA PANTALLA</title>
+<style>
+  :root{--bg:#0b1f3a;--card:#13294b;--line:#244170;--accent:#e2231a;--txt:#eaf0fb;--muted:#9fb2d4}
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
+    font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:var(--txt);padding:20px}
+  .box{width:min(94vw,380px);background:var(--card);border:1px solid var(--line);border-radius:18px;padding:26px}
+  h1{font-size:18px;margin:0 0 2px;letter-spacing:.5px}
+  p.sub{color:var(--muted);font-size:13px;margin:0 0 20px}
+  label{display:block;font-size:12px;color:var(--muted);margin:14px 0 5px}
+  input{width:100%;background:#0a1a30;border:1px solid var(--line);color:var(--txt);border-radius:10px;padding:13px;font:inherit}
+  button{width:100%;margin-top:20px;border:0;border-radius:10px;padding:14px;color:#fff;background:var(--accent);font:inherit;font-weight:700;cursor:pointer}
+  button:active{transform:translateY(1px)}
+  .msg{margin-top:14px;font-size:13px;min-height:18px}
+  .msg.err{color:#ff9bb0}
+  .note{margin-top:18px;font-size:12px;color:var(--muted);background:#0a1a30;border:1px dashed var(--line);border-radius:10px;padding:12px;display:none}
+  code{color:#bfe3ff}
+</style>
+</head>
+<body>
+  <form class="box" id="f">
+    <h1>LA PANTALLA</h1>
+    <p class="sub">Acceso de administradores · gasteizberri</p>
+    <label for="u">Usuario</label>
+    <input id="u" name="user" autocomplete="username" autocapitalize="none" required>
+    <label for="p">Contraseña</label>
+    <input id="p" name="password" type="password" autocomplete="current-password" required>
+    <button type="submit">Entrar</button>
+    <div class="msg" id="msg"></div>
+    <div class="note" id="note">No hay administradores creados todavía. Desde el servidor, ejecuta:<br>
+      <code>npm run admin:add -- usuario contraseña</code></div>
+  </form>
+<script>
+  fetch('/api/whoami').then(r=>r.json()).then(d=>{
+    if(d.authenticated) location.href='/';
+    if(!d.hasAdmins) document.getElementById('note').style.display='block';
+  }).catch(()=>{});
+
+  document.getElementById('f').addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    const msg=document.getElementById('msg'); msg.textContent=''; msg.className='msg';
+    const body={user:document.getElementById('u').value, password:document.getElementById('p').value};
+    try{
+      const r=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+      const d=await r.json();
+      if(r.ok){ location.href='/'; }
+      else { msg.textContent=d.error||'Error'; msg.className='msg err'; }
+    }catch(err){ msg.textContent='Error de conexión'; msg.className='msg err'; }
+  });
+</script>
+</body>
+</html>

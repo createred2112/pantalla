@@ -1,0 +1,15 @@
+node_modules/
+.env
+config/admins.json
+data/.session-secret
+logs/
+output/
+publish/
+preview/
+data/cards.json
+data/uploads/
+data/worker-inbox/
+!data/.gitkeep
+*.zip
+assets/fonts/.cache/
+assets/fonts/fonts.conf

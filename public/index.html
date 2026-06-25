@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PANTALLA · gasteizberri</title>
+<style>
+  :root{
+    --bg:#0b1f3a; --card:#13294b; --line:#244170; --accent:#e2231a;
+    --txt:#eaf0fb; --muted:#9fb2d4; --ok:#2bb673; --warn:#e0a106;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:var(--txt);-webkit-text-size-adjust:100%}
+  header{position:sticky;top:0;z-index:10;background:#081729;border-bottom:1px solid var(--line);
+    padding:12px 14px;display:flex;align-items:center;gap:10px}
+  header h1{font-size:16px;margin:0;flex:1;letter-spacing:.5px}
+  header .dot{width:10px;height:10px;border-radius:50%;background:var(--muted)}
+  main{padding:12px 12px 120px;max-width:680px;margin:0 auto}
+  .bar{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+  button{font:inherit;border:0;border-radius:10px;padding:11px 14px;color:#fff;background:var(--line);cursor:pointer}
+  button.primary{background:var(--accent)}
+  button.ghost{background:transparent;border:1px solid var(--line);color:var(--muted)}
+  button:active{transform:translateY(1px)}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;margin-bottom:12px;overflow:hidden}
+  .card .thumb{width:100%;aspect-ratio:16/9;object-fit:cover;background:#000;display:block}
+  .card .meta{padding:10px 12px}
+  .card .meta .t{font-weight:700;font-size:15px;margin:0 0 2px}
+  .card .meta .s{color:var(--muted);font-size:13px;margin:0}
+  .card .row{display:flex;gap:6px;padding:0 10px 10px;flex-wrap:wrap;align-items:center}
+  .tag{font-size:11px;padding:3px 8px;border-radius:999px;background:#0a3d62;color:#bfe3ff}
+  .tag.worker{background:#3d2a0a;color:#ffd98a}
+  .tag.off{background:#3a1320;color:#ff9bb0}
+  .spacer{flex:1}
+  .iconbtn{padding:8px 10px;background:var(--line)}
+  label{display:block;font-size:12px;color:var(--muted);margin:10px 0 4px}
+  .hint{color:#6f86ad;font-style:italic}
+  input,textarea,select{width:100%;background:#0a1a30;border:1px solid var(--line);color:var(--txt);
+    border-radius:10px;padding:11px;font:inherit}
+  textarea{min-height:70px;resize:vertical}
+  dialog{border:0;border-radius:16px;background:var(--card);color:var(--txt);width:min(94vw,560px);padding:0}
+  dialog::backdrop{background:rgba(0,0,0,.6)}
+  .dlg-h{display:flex;align-items:center;padding:14px;border-bottom:1px solid var(--line)}
+  .dlg-h h2{margin:0;font-size:16px;flex:1}
+  .dlg-b{padding:14px;max-height:70vh;overflow:auto}
+  .dlg-f{display:flex;gap:8px;padding:14px;border-top:1px solid var(--line)}
+  .preview{width:100%;aspect-ratio:16/9;object-fit:contain;background:#000;border-radius:10px;margin-top:8px}
+  .fab{position:fixed;right:16px;bottom:84px;z-index:20;width:56px;height:56px;border-radius:50%;
+    background:var(--accent);font-size:28px;line-height:1;box-shadow:0 6px 18px rgba(0,0,0,.4)}
+  .footbar{position:fixed;left:0;right:0;bottom:0;background:#081729;border-top:1px solid var(--line);
+    padding:12px;display:flex;gap:8px;z-index:15}
+  .footbar button{flex:1}
+  .status{font-size:12px;color:var(--muted);padding:8px 2px}
+  .status b{color:var(--txt)}
+  #log{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;background:#06101f;border:1px solid var(--line);
+    border-radius:10px;padding:10px;max-height:40vh;overflow:auto;white-space:pre-wrap;color:#bcd}
+  .toast{position:fixed;left:50%;bottom:150px;transform:translateX(-50%);background:#000c;border:1px solid var(--line);
+    padding:10px 16px;border-radius:999px;z-index:50;opacity:0;transition:opacity .2s}
+  .toast.show{opacity:1}
+  .empty{text-align:center;color:var(--muted);padding:40px 10px}
+</style>
+</head>
+<body>
+<header>
+  <span class="dot" id="dot"></span>
+  <h1>LA PANTALLA</h1>
+  <span id="who" style="font-size:12px;color:var(--muted)"></span>
+  <button class="ghost" id="btnSettings">Ajustes</button>
+  <button class="ghost" id="btnStatus">Estado</button>
+  <button class="ghost" id="btnLogout" title="Cerrar sesión">Salir</button>
+</header>
+
+<main>
+  <div class="bar">
+    <button class="ghost" id="btnImport">Importar worker</button>
+    <button class="ghost" id="btnRefresh">↻ Refrescar</button>
+  </div>
+  <div id="list"></div>
+  <div class="status" id="statusLine"></div>
+</main>
+
+<button class="fab" id="btnAdd" title="Nueva cartela">＋</button>
+
+<div class="footbar">
+  <button class="ghost" id="btnDry">Probar (sin subir)</button>
+  <button class="primary" id="btnPublish">Publicar a pantalla ▶</button>
+</div>
+
+<!-- Editor -->
+<dialog id="editor">
+  <form method="dialog">
+    <div class="dlg-h"><h2 id="edTitle">Nueva cartela</h2>
+      <button class="ghost" value="cancel">✕</button></div>
+    <div class="dlg-b">
+      <input type="hidden" id="edId">
+      <label>Tipo</label>
+      <select id="edType">
+        <option value="generated">Generada (texto + foto)</option>
+        <option value="image">Imagen lista (jpg/png)</option>
+        <option value="video">Vídeo (mp4)</option>
+      </select>
+
+      <div id="genFields">
+        <label>Plantilla</label>
+        <select id="edTemplate"></select>
+        <label>Tema de color</label>
+        <select id="edTheme"></select>
+        <div id="themeSwatches" style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap"></div>
+        <label>Título <span class="hint" id="hTitle"></span></label><input id="edTitleField" placeholder="Titular">
+        <label>Subtítulo <span class="hint" id="hSubtitle"></span></label><input id="edSubtitle" placeholder="Sección">
+        <label>Texto <span class="hint" id="hBody"></span></label><textarea id="edBody"></textarea>
+        <label>Fecha <span class="hint" id="hDate"></span></label><input id="edDate" placeholder="opcional">
+        <label>Foto de fondo</label>
+        <input type="file" id="edPhotoFile" accept="image/*" capture="environment">
+        <input type="hidden" id="edPhoto">
+      </div>
+
+      <div id="fileFields" style="display:none">
+        <label>Archivo (sube desde el móvil o usa uno del worker)</label>
+        <input type="file" id="edAnyFile" accept="image/*,video/*">
+        <input id="edFile" placeholder="data/worker-inbox/archivo.jpg">
+      </div>
+
+      <label>Duración en pantalla (segundos)</label>
+      <input id="edDuration" type="number" min="1" value="10">
+      <label><input type="checkbox" id="edEnabled" checked style="width:auto;margin-right:8px">Activa</label>
+
+      <img class="preview" id="edPreview" alt="previsualización" style="display:none">
+      <button type="button" class="ghost" id="btnPreview" style="margin-top:8px">👁 Previsualizar</button>
+    </div>
+    <div class="dlg-f">
+      <button class="ghost" value="cancel">Cancelar</button>
+      <button class="primary" type="button" id="btnSave">Guardar</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Ajustes de diseño -->
+<dialog id="settingsDlg">
+  <div class="dlg-h"><h2>Ajustes de diseño</h2><button class="ghost" onclick="settingsDlg.close()">✕</button></div>
+  <div class="dlg-b">
+    <h3 style="margin:4px 0 2px;font-size:14px">Logo</h3>
+    <p class="hint" style="margin:0 0 6px">Sube tu logo en PNG con fondo transparente. Ideal: una versión <b>clara</b> (para fondos oscuros) y una <b>oscura</b> (para fondos claros).</p>
+    <label>Modo</label>
+    <select id="setLogoMode">
+      <option value="image">Imagen (mi logo)</option>
+      <option value="wordmark">Texto "GasteizBerri"</option>
+    </select>
+    <label>Logo claro (para fondos oscuros)</label>
+    <input type="file" id="setLogoLight" accept="image/png,image/*">
+    <img id="setLogoLightPrev" style="height:40px;margin-top:6px;background:#13294b;border-radius:6px;padding:4px;display:none">
+    <label>Logo oscuro (para fondos claros)</label>
+    <input type="file" id="setLogoDark" accept="image/png,image/*">
+    <img id="setLogoDarkPrev" style="height:40px;margin-top:6px;background:#F2F1ED;border-radius:6px;padding:4px;display:none">
+    <label>Tamaño del logo: <span id="setLogoWVal"></span>% de alto</label>
+    <input type="range" id="setLogoW" min="5" max="16" step="1">
+
+    <h3 style="margin:16px 0 2px;font-size:14px">Texto</h3>
+    <label>Tamaño global del texto: <span id="setScaleVal"></span></label>
+    <input type="range" id="setScale" min="0.8" max="1.4" step="0.05">
+    <label>Fuente de titulares</label>
+    <select id="setFontDisplay"></select>
+    <label>Fuente de textos</label>
+    <select id="setFontText"></select>
+
+    <h3 style="margin:16px 0 2px;font-size:14px">Colores (temas)</h3>
+    <div id="setColors"></div>
+
+    <img class="preview" id="setPreview" alt="previsualización" style="display:none">
+    <button type="button" class="ghost" id="btnSetPreview" style="margin-top:8px">👁 Previsualizar</button>
+  </div>
+  <div class="dlg-f">
+    <button class="ghost" onclick="settingsDlg.close()">Cerrar</button>
+    <button class="primary" type="button" id="btnSetSave">Guardar y aplicar</button>
+  </div>
+</dialog>
+
+<!-- Estado -->
+<dialog id="statusDlg">
+  <div class="dlg-h"><h2>Estado y log</h2><button class="ghost" onclick="statusDlg.close()">✕</button></div>
+  <div class="dlg-b">
+    <div id="statusBox" class="status"></div>
+    <div id="log"></div>
+  </div>
+</dialog>
+
+<div class="toast" id="toast"></div>
+
+<script src="app.js"></script>
+</body>
+</html>

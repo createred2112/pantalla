@@ -1,0 +1,97 @@
+{
+  "screen": {
+    "width": 1920,
+    "height": 1080,
+    "format": "jpg",
+    "quality": 90,
+    "background": "#0E0E0E"
+  },
+  "brand": {
+    "name": "gasteizberri",
+    "wordmark": {
+      "a": "Gasteiz",
+      "b": "Berri"
+    },
+    "tagline": "LOCAL EN CLARO",
+    "website": "gasteizberri.com",
+    "fontFamily": "'Oswald', 'Archivo', 'Liberation Sans', Arial, sans-serif",
+    "fontDisplay": "'Anton', 'Oswald', 'Archivo', Arial, sans-serif",
+    "textScale": 1,
+    "logoMode": "wordmark",
+    "logoLight": "",
+    "logoDark": "",
+    "logoWidth": 9
+  },
+  "naming": {
+    "padStart": 2,
+    "separator": "_",
+    "lowercase": true,
+    "prefixWithOrder": true
+  },
+  "defaults": {
+    "duration": 10,
+    "template": "titular",
+    "theme": "azul"
+  },
+  "palette": {
+    "azul": {
+      "bg": "#0066FF",
+      "bg2": "#0066FF",
+      "text": "#FFFFFF",
+      "textMuted": "rgba(255,255,255,0.85)",
+      "accent": "#D6FF00",
+      "accentText": "#0E0E0E",
+      "logoAccent": "#D6FF00"
+    },
+    "rojo": {
+      "bg": "#FF2D2D",
+      "bg2": "#FF2D2D",
+      "text": "#FFFFFF",
+      "textMuted": "rgba(255,255,255,0.9)",
+      "accent": "#0E0E0E",
+      "accentText": "#FFFFFF",
+      "logoAccent": "#FFFFFF"
+    },
+    "lima": {
+      "bg": "#D6FF00",
+      "bg2": "#D6FF00",
+      "text": "#0E0E0E",
+      "textMuted": "rgba(14,14,14,0.72)",
+      "accent": "#0E0E0E",
+      "accentText": "#D6FF00",
+      "logoAccent": "#4F6B00"
+    },
+    "carbon": {
+      "bg": "#0E0E0E",
+      "bg2": "#0E0E0E",
+      "text": "#FFFFFF",
+      "textMuted": "rgba(255,255,255,0.8)",
+      "accent": "#D6FF00",
+      "accentText": "#0E0E0E",
+      "logoAccent": "#D6FF00"
+    },
+    "blanco": {
+      "bg": "#F2F1ED",
+      "bg2": "#F2F1ED",
+      "text": "#0E0E0E",
+      "textMuted": "rgba(14,14,14,0.7)",
+      "accent": "#FF2D2D",
+      "accentText": "#FFFFFF",
+      "logoAccent": "#0E0E0E"
+    }
+  },
+  "paths": {
+    "data": "data/cards.json",
+    "assets": "data/assets",
+    "workerInbox": "data/worker-inbox",
+    "output": "output",
+    "publish": "publish",
+    "logs": "logs",
+    "uploads": "data/uploads"
+  },
+  "ftp": {
+    "remoteDir": "/",
+    "clearRemoteFirst": false,
+    "secure": false
+  }
+}

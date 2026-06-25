@@ -1,0 +1,26 @@
+{
+  "name": "pantalla",
+  "version": "0.1.0",
+  "description": "Motor de cartelería digital para LA PANTALLA (gasteizberri): genera JPGs con texto/foto variables, importa JPGs de otro worker, ordena y renombra la secuencia, y sube por FTP sobreescribiendo. Incluye panel móvil de admin, logs y status.",
+  "type": "commonjs",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "publish": "node src/cli.js publish",
+    "generate": "node src/cli.js generate",
+    "sequence": "node src/cli.js sequence",
+    "upload": "node src/cli.js upload",
+    "import": "node src/cli.js import",
+    "demo": "node src/cli.js demo",
+    "admin:add": "node src/cli.js admin:add",
+    "admin:remove": "node src/cli.js admin:remove",
+    "admin:list": "node src/cli.js admin:list"
+  },
+  "dependencies": {
+    "basic-ftp": "^5.0.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "multer": "^2.0.0",
+    "sharp": "^0.33.4"
+  }
+}
