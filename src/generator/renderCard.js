@@ -130,7 +130,7 @@ function resolveForEditor(card) {
   if (typeof tpl.build !== 'function') return null;
   const ctx = buildCtx(card, tpl);
   const frame = resolveFrame(card, ctx, tpl);
-  return { W: ctx.W, H: ctx.H, template: tpl.id, background: frame.background || { type: 'solid', color: ctx.theme.bg }, elements: frame.elements };
+  return { W: ctx.W, H: ctx.H, template: tpl.id, photo: card.photo || null, fontDisplay: ctx.fontDisplay, fontText: ctx.font, background: frame.background || { type: 'solid', color: ctx.theme.bg }, elements: frame.elements };
 }
 
 async function renderToBuffer(card) {

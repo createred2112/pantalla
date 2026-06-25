@@ -69,6 +69,7 @@ app.use((req, res, next) => {
 app.use(express.static(PUBLIC));
 app.use('/media/uploads', express.static(paths.uploads));
 app.use('/media/inbox', express.static(paths.workerInbox));
+app.use('/fonts', express.static(path.join(__dirname, '..', 'assets', 'fonts')));
 
 // --- Subida de fotos (desde el móvil) ---
 const upload = multer({

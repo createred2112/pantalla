@@ -175,6 +175,7 @@ function render() {
         <button class="iconbtn" data-up="${i}" ${i===0?'disabled':''}>▲</button>
         <button class="iconbtn" data-down="${i}" ${i===cards.length-1?'disabled':''}>▼</button>
         <button class="iconbtn" data-edit="${c.id}">✎</button>
+        ${c.type === 'generated' ? `<button class="iconbtn" data-design="${c.id}" title="Editor de diseño">🎨</button>` : ''}
         <button class="iconbtn" data-del="${c.id}">🗑</button>
       </div>`;
     el.appendChild(div);
@@ -285,6 +286,7 @@ $('#list').addEventListener('click', (e) => {
   if (b.dataset.up != null) move(+b.dataset.up, -1);
   else if (b.dataset.down != null) move(+b.dataset.down, +1);
   else if (b.dataset.edit) openEditor(cards.find(c => c.id === b.dataset.edit));
+  else if (b.dataset.design) location.href = '/editor.html?id=' + b.dataset.design;
   else if (b.dataset.del) {
     if (confirm('¿Eliminar esta cartela?'))
       api('/cards/' + b.dataset.del, { method: 'DELETE' }).then(() => { toast('Eliminada'); load(); });

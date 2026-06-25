@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Editor · LA PANTALLA</title>
+<style>
+  @font-face{font-family:'Anton';font-weight:400;src:url('/fonts/Anton-400.ttf') format('truetype')}
+  @font-face{font-family:'Oswald';font-weight:300;src:url('/fonts/Oswald-300.ttf') format('truetype')}
+  @font-face{font-family:'Oswald';font-weight:400;src:url('/fonts/Oswald-400.ttf') format('truetype')}
+  @font-face{font-family:'Oswald';font-weight:500;src:url('/fonts/Oswald-500.ttf') format('truetype')}
+  @font-face{font-family:'Oswald';font-weight:600;src:url('/fonts/Oswald-600.ttf') format('truetype')}
+  @font-face{font-family:'Oswald';font-weight:700;src:url('/fonts/Oswald-700.ttf') format('truetype')}
+  @font-face{font-family:'Archivo';font-weight:400;src:url('/fonts/Archivo-400.ttf') format('truetype')}
+  @font-face{font-family:'Archivo';font-weight:700;src:url('/fonts/Archivo-700.ttf') format('truetype')}
+  @font-face{font-family:'Archivo';font-weight:800;src:url('/fonts/Archivo-800.ttf') format('truetype')}
+  @font-face{font-family:'Archivo';font-weight:900;src:url('/fonts/Archivo-900.ttf') format('truetype')}
+  :root{--bg:#0b1f3a;--card:#13294b;--line:#244170;--accent:#e2231a;--txt:#eaf0fb;--muted:#9fb2d4}
+  *{box-sizing:border-box}
+  body{margin:0;height:100vh;display:flex;flex-direction:column;font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif;background:#06101f;color:var(--txt);overflow:hidden}
+  header{background:#081729;border-bottom:1px solid var(--line);padding:10px 14px;display:flex;align-items:center;gap:10px}
+  header h1{font-size:15px;margin:0;flex:1}
+  button{font:inherit;border:0;border-radius:9px;padding:9px 13px;color:#fff;background:var(--line);cursor:pointer;font-size:13px}
+  button.primary{background:var(--accent)} button.ghost{background:transparent;border:1px solid var(--line);color:var(--muted)}
+  .wrap{flex:1;display:flex;min-height:0}
+  .stage{flex:1;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#06101f;background-image:linear-gradient(45deg,#0c1a30 25%,transparent 25%,transparent 75%,#0c1a30 75%),linear-gradient(45deg,#0c1a30 25%,transparent 25%,transparent 75%,#0c1a30 75%);background-size:32px 32px;background-position:0 0,16px 16px}
+  #canvasWrap{position:relative;box-shadow:0 8px 40px rgba(0,0,0,.5)}
+  #canvas{position:absolute;top:0;left:0;overflow:hidden;transform-origin:top left}
+  .el{position:absolute;overflow:hidden;outline:1px dashed transparent}
+  .el:hover{outline-color:rgba(255,255,255,.4)}
+  .el.sel{outline:2px solid #2bb6ff}
+  .handle{position:absolute;width:22px;height:22px;background:#2bb6ff;border:2px solid #fff;border-radius:50%;right:-11px;bottom:-11px;cursor:nwse-resize}
+  .panel{width:300px;background:#081729;border-left:1px solid var(--line);padding:14px;overflow:auto}
+  .panel h2{font-size:13px;margin:0 0 10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px}
+  label{display:block;font-size:11px;color:var(--muted);margin:10px 0 3px}
+  input,select{width:100%;background:#0a1a30;border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:8px;font:inherit;font-size:13px}
+  .row{display:flex;gap:6px}.row>div{flex:1}
+  .empty{color:var(--muted);font-size:13px;text-align:center;margin-top:30px}
+  .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#000c;border:1px solid var(--line);padding:9px 16px;border-radius:999px;opacity:0;transition:.2s}
+  .toast.show{opacity:1}
+</style>
+</head>
+<body>
+<header>
+  <h1>Editor de cartela</h1>
+  <span id="hint" style="font-size:12px;color:var(--muted)">cargando…</span>
+  <button class="ghost" id="btnReset">Restablecer</button>
+  <button class="ghost" onclick="location.href='/'">← Volver</button>
+  <button class="primary" id="btnSave">Guardar diseño</button>
+</header>
+<div class="wrap">
+  <div class="stage" id="stage">
+    <div id="canvasWrap"><div id="canvas"></div></div>
+  </div>
+  <div class="panel" id="panel"><div class="empty">Haz clic en un elemento de la cartela para editarlo.</div></div>
+</div>
+<div class="toast" id="toast"></div>
+<script src="editor.js"></script>
+</body>
+</html>
