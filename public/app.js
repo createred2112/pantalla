@@ -140,7 +140,7 @@ $('#btnLogout').addEventListener('click', async () => {
 });
 
 async function load() {
-  api('/whoami').then((w) => { if (w.user) $('#who').textContent = w.user; }).catch(() => {});
+  api('/whoami').then((w) => { $('#who').textContent = (w.user || '') + (w.version ? ' · v' + w.version : ''); }).catch(() => {});
   cards = await api('/cards');
   cards.sort((a, b) => (a.order || 0) - (b.order || 0));
   render();

@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Galería · LA PANTALLA</title>
+<style>
+  :root{--bg:#0b1f3a;--card:#13294b;--line:#244170;--accent:#e2231a;--txt:#eaf0fb;--muted:#9fb2d4}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:var(--txt)}
+  header{position:sticky;top:0;background:#081729;border-bottom:1px solid var(--line);padding:12px 16px;display:flex;align-items:center;gap:12px;z-index:5}
+  header h1{font-size:16px;margin:0;flex:1}
+  a.btn{text-decoration:none;background:var(--line);color:#fff;padding:9px 13px;border-radius:9px;font-size:14px}
+  main{padding:16px;max-width:1100px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px}
+  .cell{background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  .cell .lbl{padding:8px 12px;font-size:13px;display:flex;justify-content:space-between;align-items:center}
+  .cell .lbl b{font-weight:700}
+  .cell .lbl span{color:var(--muted);font-size:11px}
+  .cell img{width:100%;aspect-ratio:16/9;object-fit:contain;background:#000;display:block}
+  .cell img.err{opacity:.25}
+  .note{grid-column:1/-1;color:var(--muted);font-size:13px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Galería de plantillas</h1>
+  <span id="ver" style="color:var(--muted);font-size:12px"></span>
+  <a class="btn" href="/">← Volver al panel</a>
+</header>
+<main id="grid"><div class="note">Generando muestras…</div></main>
+<script>
+const SAMPLES = {
+  titular:{ title:'Vitoria, capital verde de Europa', subtitle:'Ciudad', date:'Hoy' },
+  noticia:{ title:'El tranvía llega al centro', subtitle:'Movilidad', body:'La nueva línea conecta el centro con los barrios del sur.', date:'24 jun' },
+  dato:{ title:'1.240', subtitle:'Personas en las piscinas', body:'Actualizado cada 15 min', date:'13:00' },
+  alerta:{ title:'Corte de tráfico en la Avenida', subtitle:'Tráfico', body:'Desvíos por la calle Dato', date:'Hoy' },
+  evento:{ title:'Kaldearte: Ballet Aéreo', subtitle:'Espectáculo', body:'Plaza de la Virgen Blanca', date:'Sáb 28 · 21:30' },
+  cita:{ title:'Volar sobre la ciudad cambia tu mirada', subtitle:'Iñigo Naya' },
+  clima:{ title:'24ºC', subtitle:'Soleado', body:'Máx 28º · Mín 14º', date:'Hoy' },
+  foto:{ title:'Atardecer sobre la Catedral', subtitle:'Postal', date:'22:00' },
+  agenda:{ title:'Agenda', body:'19:30 | Los Chunguitos Live | Jimmy Jazz\n20:00 | La Tremenda Pasarela | Teatro Félix Petite' },
+  mensaje:{ title:'Vitoria en verde.' },
+};
+async function go(){
+  let cfg;
+  try { cfg = await (await fetch('/api/config')).json(); }
+  catch { location.href='/login'; return; }
+  try { const w = await (await fetch('/api/whoami')).json(); document.getElementById('ver').textContent = w.version?('v'+w.version):''; } catch {}
+  const grid = document.getElementById('grid'); grid.innerHTML='';
+  for (const t of cfg.templates){
+    const cell=document.createElement('div'); cell.className='cell';
+    cell.innerHTML=`<div class="lbl"><b>${t.label}</b><span>${t.id}</span></div><img alt="${t.id}">`;
+    grid.appendChild(cell);
+    const data = Object.assign({ template:t.id }, SAMPLES[t.id]||{ title:'Ejemplo '+t.id });
+    try{
+      const r = await fetch('/api/preview',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+      if(!r.ok) throw 0;
+      cell.querySelector('img').src = URL.createObjectURL(await r.blob());
+    }catch{ cell.querySelector('img').classList.add('err'); }
+  }
+}
+go();
+</script>
+</body>
+</html>

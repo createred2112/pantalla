@@ -50,9 +50,10 @@ app.post('/api/logout', (req, res) => {
 });
 
 // Estado de autenticación / si hay administradores creados.
+const PKG = require('../package.json');
 app.get('/api/whoami', (req, res) => {
   const u = auth.userOf(req);
-  res.json({ authenticated: Boolean(u), user: u ? u.user : null, hasAdmins: auth.hasAdmins() });
+  res.json({ authenticated: Boolean(u), user: u ? u.user : null, hasAdmins: auth.hasAdmins(), version: PKG.version });
 });
 
 // --- Muro de autenticación para todo lo demás ---
