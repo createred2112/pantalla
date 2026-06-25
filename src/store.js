@@ -44,6 +44,7 @@ function normalize(card) {
     type: card.type || 'generated',
     template: card.template || cfg.defaults.template,
     theme: card.theme || null,   // clave de paleta; null = la que trae la plantilla
+    layout: card.layout || null, // diseño editado (elementos) de esta cartela; null = el de la plantilla
     title: card.title || '',
     subtitle: card.subtitle || '',
     body: card.body || '',

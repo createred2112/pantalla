@@ -142,9 +142,9 @@ const AUTOFIT = `
   });
 })();`;
 
-async function renderFrame(card, ctx, tpl) {
+async function renderFrame(card, ctx, tpl, frame) {
   const { W, H } = ctx;
-  const frame = tpl.build(card, ctx);
+  if (!frame) frame = tpl.build(card, ctx);
   const bg = frame.background || { type: 'solid', color: ctx.theme.bg };
 
   let bgHtml = '';

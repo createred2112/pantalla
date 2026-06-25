@@ -78,31 +78,71 @@ function buildWordmark(W, H, theme, hasPhoto, pos) {
   );
 }
 
-async function renderToBuffer(card) {
-  const W = cfg.screen.width;
-  const H = cfg.screen.height;
-  const tpl = templates.get(card.template);
+// Contexto de render (tema, fuentes, logo, foto) compartido por render y editor.
+function buildCtx(card, tpl) {
+  const W = cfg.screen.width, H = cfg.screen.height;
   const useImg = cfg.brand.logoMode !== 'wordmark';
-  const ctx = {
-    W, H,
-    brand: brandCtx(),
-    theme: resolveTheme(card, tpl),
-    font: cfg.brand.fontFamily || 'Arial, sans-serif',           // texto (Oswald)
-    fontDisplay: cfg.brand.fontDisplay || cfg.brand.fontFamily || 'Arial, sans-serif', // titulares (Anton)
+  const theme = resolveTheme(card, tpl);
+  const hasPhoto = Boolean(card.photo) && (tpl.usesPhoto !== false);
+  return {
+    W, H, brand: brandCtx(), theme,
+    font: cfg.brand.fontFamily || 'Arial, sans-serif',
+    fontDisplay: cfg.brand.fontDisplay || cfg.brand.fontFamily || 'Arial, sans-serif',
     lib: templates.lib,
-    // Logo como data-URI por si una plantilla necesita incrustarlo en su SVG (p. ej. agenda).
     logo: {
       light: useImg ? logoDataUri(cfg.brand.logoLight || cfg.brand.logo) : null,
       dark: useImg ? logoDataUri(cfg.brand.logoDark || cfg.brand.logo) : null,
     },
+    hasPhoto,
+    _onDark: hasPhoto || String(theme.text).toLowerCase() === '#ffffff' || tpl.logoOnDark === true,
   };
+}
+
+// Deduce a qué campo (title/subtitle/body/date) corresponde un texto generado.
+function inferBind(el, card) {
+  if (el.type !== 'text' && el.type !== 'chip') return null;
+  for (const f of ['title', 'subtitle', 'body', 'date']) {
+    const v = card[f]; if (!v) continue;
+    if (el.text === v || el.text === String(v).toUpperCase()) return f;
+  }
+  return null;
+}
+
+// Frame resuelto: el diseño editado de la cartela (card.layout) si existe —con el
+// texto refrescado desde los datos actuales—, o el que genera la plantilla.
+function resolveFrame(card, ctx, tpl) {
+  if (card.layout && Array.isArray(card.layout.elements)) {
+    const elements = card.layout.elements.map((e) => {
+      const el = { ...e };
+      if (el.bind && card[el.bind] != null) el.text = el.transform === 'upper' ? String(card[el.bind]).toUpperCase() : String(card[el.bind]);
+      return el;
+    });
+    return { background: card.layout.background, elements };
+  }
+  const frame = tpl.build(card, ctx) || { elements: [] };
+  frame.elements = (frame.elements || []).map((e, i) => Object.assign({ id: 'el' + i, bind: inferBind(e, card) }, e));
+  return frame;
+}
+
+// Resuelve el frame para el editor (sin renderizar): { W, H, background, elements }.
+function resolveForEditor(card) {
+  const tpl = templates.get(card.template);
+  if (typeof tpl.build !== 'function') return null;
+  const ctx = buildCtx(card, tpl);
+  const frame = resolveFrame(card, ctx, tpl);
+  return { W: ctx.W, H: ctx.H, template: tpl.id, background: frame.background || { type: 'solid', color: ctx.theme.bg }, elements: frame.elements };
+}
+
+async function renderToBuffer(card) {
+  const W = cfg.screen.width;
+  const H = cfg.screen.height;
+  const tpl = templates.get(card.template);
+  const ctx = buildCtx(card, tpl);
 
   // Motor HTML/Chromium para plantillas migradas (exportan build()).
   if (typeof tpl.build === 'function') {
-    const hasPhoto = Boolean(card.photo) && (tpl.usesPhoto !== false);
-    ctx.hasPhoto = hasPhoto;
-    ctx._onDark = hasPhoto || String(ctx.theme.text).toLowerCase() === '#ffffff' || tpl.logoOnDark === true;
-    return require('./htmlRender').renderFrame(card, ctx, tpl);
+    const frame = resolveFrame(card, ctx, tpl);
+    return require('./htmlRender').renderFrame(card, ctx, tpl, frame);
   }
 
   // --- Motor SVG/sharp (plantillas aún sin migrar) ---
@@ -155,4 +195,4 @@ async function renderToFile(card) {
   return file;
 }
 
-module.exports = { renderToBuffer, renderToFile };
+module.exports = { renderToBuffer, renderToFile, resolveForEditor };

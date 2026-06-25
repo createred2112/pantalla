@@ -121,6 +121,26 @@ app.put('/api/settings', (req, res) => {
 
 app.get('/api/cards', (req, res) => res.json(store.list()));
 
+// Frame resuelto de una cartela (para el editor visual): elementos posicionados.
+app.get('/api/frame/:id', (req, res) => {
+  const card = store.list().find((c) => c.id === req.params.id);
+  if (!card) return res.status(404).json({ error: 'no existe' });
+  try {
+    const { resolveForEditor } = require('./generator/renderCard');
+    const frame = resolveForEditor(card);
+    if (!frame) return res.status(400).json({ error: 'plantilla no editable' });
+    res.json(frame);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Guardar el diseño editado (layout) de una cartela. null = volver al de la plantilla.
+app.put('/api/cards/:id/layout', (req, res) => {
+  const c = store.update(req.params.id, { layout: req.body && req.body.layout ? req.body.layout : null });
+  if (!c) return res.status(404).json({ error: 'no existe' });
+  log.info('editor', `Layout guardado en ${req.params.id}`);
+  res.json({ ok: true });
+});
+
 app.post('/api/cards', (req, res) => res.json(store.add(req.body)));
 
 app.put('/api/cards/:id', (req, res) => {
