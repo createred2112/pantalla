@@ -97,6 +97,15 @@ async function renderToBuffer(card) {
     },
   };
 
+  // Motor HTML/Chromium para plantillas migradas (exportan build()).
+  if (typeof tpl.build === 'function') {
+    const hasPhoto = Boolean(card.photo) && (tpl.usesPhoto !== false);
+    ctx.hasPhoto = hasPhoto;
+    ctx._onDark = hasPhoto || String(ctx.theme.text).toLowerCase() === '#ffffff' || tpl.logoOnDark === true;
+    return require('./htmlRender').renderFrame(card, ctx, tpl);
+  }
+
+  // --- Motor SVG/sharp (plantillas aún sin migrar) ---
   templates.lib.setScale(Number(cfg.brand.textScale) || 1);
   const { base, svg } = tpl.frame(card, ctx);
   const { buffer: baseBuf, hasPhoto } = await buildBase(base || {}, card, W, H);
