@@ -227,6 +227,8 @@ function openEditor(card) {
   $('#edDuration').value = card?.duration || 10;
   $('#edEnabled').checked = card?.enabled !== false;
   $('#edPreview').style.display = 'none';
+  $('#edUrl').value = '';
+  $('#urlHint').textContent = 'Pega el enlace y rellenamos los campos. Luego edítalos a tu gusto.';
   applyHints();
   toggleType();
   editor.showModal();
@@ -276,6 +278,26 @@ $('#edPhotoFile').addEventListener('change', async (e) => {
 });
 $('#edAnyFile').addEventListener('change', async (e) => {
   if (e.target.files[0]) { toast('Subiendo…'); $('#edFile').value = await uploadFile(e.target); toast('Archivo listo'); }
+});
+
+$('#btnExtract').addEventListener('click', async () => {
+  const url = $('#edUrl').value.trim();
+  if (!url) { toast('Pega una URL'); return; }
+  const hint = $('#urlHint'); hint.textContent = 'Extrayendo…';
+  try {
+    const d = await api('/extract', { method: 'POST', body: JSON.stringify({ url }) });
+    $('#edType').value = 'generated'; toggleType();
+    if (d.title) $('#edTitleField').value = d.title;
+    if (d.body) $('#edBody').value = d.body;
+    if (d.subtitle) $('#edSubtitle').value = d.subtitle;
+    if (d.date) $('#edDate').value = d.date;
+    if (d.image) $('#edPhoto').value = d.image;
+    // Sugerir plantilla: con foto, titular; si no, noticia.
+    $('#edTemplate').value = d.image ? 'titular' : 'noticia';
+    applyHints();
+    hint.textContent = `✓ Datos de ${d.source === 'wordpress' ? 'WordPress' : 'la web'}${d.image ? ' (con foto)' : ''}. Revisa y ajusta.`;
+    toast('Datos extraídos');
+  } catch (e) { hint.textContent = '✗ ' + e.message; toast('No se pudo extraer'); }
 });
 
 $('#btnPreview').addEventListener('click', async () => {

@@ -237,6 +237,20 @@ app.post('/api/preview', async (req, res) => {
 
 app.post('/api/import', (req, res) => res.json(importWorker()));
 
+// Extraer datos de una URL (WordPress API / Open Graph) para prerrellenar una cartela.
+app.post('/api/extract', async (req, res) => {
+  const url = req.body && req.body.url;
+  if (!url) return res.status(400).json({ error: 'falta url' });
+  try {
+    const data = await require('./extract').extract(url);
+    log.info('extract', `${data.source}: ${url}`);
+    res.json(data);
+  } catch (e) {
+    log.warn('extract', `fallo en ${url}: ${e.message}`);
+    res.status(502).json({ error: e.message });
+  }
+});
+
 app.post('/api/publish', async (req, res) => {
   const dryRun = req.body && req.body.dryRun;
   const result = await publish({ dryRun });

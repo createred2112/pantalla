@@ -93,6 +93,14 @@
       <button class="ghost" value="cancel">✕</button></div>
     <div class="dlg-b">
       <input type="hidden" id="edId">
+      <div id="urlImport" style="margin-bottom:12px;padding:10px;background:#0a1a30;border:1px dashed var(--line);border-radius:10px">
+        <label style="margin-top:0">⚡ Crear desde URL (noticia)</label>
+        <div style="display:flex;gap:6px">
+          <input id="edUrl" placeholder="https://gasteizberri.com/..." style="flex:1">
+          <button type="button" class="primary" id="btnExtract">Extraer</button>
+        </div>
+        <div class="hint" id="urlHint" style="margin-top:5px">Pega el enlace y rellenamos los campos. Luego edítalos a tu gusto.</div>
+      </div>
       <label>Tipo</label>
       <select id="edType">
         <option value="generated">Generada (texto + foto)</option>
