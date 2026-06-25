@@ -127,6 +127,23 @@ $('#btnSetPreview').addEventListener('click', async () => {
   const img = $('#setPreview'); img.src = URL.createObjectURL(await r.blob()); img.style.display = 'block';
   toast('Aplicado');
 });
+$('#btnFontUpload').addEventListener('click', async () => {
+  const f = $('#setFontFile').files[0];
+  const name = $('#setFontName').value.trim().replace(/[^A-Za-z0-9]/g, '');
+  const w = $('#setFontWeight').value;
+  if (!f || !name) { toast('Pon un nombre y elige el archivo'); return; }
+  toast('Subiendo fuente…');
+  const fd = new FormData(); fd.append('font', f);
+  const r = await fetch(`/api/font?family=${encodeURIComponent(name)}&weight=${w}`, { method: 'POST', headers: TOKEN ? { 'x-panel-token': TOKEN } : {}, body: fd });
+  if (!r.ok) { toast('Error al subir la fuente'); return; }
+  toast('Fuente subida ✓');
+  const cur = await api('/settings'); SETTINGS.fonts = cur.fonts;
+  const sel1 = $('#setFontDisplay').value, sel2 = $('#setFontText').value;
+  const opts = (SETTINGS.fonts || []).map((x) => `<option value="'${x}', sans-serif">${x}</option>`).join('');
+  $('#setFontDisplay').innerHTML = opts; $('#setFontText').innerHTML = opts;
+  $('#setFontDisplay').value = sel1; $('#setFontText').value = sel2;
+  $('#setFontFile').value = '';
+});
 $('#btnSetSave').addEventListener('click', async () => {
   try {
     await api('/settings', { method: 'PUT', body: JSON.stringify(collectSettings()) });

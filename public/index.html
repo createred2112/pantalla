@@ -162,6 +162,16 @@
     <select id="setFontDisplay"></select>
     <label>Fuente de textos</label>
     <select id="setFontText"></select>
+    <div style="margin-top:10px;padding:10px;background:#0a1a30;border:1px dashed var(--line);border-radius:10px">
+      <label style="margin-top:0">Subir tu propia fuente (.ttf / .otf)</label>
+      <div style="display:flex;gap:6px">
+        <input id="setFontName" placeholder="Nombre (p. ej. ClashDisplay)" style="flex:2">
+        <select id="setFontWeight" style="flex:1"><option>300</option><option>400</option><option>500</option><option>600</option><option selected>700</option><option>800</option><option>900</option></select>
+      </div>
+      <input type="file" id="setFontFile" accept=".ttf,.otf" style="margin-top:6px">
+      <button type="button" class="ghost" id="btnFontUpload" style="margin-top:6px;width:100%">Subir fuente</button>
+      <div class="hint" style="margin-top:4px">Tras subirla, aparece en los desplegables de arriba. Sube cada peso por separado (mismo Nombre, distinto peso).</div>
+    </div>
 
     <h3 style="margin:16px 0 2px;font-size:14px">Colores (temas)</h3>
     <div id="setColors"></div>

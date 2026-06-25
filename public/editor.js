@@ -11,7 +11,11 @@ let FONT_DISPLAY = "'Anton',sans-serif", FONT_TEXT = "'Oswald',sans-serif";
 function toast(m) { const t = $('#toast'); t.textContent = m; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 1800); }
 function mediaUrl(p) { return p ? '/media/' + p.replace('data/uploads/', 'uploads/').replace('data/worker-inbox/', 'inbox/') : ''; }
 
+async function loadFonts() {
+  try { const css = await (await fetch('/api/fontcss')).text(); const s = document.createElement('style'); s.textContent = css; document.head.appendChild(s); } catch {}
+}
 async function load() {
+  await loadFonts();
   const r = await fetch('/api/frame/' + ID);
   if (!r.ok) { if (r.status === 401) location.href = '/login'; $('#hint').textContent = 'no se pudo cargar'; return; }
   FRAME = await r.json();
@@ -164,6 +168,12 @@ $('#btnSave').addEventListener('click', async () => {
   const bg = FRAME.background ? { type: FRAME.background.type, color: FRAME.background.color } : undefined;
   const r = await fetch('/api/cards/' + ID + '/layout', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ layout: { background: bg, elements: ELS } }) });
   toast(r.ok ? 'Diseño guardado ✓' : 'Error al guardar');
+});
+$('#btnDefault').addEventListener('click', async () => {
+  if (!confirm('¿Aplicar este diseño como PREDETERMINADO de la plantilla "' + FRAME.template + '"? Afectará a todas sus cartelas que no tengan diseño propio.')) return;
+  const bg = FRAME.background ? { type: FRAME.background.type, color: FRAME.background.color } : undefined;
+  const r = await fetch('/api/templates/' + FRAME.template + '/layout', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ layout: { background: bg, elements: ELS } }) });
+  toast(r.ok ? 'Guardado como predeterminado ✓' : 'Error');
 });
 $('#btnReset').addEventListener('click', async () => {
   if (!confirm('¿Volver al diseño por defecto de la plantilla? Se perderán los cambios de esta cartela.')) return;

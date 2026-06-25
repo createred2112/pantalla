@@ -13,3 +13,4 @@ data/worker-inbox/
 *.zip
 assets/fonts/.cache/
 assets/fonts/fonts.conf
+data/template-layouts.json

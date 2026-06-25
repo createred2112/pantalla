@@ -95,12 +95,25 @@ function fontFamilies() {
     const dir = path.join(__dirname, '..', 'assets', 'fonts');
     const fams = new Set();
     for (const f of fs.readdirSync(dir)) {
-      const m = f.match(/^([A-Za-z]+)-/);
-      if (m && /\.ttf$/i.test(f)) fams.add(m[1]);
+      const m = f.match(/^([A-Za-z0-9]+)-\d+\.(ttf|otf)$/i);
+      if (m) fams.add(m[1]);
     }
     return [...fams];
   } catch { return ['Anton', 'Oswald', 'Archivo']; }
 }
+
+// CSS @font-face de las fuentes empaquetadas (para el editor visual).
+app.get('/api/fontcss', (req, res) => {
+  const dir = path.join(__dirname, '..', 'assets', 'fonts');
+  let css = '';
+  try {
+    for (const f of fs.readdirSync(dir)) {
+      const m = f.match(/^([A-Za-z0-9]+)-(\d+)\.(ttf|otf)$/i);
+      if (m) css += `@font-face{font-family:'${m[1]}';font-weight:${m[2]};src:url('/fonts/${f}') format('${m[3].toLowerCase() === 'otf' ? 'opentype' : 'truetype'}')}\n`;
+    }
+  } catch {}
+  res.type('css').send(css);
+});
 
 // Ajustes de diseño: leer.
 app.get('/api/settings', (req, res) => {
@@ -142,6 +155,13 @@ app.put('/api/cards/:id/layout', (req, res) => {
   res.json({ ok: true });
 });
 
+// Guardar un layout como PREDETERMINADO de una plantilla (afecta a todas sus cartelas).
+app.put('/api/templates/:id/layout', (req, res) => {
+  require('./templateLayouts').set(req.params.id, req.body && req.body.layout ? req.body.layout : null);
+  log.info('editor', `Layout predeterminado guardado en plantilla ${req.params.id}`);
+  res.json({ ok: true });
+});
+
 app.post('/api/cards', (req, res) => res.json(store.add(req.body)));
 
 app.put('/api/cards/:id', (req, res) => {
@@ -163,6 +183,26 @@ app.post('/api/upload', upload.single('photo'), (req, res) => {
   const rel = path.join('data/uploads', req.file.filename).replace(/\\/g, '/');
   log.info('upload-foto', `Foto recibida: ${req.file.filename}`);
   res.json({ path: rel, url: `/media/uploads/${req.file.filename}` });
+});
+
+// Subir una fuente propia (.ttf/.otf) -> assets/fonts como Familia-Peso.ext.
+const fontUpload = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => cb(null, path.join(__dirname, '..', 'assets', 'fonts')),
+    filename: (req, file, cb) => {
+      const ext = (path.extname(file.originalname).toLowerCase().replace('.', '') || 'ttf');
+      const fam = String(req.query.family || 'Custom').replace(/[^A-Za-z0-9]/g, '') || 'Custom';
+      const w = String(req.query.weight || '700').replace(/[^0-9]/g, '') || '700';
+      cb(null, `${fam}-${w}.${ext === 'otf' ? 'otf' : 'ttf'}`);
+    },
+  }),
+  limits: { fileSize: 6 * 1024 * 1024 },
+});
+app.post('/api/font', fontUpload.single('font'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'sin archivo' });
+  require('./generator/htmlRender').invalidateFonts();
+  log.info('font', 'Fuente subida: ' + req.file.filename);
+  res.json({ ok: true, file: req.file.filename, family: req.query.family });
 });
 
 // Previsualización en vivo de una card generada (no escribe en disco salvo render en memoria).

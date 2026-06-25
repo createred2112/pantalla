@@ -28,15 +28,17 @@ function fontFaceCss() {
   let css = '';
   try {
     for (const f of fs.readdirSync(dir)) {
-      const m = f.match(/^([A-Za-z]+)-(\d+)\.ttf$/i);
+      const m = f.match(/^([A-Za-z0-9]+)-(\d+)\.(ttf|otf)$/i);
       if (!m) continue;
+      const otf = m[3].toLowerCase() === 'otf';
       const b64 = fs.readFileSync(path.join(dir, f)).toString('base64');
-      css += `@font-face{font-family:'${m[1]}';font-weight:${m[2]};font-style:normal;src:url(data:font/ttf;base64,${b64}) format('truetype');}\n`;
+      css += `@font-face{font-family:'${m[1]}';font-weight:${m[2]};font-style:normal;src:url(data:font/${otf ? 'otf' : 'ttf'};base64,${b64}) format('${otf ? 'opentype' : 'truetype'}');}\n`;
     }
   } catch {}
   _fontCss = css;
   return css;
 }
+function invalidateFonts() { _fontCss = null; }
 
 function esc(s) {
   return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -186,4 +188,4 @@ async function renderFrame(card, ctx, tpl, frame) {
 
 async function close() { if (_browser) { try { await _browser.close(); } catch {} _browser = null; } }
 
-module.exports = { renderFrame, close };
+module.exports = { renderFrame, close, invalidateFonts };

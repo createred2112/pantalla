@@ -108,17 +108,22 @@ function inferBind(el, card) {
   return null;
 }
 
-// Frame resuelto: el diseño editado de la cartela (card.layout) si existe —con el
-// texto refrescado desde los datos actuales—, o el que genera la plantilla.
+// Aplica un layout (elementos) a los datos de la cartela (refresca texto vinculado).
+function applyLayout(layout, card) {
+  const elements = (layout.elements || []).map((e) => {
+    const el = { ...e };
+    if (el.bind && card[el.bind] != null) el.text = el.transform === 'upper' ? String(card[el.bind]).toUpperCase() : String(card[el.bind]);
+    return el;
+  });
+  return { background: layout.background, elements };
+}
+
+// Frame resuelto, por prioridad: layout propio de la cartela > layout por defecto
+// de la plantilla > el que genera la plantilla en código.
 function resolveFrame(card, ctx, tpl) {
-  if (card.layout && Array.isArray(card.layout.elements)) {
-    const elements = card.layout.elements.map((e) => {
-      const el = { ...e };
-      if (el.bind && card[el.bind] != null) el.text = el.transform === 'upper' ? String(card[el.bind]).toUpperCase() : String(card[el.bind]);
-      return el;
-    });
-    return { background: card.layout.background, elements };
-  }
+  if (card.layout && Array.isArray(card.layout.elements)) return applyLayout(card.layout, card);
+  const tl = require('../templateLayouts').get(card.template);
+  if (tl && Array.isArray(tl.elements)) return applyLayout(tl, card);
   const frame = tpl.build(card, ctx) || { elements: [] };
   frame.elements = (frame.elements || []).map((e, i) => Object.assign({ id: 'el' + i, bind: inferBind(e, card) }, e));
   return frame;
