@@ -1,41 +1,23 @@
 'use strict';
-// CITA — una frase entrecomillada grande + autor. Editorial, para entrevistas.
+// CITA — comilla decorativa + frase grande + autor. Motor HTML.
 module.exports = {
   id: 'cita',
   label: 'Cita / Frase (editorial)',
   hint: { title: 'La frase entrecomillada', subtitle: 'Autor / cargo', body: '—', date: 'Fecha (opcional)' },
-  logoPos: 'tr',
   defaultTheme: 'carbon',
-  frame(card, ctx) {
-    const { W, H, font, lib, theme } = ctx;
+  logoPos: 'tr',
+  build(card, ctx) {
+    const { W, H, theme } = ctx;
     const pad = Math.round(W * 0.08);
-    const maxW = W - pad * 2;
+    const w = W - pad * 2;
+    const els = [];
 
-    // Comilla decorativa enorme (carácter literal para máxima compatibilidad).
-    const quoteSize = Math.round(H * 0.26);
-    const quote = `<text x="${pad}" y="${Math.round(H * 0.28)}" font-family="${font}" font-size="${quoteSize}" font-weight="800" fill="${theme.accent}" opacity="0.9">“</text>`;
-
-    // Frase.
-    const title = lib.fitText(card.title || '', { maxWidth: maxW, maxLines: 4, maxSize: Math.round(H * 0.11), minSize: Math.round(H * 0.045), weight: 700 });
-    const titleH = lib.blockHeight(title.lines.length, title.size, 1.12);
-    const top = (H - titleH) / 2 + Math.round(H * 0.02);
-    const titleSvg = lib.textBlock(title.lines, { x: pad, y: top + title.size, size: title.size, font, weight: 700, fill: theme.text, lineHeight: 1.12 });
-
-    // Autor.
-    let author = '';
-    let y = top + titleH + Math.round(H * 0.06);
+    els.push({ type: 'text', x: pad, y: Math.round(H * 0.04), w: Math.round(W * 0.3), h: Math.round(H * 0.28), text: '“', font: 'display', weight: 800, color: theme.accent, align: 'left', valign: 'top', size: Math.round(H * 0.34) });
+    els.push({ type: 'text', x: pad, y: Math.round(H * 0.3), w, h: Math.round(H * 0.42), text: card.title || '', font: 'text', weight: 700, color: theme.text, align: 'left', valign: 'center', lineHeight: 1.1, autofit: { min: Math.round(H * 0.045), max: Math.round(H * 0.1), lines: 4 } });
     if (card.subtitle) {
-      author = `<rect x="${pad}" y="${y - Math.round(H * 0.03)}" width="${Math.round(W * 0.06)}" height="5" fill="${theme.accent}"/>` +
-        lib.textBlock([card.subtitle], { x: pad, y: y + Math.round(H * 0.03), size: Math.round(H * 0.04), font, weight: 700, fill: theme.accent });
+      els.push({ type: 'rect', x: pad, y: Math.round(H * 0.78), w: Math.round(W * 0.06), h: 6, color: theme.accent });
+      els.push({ type: 'text', x: pad, y: Math.round(H * 0.8), w, h: Math.round(H * 0.07), text: card.subtitle, font: 'text', weight: 700, color: theme.accent, align: 'left', valign: 'center', size: Math.round(H * 0.04) });
     }
-
-    const svg =
-      `<svg width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">
-        <defs>${lib.linearGradient('g', [{ o: '0%', c: theme.bg }, { o: '100%', c: theme.bg2 }])}</defs>
-        <rect x="0" y="0" width="${W}" height="${H}" fill="url(#g)"/>
-        ${quote}${titleSvg}${author}
-      </svg>`;
-
-    return { base: { solid: theme.bg }, svg };
+    return { background: { type: 'solid', color: theme.bg }, elements: els };
   },
 };

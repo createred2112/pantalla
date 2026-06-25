@@ -96,9 +96,11 @@ async function elHtml(el, ctx) {
   if (el.type === 'chip') {
     const fam = famOf(el.font || 'text');
     const cs = Math.round((el.size || 30) * scale);
-    return `<div style="${box}display:inline-flex;align-items:center;background:${el.bg};color:${el.color};` +
-      `font-family:${fam};font-weight:700;font-size:${cs}px;letter-spacing:2px;padding:0 ${Math.round(cs * 0.6)}px;` +
-      `border-radius:${el.radius != null ? el.radius : Math.round(cs * 0.35)}px;text-transform:uppercase;white-space:nowrap;width:auto;">${esc(el.text)}</div>`;
+    // Ancho automático: posición por esquina sup-izq, sin caja fija.
+    return `<div style="position:absolute;left:${el.x}px;top:${el.y}px;display:inline-flex;align-items:center;` +
+      `background:${el.bg};color:${el.color};font-family:${fam};font-weight:700;font-size:${cs}px;` +
+      `letter-spacing:${el.letterSpacing != null ? el.letterSpacing : 2}px;height:${Math.round(cs * 1.9)}px;padding:0 ${Math.round(cs * 0.6)}px;` +
+      `border-radius:${el.radius != null ? el.radius : Math.round(cs * 0.35)}px;text-transform:uppercase;white-space:nowrap;">${esc(el.text)}</div>`;
   }
   if (el.type === 'svg') {
     return `<div style="${box}">${el.svg}</div>`;
