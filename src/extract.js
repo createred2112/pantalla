@@ -45,6 +45,48 @@ function meta(html, prop) {
   return m ? m[1] : null;
 }
 
+// Quita el nombre del sitio de un titular ("Mi noticia | El Diario" -> "Mi noticia").
+function cleanTitle(title, site) {
+  let t = String(title || '').trim();
+  if (!t) return t;
+  if (site) {
+    const s = site.trim();
+    const re = new RegExp('\\s*[|\\-–—·»]\\s*' + s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*$', 'i');
+    t = t.replace(re, '').trim();
+  }
+  // Si aún queda un separador final con texto corto (nombre de medio), recórtalo.
+  const parts = t.split(/\s+[|–—»]\s+/);
+  if (parts.length > 1 && parts[parts.length - 1].length <= 30) t = parts.slice(0, -1).join(' — ').trim();
+  return t || String(title || '').trim();
+}
+
+// Intenta sacar titular/imagen del JSON-LD (schema.org NewsArticle/Article).
+function jsonLd(html) {
+  const out = {};
+  const re = /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+  let m;
+  while ((m = re.exec(html))) {
+    let data;
+    try { data = JSON.parse(m[1].trim()); } catch { continue; }
+    const arr = Array.isArray(data) ? data : (data['@graph'] ? data['@graph'] : [data]);
+    for (const node of arr) {
+      if (!node || typeof node !== 'object') continue;
+      const type = String(node['@type'] || '').toLowerCase();
+      if (!/article|newsarticle|blogposting|webpage/.test(type)) continue;
+      if (!out.title && node.headline) out.title = strip(node.headline);
+      if (!out.body && node.description) out.body = strip(node.description);
+      if (!out.date && node.datePublished) out.date = String(node.datePublished).slice(0, 10);
+      if (!out.image) {
+        let img = node.image;
+        if (Array.isArray(img)) img = img[0];
+        if (img && typeof img === 'object') img = img.url || null;
+        out.image = typeof img === 'string' ? img : null;
+      }
+    }
+  }
+  return out;
+}
+
 async function extract(url) {
   let u;
   try { u = new URL(url); } catch { throw new Error('URL no válida'); }
@@ -74,15 +116,17 @@ async function extract(url) {
     } catch {}
   }
 
-  // 2) Open Graph del HTML.
+  // 2) Open Graph + JSON-LD del HTML.
   const r = await fetchT(url);
   if (!r.ok) throw new Error('No se pudo abrir la URL (' + r.status + ')');
   const html = await r.text();
-  const title = strip(meta(html, 'og:title') || meta(html, 'twitter:title') || (html.match(/<title[^>]*>([^<]+)<\/title>/i) || [])[1]);
-  const body = strip(meta(html, 'og:description') || meta(html, 'twitter:description') || meta(html, 'description'));
-  const img = meta(html, 'og:image') || meta(html, 'twitter:image');
-  const date = (meta(html, 'article:published_time') || '').slice(0, 10);
+  const ld = jsonLd(html);
   const site = strip(meta(html, 'og:site_name'));
+  const rawTitle = strip(meta(html, 'og:title') || meta(html, 'twitter:title') || ld.title || (html.match(/<title[^>]*>([^<]+)<\/title>/i) || [])[1]);
+  const title = cleanTitle(rawTitle, site);
+  const body = strip(meta(html, 'og:description') || meta(html, 'twitter:description') || meta(html, 'description') || ld.body);
+  const img = meta(html, 'og:image') || meta(html, 'twitter:image') || ld.image;
+  const date = ((meta(html, 'article:published_time') || ld.date) || '').slice(0, 10);
   return {
     source: 'opengraph',
     title, body, subtitle: site || null, date,

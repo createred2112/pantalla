@@ -5,6 +5,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const { cfg, paths, env, ensureDirs } = require('./config');
+const sharp = require('sharp');
 const store = require('./store');
 const log = require('./util/logger');
 const status = require('./util/status');
@@ -228,7 +229,13 @@ app.get('/api/preview/:id', async (req, res) => {
 app.post('/api/preview', async (req, res) => {
   try {
     const card = store.normalize({ ...req.body, id: 'preview' });
-    const { buffer, ext } = await renderToBuffer(card);
+    let { buffer, ext } = await renderToBuffer(card);
+    // Miniatura: para la galería de plantillas pedimos un JPG pequeño (más rápido de transferir).
+    const tw = Number(req.body && req.body._thumbW);
+    if (tw && tw > 0) {
+      buffer = await sharp(buffer).resize(Math.round(tw)).jpeg({ quality: 72 }).toBuffer();
+      ext = 'jpg';
+    }
     res.type(ext === 'png' ? 'image/png' : 'image/jpeg').send(buffer);
   } catch (e) {
     res.status(500).json({ error: e.message });

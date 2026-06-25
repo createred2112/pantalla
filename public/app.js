@@ -21,6 +21,11 @@ let cards = [];
 let TEMPLATES = [];
 let PALETTE = {};
 
+// Galería visual de plantillas (probar varias con los datos actuales).
+let galleryOpen = false;
+let galleryToken = 0;
+const tplCache = new Map(); // clave: template|datos -> objectURL
+
 async function loadConfig() {
   try {
     const cfg = await api('/config');
@@ -48,6 +53,7 @@ function applyHints() {
   $('#hBody').textContent = h.body && h.body !== '—' ? '· ' + h.body : '';
   $('#hDate').textContent = h.date ? '· ' + h.date : '';
   renderSwatches();
+  if (galleryOpen) highlightTpl();
 }
 
 // ===== Ajustes de diseño =====
@@ -230,6 +236,10 @@ function openEditor(card) {
   $('#edPreview').style.display = 'none';
   $('#edUrl').value = '';
   $('#urlHint').textContent = 'Pega el enlace y rellenamos los campos. Luego edítalos a tu gusto.';
+  // Cierra la galería de plantillas al (re)abrir el editor.
+  galleryOpen = false; galleryToken++;
+  $('#tplGallery').innerHTML = '';
+  $('#btnGallery').textContent = '🖼 Probar plantillas visualmente';
   applyHints();
   toggleType();
   editor.showModal();
@@ -238,6 +248,11 @@ function toggleType() {
   const t = $('#edType').value;
   $('#genFields').style.display = t === 'generated' ? '' : 'none';
   $('#fileFields').style.display = t === 'generated' ? 'none' : '';
+  if (t !== 'generated' && galleryOpen) {
+    galleryOpen = false; galleryToken++;
+    $('#tplGallery').innerHTML = '';
+    $('#btnGallery').textContent = '🖼 Probar plantillas visualmente';
+  }
 }
 $('#edType').addEventListener('change', toggleType);
 $('#edTemplate').addEventListener('change', applyHints);
@@ -245,6 +260,62 @@ $('#edTheme').addEventListener('change', renderSwatches);
 $('#themeSwatches').addEventListener('click', (e) => {
   const b = e.target.closest('button'); if (!b) return;
   $('#edTheme').value = b.dataset.theme; renderSwatches();
+  if (galleryOpen) renderTemplateGallery(); // refleja el tema elegido en las miniaturas
+});
+
+// ===== Galería visual de plantillas =====
+function tplDataKey(d) {
+  return [d.title, d.subtitle, d.body, d.date, d.photo, d.theme].join('|');
+}
+function highlightTpl() {
+  const cur = $('#edTemplate').value;
+  $('#tplGallery').querySelectorAll('.tplcell').forEach((c) => {
+    c.classList.toggle('sel', c.dataset.tpl === cur);
+  });
+}
+async function renderTemplateGallery(force) {
+  const wrap = $('#tplGallery');
+  const data = collect();
+  if (data.type !== 'generated') { wrap.innerHTML = ''; galleryOpen = false; return; }
+  galleryOpen = true;
+  $('#btnGallery').textContent = '🖼 Ocultar plantillas';
+  const key = tplDataKey(data);
+  wrap.innerHTML = TEMPLATES.map((t) =>
+    `<button type="button" class="tplcell" data-tpl="${t.id}" title="${t.label}">
+       <div class="tplimg" id="tpl_${t.id}"><span class="spin">◠</span></div>
+       <span class="tpllbl">${t.label}</span>
+     </button>`).join('');
+  highlightTpl();
+  // Render secuencial (un solo navegador headless en el servidor): no saturamos.
+  galleryToken++; const my = galleryToken;
+  for (const t of TEMPLATES) {
+    if (my !== galleryToken) return; // se cerró el diálogo o se relanzó
+    const ck = t.id + '|' + key;
+    if (force) tplCache.delete(ck);
+    let url = tplCache.get(ck);
+    if (!url) {
+      try {
+        const r = await fetch('/api/preview', { method: 'POST', headers: H, body: JSON.stringify({ ...data, template: t.id, _thumbW: 360 }) });
+        if (!r.ok) throw new Error('render');
+        url = URL.createObjectURL(await r.blob());
+        tplCache.set(ck, url);
+      } catch { url = null; }
+    }
+    if (my !== galleryToken) return;
+    const cell = $('#tpl_' + t.id);
+    if (cell) cell.innerHTML = url ? `<img src="${url}" alt="">` : '⚠';
+  }
+}
+$('#btnGallery').addEventListener('click', () => {
+  if (galleryOpen) { galleryOpen = false; $('#tplGallery').innerHTML = ''; $('#btnGallery').textContent = '🖼 Probar plantillas visualmente'; galleryToken++; }
+  else renderTemplateGallery();
+});
+$('#tplGallery').addEventListener('click', (e) => {
+  const b = e.target.closest('.tplcell'); if (!b) return;
+  $('#edTemplate').value = b.dataset.tpl;
+  applyHints();
+  highlightTpl();
+  toast('Plantilla: ' + (TEMPLATES.find((t) => t.id === b.dataset.tpl) || {}).label);
 });
 
 function collect() {
@@ -297,8 +368,10 @@ $('#btnExtract').addEventListener('click', async () => {
     // Sugerir plantilla: con foto, titular; si no, noticia.
     $('#edTemplate').value = d.image ? 'titular' : 'noticia';
     applyHints();
-    hint.textContent = `✓ Datos de ${d.source === 'wordpress' ? 'WordPress' : 'la web'}${d.image ? ' (con foto)' : ''}. Revisa y ajusta.`;
+    hint.textContent = `✓ Datos de ${d.source === 'wordpress' ? 'WordPress' : 'la web'}${d.image ? ' (con foto)' : ''}. Elige plantilla abajo y ajusta.`;
     toast('Datos extraídos');
+    // Abre la galería para probar plantillas con los datos ya rellenados.
+    renderTemplateGallery(true);
   } catch (e) { hint.textContent = '✗ ' + e.message; toast('No se pudo extraer'); }
 });
 
