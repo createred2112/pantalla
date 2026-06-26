@@ -31,6 +31,17 @@ El panel es **móvil-first**: añadir/editar/ordenar cartelas, subir foto con la
 cámara, previsualizar el JPG en vivo, y botón **Publicar** (con modo "Probar"
 que no sube nada).
 
+### Crear una cartela desde una URL
+
+En el editor, pega una URL (noticia de WordPress o cualquier web con Open Graph
+/ JSON-LD) y pulsa **Extraer**: la herramienta rellena **título, subtítulo,
+texto, fecha y foto** automáticamente. Después puedes:
+
+- **Probar plantillas visualmente**: la galería muestra una miniatura de cada
+  plantilla renderizada con tus datos; toca una para elegirla.
+- **Ajustar el detalle**: cambia textos, tema de color, foto y duración antes de
+  guardar. Cada miniatura refleja el tema de color seleccionado.
+
 ## Acceso de administradores
 
 El panel está **protegido**: sin sesión, toda navegación redirige a `/login` y
