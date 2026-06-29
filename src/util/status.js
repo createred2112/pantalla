@@ -28,7 +28,7 @@ function set(stage, result) {
     ok: result.ok !== false,
     ...result,
   };
-  if (stage === 'upload' && result.ok !== false) {
+  if (stage === 'upload' && result.ok !== false && !result.dryRun) {
     state.lastPublish = state.stages[stage].ts;
   }
   return write(state);

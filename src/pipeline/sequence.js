@@ -1,7 +1,7 @@
 'use strict';
 // Etapa SEQUENCE: ordena las cartelas activas y las copia a publish/ con el
 // esquema de renombrado (NN_slug.ext) para que la pantalla las lea por orden
-// alfanumérico. Limpia publish/ antes para no dejar restos de secuencias previas.
+// alfanumérico. Valida todo antes de tocar publish/ y lo sustituye al final.
 const fs = require('fs');
 const path = require('path');
 const { active } = require('../store');
@@ -24,23 +24,47 @@ function sourceFile(card) {
   return card.file ? abs(card.file) : null;
 }
 
-function clearDir(dir) {
-  fs.mkdirSync(dir, { recursive: true });
-  for (const f of fs.readdirSync(dir)) {
-    fs.rmSync(path.join(dir, f), { force: true });
+function writePlaylist(dir, manifest) {
+  fs.writeFileSync(
+    path.join(dir, 'playlist.json'),
+    JSON.stringify({ generatedAt: new Date().toISOString(), items: manifest }, null, 2)
+  );
+}
+
+function swapPublishDir(stagingDir) {
+  const parent = path.dirname(paths.publish);
+  const backupDir = path.join(parent, `.publish-backup-${Date.now()}-${process.pid}`);
+
+  try {
+    if (fs.existsSync(paths.publish)) fs.renameSync(paths.publish, backupDir);
+    fs.renameSync(stagingDir, paths.publish);
+    if (fs.existsSync(backupDir)) fs.rmSync(backupDir, { recursive: true, force: true });
+  } catch (e) {
+    try {
+      if (!fs.existsSync(paths.publish) && fs.existsSync(backupDir)) fs.renameSync(backupDir, paths.publish);
+    } catch {}
+    throw e;
   }
 }
 
-function sequence() {
+function sequence({ dryRun } = {}) {
   const cards = active();
-  clearDir(paths.publish);
+  if (!cards.length) {
+    const r = { ok: false, error: 'No hay cartelas activas para publicar', count: 0, manifest: [] };
+    status.set('sequence', r);
+    log.warn('sequence', r.error);
+    return r;
+  }
+
   const manifest = [];
+  const copies = [];
+  const missing = [];
   let pos = 1;
 
   for (const card of cards) {
     const src = sourceFile(card);
     if (!src || !fs.existsSync(src)) {
-      log.warn('sequence', `Sin archivo para ${card.id} (${card.type}); se omite`);
+      missing.push({ id: card.id, type: card.type, file: src || null, title: card.title || '' });
       continue;
     }
     const ext = path.extname(src).replace('.', '').toLowerCase() || 'jpg';
@@ -51,7 +75,6 @@ function sequence() {
     }
     if (cfg.naming.lowercase) name = name.toLowerCase();
     const dest = path.join(paths.publish, `${name}.${ext}`);
-    fs.copyFileSync(src, dest);
     manifest.push({
       order: pos,
       id: card.id,
@@ -59,15 +82,45 @@ function sequence() {
       file: path.basename(dest),
       duration: card.duration,
     });
+    copies.push({ src, file: path.basename(dest) });
     log.info('sequence', `${pad(pos)} -> ${path.basename(dest)}`);
     pos++;
   }
 
-  // playlist.json opcional con tiempos (por si el reproductor lo aprovecha).
-  fs.writeFileSync(
-    path.join(paths.publish, 'playlist.json'),
-    JSON.stringify({ generatedAt: new Date().toISOString(), items: manifest }, null, 2)
-  );
+  if (missing.length) {
+    const r = { ok: false, error: `Faltan archivos para ${missing.length} cartela(s); no se toca publish/`, count: manifest.length, manifest, missing };
+    status.set('sequence', r);
+    for (const m of missing) log.warn('sequence', `Sin archivo para ${m.id} (${m.type}); ${m.file || 'sin ruta'}`);
+    return r;
+  }
+
+  if (!manifest.length) {
+    const r = { ok: false, error: 'La secuencia quedó vacía; no se toca publish/', count: 0, manifest: [] };
+    status.set('sequence', r);
+    log.warn('sequence', r.error);
+    return r;
+  }
+
+  if (dryRun) {
+    const r = { ok: true, dryRun: true, count: manifest.length, manifest, files: copies.map((c) => c.file) };
+    status.set('sequence', r);
+    log.info('sequence', `Prueba de secuencia OK: ${manifest.length} archivo(s); publish/ no se modifica`);
+    return r;
+  }
+
+  const stagingDir = path.join(path.dirname(paths.publish), `.publish-staging-${Date.now()}-${process.pid}`);
+  try {
+    fs.mkdirSync(stagingDir, { recursive: true });
+    for (const c of copies) fs.copyFileSync(c.src, path.join(stagingDir, c.file));
+    writePlaylist(stagingDir, manifest);
+    swapPublishDir(stagingDir);
+  } catch (e) {
+    try { fs.rmSync(stagingDir, { recursive: true, force: true }); } catch {}
+    const r = { ok: false, error: `No se pudo preparar publish/: ${e.message}`, count: manifest.length, manifest };
+    status.set('sequence', r);
+    log.error('sequence', r.error);
+    return r;
+  }
 
   status.set('sequence', { ok: true, count: manifest.length, manifest });
   log.info('sequence', `Secuencia lista: ${manifest.length} archivo(s) en publish/`);

@@ -415,19 +415,87 @@ $('#btnImport').addEventListener('click', async () => {
   toast(`Worker: ${r.added.length} nuevo(s) de ${r.scanned}`); load();
 });
 
-async function doPublish(dryRun) {
+const publishDlg = $('#publishDlg');
+let publishBusy = false;
+
+function publishError(r) {
+  if (!r || !r.steps) return 'No se pudo preparar la publicación';
+  for (const k of ['generate', 'sequence', 'upload']) {
+    if (r.steps[k] && r.steps[k].ok === false) return r.steps[k].error || `Falló ${k}`;
+  }
+  return 'Hubo errores, mira el log';
+}
+
+function plannedFiles(r) {
+  const up = r && r.steps && r.steps.upload;
+  const seq = r && r.steps && r.steps.sequence;
+  if (up && Array.isArray(up.files)) return up.files;
+  if (seq && Array.isArray(seq.files)) return [...seq.files, 'playlist.json'];
+  return [];
+}
+
+function setPublishBusy(on) {
+  publishBusy = on;
+  $('#btnPublish').disabled = on;
+  $('#btnDry').disabled = on;
+}
+
+async function runPublish(dryRun) {
+  setPublishBusy(true);
   toast(dryRun ? 'Probando…' : 'Publicando…');
   $('#dot').style.background = '#e0a106';
   try {
     const r = await api('/publish', { method: 'POST', body: JSON.stringify({ dryRun }) });
     $('#dot').style.background = r.ok ? '#2bb673' : '#e2231a';
-    const up = r.steps.upload;
-    toast(r.ok ? (up.dryRun ? 'Prueba OK (no subido)' : '¡Publicado en pantalla!') : 'Hubo errores, mira el log');
+    if (r.ok) {
+      const files = plannedFiles(r);
+      const up = r.steps.upload || {};
+      if (dryRun) toast(`Prueba OK: ${files.length} archivo(s)`);
+      else if (up.dryRun) toast(`Simulado: ${up.reason || 'no se subió al FTP'}`);
+      else toast(`Publicado: ${(up.files || []).length} archivo(s)`);
+    } else {
+      toast(publishError(r));
+    }
     loadStatus();
-  } catch (e) { $('#dot').style.background = '#e2231a'; toast('Error: ' + e.message); }
+    return r;
+  } catch (e) {
+    $('#dot').style.background = '#e2231a';
+    toast('Error: ' + e.message);
+    return null;
+  } finally {
+    setPublishBusy(false);
+  }
 }
-$('#btnPublish').addEventListener('click', () => doPublish(false));
+
+async function preparePublish() {
+  if (publishBusy) return;
+  if (!cards.some((c) => c.enabled !== false)) {
+    toast('No hay cartelas activas');
+    return;
+  }
+  const r = await runPublish(true);
+  if (!r || !r.ok) return;
+
+  const files = plannedFiles(r);
+  const up = r.steps.upload || {};
+  $('#publishPlan').innerHTML =
+    `<p style="margin-top:0">La prueba está correcta. Se subirán <b>${files.length}</b> archivo(s) al FTP${up.remoteDir ? `, carpeta <b>${esc(up.remoteDir)}</b>` : ''}.</p>` +
+    `<div id="publishFiles" style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;background:#06101f;border:1px solid var(--line);border-radius:10px;padding:10px;max-height:34vh;overflow:auto;white-space:pre-wrap">${files.map(esc).join('\n')}</div>` +
+    `<p class="hint" style="margin-bottom:0">Al confirmar se regenerará la secuencia y se intentará subir al FTP real.</p>`;
+  publishDlg.showModal();
+}
+
+async function doPublish(dryRun) {
+  return dryRun ? runPublish(true) : preparePublish();
+}
+$('#btnPublish').addEventListener('click', () => preparePublish());
 $('#btnDry').addEventListener('click', () => doPublish(true));
+$('#btnPublishCancel').addEventListener('click', () => publishDlg.close());
+$('#btnPublishCancelTop').addEventListener('click', () => publishDlg.close());
+$('#btnPublishConfirm').addEventListener('click', async () => {
+  publishDlg.close();
+  await runPublish(false);
+});
 
 // --- Estado / log ---
 const statusDlg = $('#statusDlg');

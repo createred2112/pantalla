@@ -38,7 +38,7 @@ async function main() {
       return { ok: true };
     }
     case 'generate': return generate();
-    case 'sequence': return sequence();
+    case 'sequence': return sequence({ dryRun });
     case 'upload': return upload({ dryRun });
     case 'import': return importWorker();
     case 'publish': return publish({ dryRun });

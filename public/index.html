@@ -20,7 +20,9 @@
   button{font:inherit;border:0;border-radius:10px;padding:11px 14px;color:#fff;background:var(--line);cursor:pointer}
   button.primary{background:var(--accent)}
   button.ghost{background:transparent;border:1px solid var(--line);color:var(--muted)}
+  button:disabled{opacity:.5;cursor:not-allowed}
   button:active{transform:translateY(1px)}
+  button:disabled:active{transform:none}
   .card{background:var(--card);border:1px solid var(--line);border-radius:14px;margin-bottom:12px;overflow:hidden}
   .card .thumb{width:100%;aspect-ratio:16/9;object-fit:cover;background:#000;display:block}
   .card .meta{padding:10px 12px}
@@ -213,6 +215,18 @@
   <div class="dlg-b">
     <div id="statusBox" class="status"></div>
     <div id="log"></div>
+  </div>
+</dialog>
+
+<!-- Confirmar publicación -->
+<dialog id="publishDlg">
+  <div class="dlg-h"><h2>Publicar a pantalla</h2><button class="ghost" id="btnPublishCancelTop">✕</button></div>
+  <div class="dlg-b">
+    <div id="publishPlan" class="status"></div>
+  </div>
+  <div class="dlg-f">
+    <button class="ghost" id="btnPublishCancel">Cancelar</button>
+    <button class="primary" id="btnPublishConfirm">Subir ahora</button>
   </div>
 </dialog>
 
