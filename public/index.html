@@ -71,6 +71,19 @@
   .tpllbl{font-size:11px;line-height:1.15}
   .spin{display:inline-block;animation:spin 1s linear infinite}
   @keyframes spin{to{transform:rotate(360deg)}}
+  @media (max-width:640px){
+    header{flex-wrap:wrap;gap:8px;padding:10px 12px}
+    header h1{flex:1 1 128px}
+    #who{display:none}
+    .version-badge{font-size:11px;padding:3px 7px}
+    header>a.ghost,header>button.ghost{
+      flex:1 1 calc(25% - 8px);min-width:0;padding:9px 6px!important;
+      font-size:12px!important;text-align:center;white-space:nowrap
+    }
+  }
+  @media (max-width:380px){
+    header>a.ghost,header>button.ghost{flex-basis:calc(50% - 8px)}
+  }
 </style>
 </head>
 <body>
