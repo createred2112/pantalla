@@ -7,7 +7,7 @@ const path = require('path');
 const os = require('os');
 const { spawn } = require('child_process');
 const ffmpeg = require('ffmpeg-static');
-const { cfg, paths } = require('../config');
+const { cfg, paths, abs } = require('../config');
 const { buildHtml, browser, AUTOFIT } = require('./htmlRender');
 const { prepare } = require('./renderCard');
 
@@ -26,15 +26,57 @@ function setupAnim(durMs) {
   window.__setT = function (ms) { document.getAnimations().forEach((a) => { try { a.currentTime = ms; } catch (e) {} }); };
 }
 
-function encode(dir, fps, out) {
+function runFfmpeg(args) {
   return new Promise((resolve, reject) => {
-    const args = ['-y', '-framerate', String(fps), '-i', path.join(dir, 'f%05d.jpg'),
-      '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'veryfast', '-movflags', '+faststart', out];
     const p = spawn(ffmpeg, args);
     let err = '';
     p.stderr.on('data', (d) => { err += d; });
-    p.on('close', (code) => code === 0 ? resolve(out) : reject(new Error('ffmpeg ' + code + ': ' + err.slice(-300))));
+    p.on('close', (code) => code === 0 ? resolve() : reject(new Error('ffmpeg ' + code + ': ' + err.slice(-500))));
   });
+}
+
+async function encode(dir, fps, out) {
+  await runFfmpeg(['-y', '-framerate', String(fps), '-i', path.join(dir, 'f%05d.jpg'),
+    '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'veryfast', '-movflags', '+faststart', out]);
+  return out;
+}
+
+function concatLine(file) {
+  return `file '${file.replace(/\\/g, '/').replace(/'/g, "'\\''")}'`;
+}
+
+async function normalizeClip(input, out, W, H, fps) {
+  await runFfmpeg([
+    '-y', '-i', input, '-an',
+    '-vf', `scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H},setsar=1,fps=${fps},format=yuv420p`,
+    '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'veryfast', '-movflags', '+faststart',
+    out,
+  ]);
+  return out;
+}
+
+async function stitchClips(inputs, out, dir, W, H, fps) {
+  if (inputs.length === 1) {
+    fs.copyFileSync(inputs[0], out);
+    return out;
+  }
+  const normalized = [];
+  for (let i = 0; i < inputs.length; i++) {
+    const n = path.join(dir, `seg${String(i).padStart(2, '0')}.mp4`);
+    await normalizeClip(inputs[i], n, W, H, fps);
+    normalized.push(n);
+  }
+  const list = path.join(dir, 'concat.txt');
+  fs.writeFileSync(list, normalized.map(concatLine).join('\n'));
+  await runFfmpeg(['-y', '-f', 'concat', '-safe', '0', '-i', list, '-c', 'copy', '-movflags', '+faststart', out]);
+  return out;
+}
+
+function bumperPath(card, field, label) {
+  if (!card[field]) return null;
+  const p = abs(card[field]);
+  if (!fs.existsSync(p)) throw new Error(`cortinilla ${label} no encontrada: ${card[field]}`);
+  return p;
 }
 
 // Renderiza la cartela a un MP4 en output/. Devuelve { file, ext:'mp4' }.
@@ -63,7 +105,11 @@ async function renderVideoToFile(card) {
     }
     fs.mkdirSync(paths.output, { recursive: true });
     const out = path.join(paths.output, card.id + '.mp4');
-    await encode(dir, fps, out);
+    const main = path.join(dir, 'main.mp4');
+    await encode(dir, fps, main);
+    const intro = bumperPath(card, 'videoIntro', 'de entrada');
+    const outro = bumperPath(card, 'videoOutro', 'de salida');
+    await stitchClips([intro, main, outro].filter(Boolean), out, dir, W, H, fps);
     return { file: out, ext: 'mp4' };
   } finally {
     await page.close();

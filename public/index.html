@@ -163,6 +163,15 @@
       <input id="edDuration" type="number" min="1" value="10">
       <label><input type="checkbox" id="edEnabled" checked style="width:auto;margin-right:8px">Activa</label>
       <label><input type="checkbox" id="edVideo" style="width:auto;margin-right:8px">Animar (generar vídeo MP4 con entrada + movimiento)</label>
+      <div id="videoBumpers" style="display:none;margin-top:10px;padding:10px;background:#0a1a30;border:1px dashed var(--line);border-radius:10px">
+        <label style="margin-top:0">Cortinilla de entrada (MP4)</label>
+        <input type="file" id="edVideoIntroFile" accept="video/mp4,video/*">
+        <input id="edVideoIntro" placeholder="data/uploads/entrada.mp4">
+        <label>Cortinilla de salida (MP4)</label>
+        <input type="file" id="edVideoOutroFile" accept="video/mp4,video/*">
+        <input id="edVideoOutro" placeholder="data/uploads/salida.mp4">
+        <div class="hint" style="margin-top:5px">Solo se usan cuando la cartela está animada. Se adaptan a 1920×1080 y se unen al MP4 final.</div>
+      </div>
 
       <img class="preview" id="edPreview" alt="previsualización" style="display:none">
       <button type="button" class="ghost" id="btnPreview" style="margin-top:8px">👁 Previsualizar</button>

@@ -236,6 +236,8 @@ function openEditor(card) {
   $('#edDuration').value = card?.duration || 10;
   $('#edEnabled').checked = card?.enabled !== false;
   $('#edVideo').checked = card?.video === true;
+  $('#edVideoIntro').value = card?.videoIntro || '';
+  $('#edVideoOutro').value = card?.videoOutro || '';
   $('#edPreview').style.display = 'none';
   $('#edUrl').value = '';
   $('#urlHint').textContent = 'Pega el enlace y rellenamos los campos. Luego edítalos a tu gusto.';
@@ -251,6 +253,7 @@ function toggleType() {
   const t = $('#edType').value;
   $('#genFields').style.display = t === 'generated' ? '' : 'none';
   $('#fileFields').style.display = t === 'generated' ? 'none' : '';
+  $('#videoBumpers').style.display = t === 'generated' && $('#edVideo').checked ? '' : 'none';
   if (t !== 'generated' && galleryOpen) {
     galleryOpen = false; galleryToken++;
     $('#tplGallery').innerHTML = '';
@@ -258,6 +261,7 @@ function toggleType() {
   }
 }
 $('#edType').addEventListener('change', toggleType);
+$('#edVideo').addEventListener('change', toggleType);
 $('#edTemplate').addEventListener('change', applyHints);
 $('#edTheme').addEventListener('change', renderSwatches);
 $('#themeSwatches').addEventListener('click', (e) => {
@@ -335,6 +339,8 @@ function collect() {
     duration: Number($('#edDuration').value) || 10,
     enabled: $('#edEnabled').checked,
     video: $('#edVideo').checked,
+    videoIntro: $('#edVideoIntro').value || null,
+    videoOutro: $('#edVideoOutro').value || null,
   };
 }
 
@@ -354,6 +360,12 @@ $('#edPhotoFile').addEventListener('change', async (e) => {
 });
 $('#edAnyFile').addEventListener('change', async (e) => {
   if (e.target.files[0]) { toast('Subiendo…'); $('#edFile').value = await uploadFile(e.target); toast('Archivo listo'); }
+});
+$('#edVideoIntroFile').addEventListener('change', async (e) => {
+  if (e.target.files[0]) { toast('Subiendo cortinilla…'); $('#edVideoIntro').value = await uploadFile(e.target); toast('Entrada lista'); }
+});
+$('#edVideoOutroFile').addEventListener('change', async (e) => {
+  if (e.target.files[0]) { toast('Subiendo cortinilla…'); $('#edVideoOutro').value = await uploadFile(e.target); toast('Salida lista'); }
 });
 
 $('#btnExtract').addEventListener('click', async () => {
