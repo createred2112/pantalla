@@ -14,6 +14,40 @@ function pad(n) {
   return String(n).padStart(cfg.naming.padStart || 2, '0');
 }
 
+function safeName(text, fallback = 'cartela') {
+  const s = String(text || '')
+    .normalize('NFD').replace(/\p{Diacritic}/gu, '')
+    .replace(/[^A-Za-z0-9_-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return s || fallback;
+}
+
+function fileBase(card, pos) {
+  const naming = cfg.naming || {};
+  const base = slugify(card.slug || card.title || card.id);
+  const pattern = String(naming.pattern || '').trim();
+  if (pattern) {
+    const replacements = {
+      n: String(pos),
+      nn: String(pos).padStart(2, '0'),
+      nnn: String(pos).padStart(3, '0'),
+      order: pad(pos),
+      slug: base,
+      title: base,
+      id: slugify(card.id),
+    };
+    let name = pattern.replace(/\{(n|nn|nnn|order|slug|title|id)\}/g, (_, k) => replacements[k]);
+    if (naming.lowercase !== false) name = name.toLowerCase();
+    return safeName(name, base || card.id);
+  }
+
+  let name = base;
+  if (naming.prefixWithOrder) name = `${pad(pos)}${naming.separator || '_'}${base}`;
+  if (naming.lowercase) name = name.toLowerCase();
+  return safeName(name, base || card.id);
+}
+
 // Resuelve el archivo de origen de una card según su tipo.
 function sourceFile(card) {
   if (card.type === 'generated') {
@@ -68,12 +102,7 @@ function sequence({ dryRun } = {}) {
       continue;
     }
     const ext = path.extname(src).replace('.', '').toLowerCase() || 'jpg';
-    const base = slugify(card.slug || card.title || card.id);
-    let name = base;
-    if (cfg.naming.prefixWithOrder) {
-      name = `${pad(pos)}${cfg.naming.separator || '_'}${base}`;
-    }
-    if (cfg.naming.lowercase) name = name.toLowerCase();
+    const name = fileBase(card, pos);
     const dest = path.join(paths.publish, `${name}.${ext}`);
     manifest.push({
       order: pos,

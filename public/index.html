@@ -224,6 +224,28 @@
     <h3 style="margin:16px 0 2px;font-size:14px">Colores (temas)</h3>
     <div id="setColors"></div>
 
+    <h3 style="margin:16px 0 2px;font-size:14px">Publicación</h3>
+    <label>Nombre de archivos</label>
+    <input id="setNamePattern" placeholder="{nn}_{slug}">
+    <div class="hint" style="margin-top:4px">Variables: {n}=1, {nn}=01, {nnn}=001, {slug}=titulo. Ejemplos: diapo{n}, diapositiva_{nnn}, {nn}_{slug}.</div>
+    <div style="display:flex;gap:8px">
+      <div style="flex:1"><label>Relleno de orden</label><input id="setPadStart" type="number" min="1" max="5"></div>
+      <div style="flex:1"><label>Separador antiguo</label><input id="setSeparator" placeholder="_"></div>
+    </div>
+    <label><input type="checkbox" id="setLowercase" style="width:auto;margin-right:8px">Nombres en minúsculas</label>
+
+    <h3 style="margin:16px 0 2px;font-size:14px">FTP</h3>
+    <label>Servidor FTP</label><input id="setFtpHost" placeholder="ftp.servidor.com">
+    <div style="display:flex;gap:8px">
+      <div style="flex:1"><label>Puerto</label><input id="setFtpPort" type="number" min="1" placeholder="21"></div>
+      <div style="flex:2"><label>Usuario</label><input id="setFtpUser" autocomplete="off"></div>
+    </div>
+    <label>Contraseña</label><input id="setFtpPassword" type="password" autocomplete="new-password" placeholder="Dejar vacío para conservar">
+    <label>Carpeta remota</label><input id="setFtpRemoteDir" placeholder="/">
+    <label><input type="checkbox" id="setFtpSecure" style="width:auto;margin-right:8px">FTPS explícito</label>
+    <label><input type="checkbox" id="setFtpClear" style="width:auto;margin-right:8px">Limpiar carpeta remota antes de subir</label>
+    <div class="hint" id="setFtpHint" style="margin-top:4px"></div>
+
     <img class="preview" id="setPreview" alt="previsualización" style="display:none">
     <button type="button" class="ghost" id="btnSetPreview" style="margin-top:8px">👁 Previsualizar</button>
   </div>

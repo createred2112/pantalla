@@ -78,6 +78,21 @@ async function openSettings() {
   setSelectByFamily($('#setFontText'), cur(b.fontFamily));
   showLogoPrev('setLogoLightPrev', b.logoLight || b.logo);
   showLogoPrev('setLogoDarkPrev', b.logoDark);
+  const naming = SETTINGS.naming || {};
+  $('#setNamePattern').value = naming.pattern || '{nn}_{slug}';
+  $('#setPadStart').value = naming.padStart || 2;
+  $('#setSeparator').value = naming.separator || '_';
+  $('#setLowercase').checked = naming.lowercase !== false;
+  const ftp = SETTINGS.ftp || {};
+  $('#setFtpHost').value = ftp.host || '';
+  $('#setFtpPort').value = ftp.port || 21;
+  $('#setFtpUser').value = ftp.user || '';
+  $('#setFtpPassword').value = '';
+  $('#setFtpRemoteDir').value = ftp.remoteDir || '/';
+  $('#setFtpSecure').checked = ftp.secure === true;
+  $('#setFtpClear').checked = ftp.clearRemoteFirst === true;
+  const eff = ftp.effective || {};
+  $('#setFtpHint').textContent = `${ftp.hasPassword ? 'Hay contraseña guardada. ' : ''}FTP activo: ${eff.host || 'sin servidor'}:${eff.port || 21} · carpeta ${eff.remoteDir || '/'}`;
   buildColorEditor();
   $('#setPreview').style.display = 'none';
   settingsDlg.showModal();
@@ -123,7 +138,27 @@ function collectSettings() {
   $('#setColors').querySelectorAll('input[type=color]').forEach((inp) => {
     palette[inp.dataset.th][inp.dataset.key] = inp.value;
   });
-  return { brand: b, palette };
+  const ftp = {
+    host: $('#setFtpHost').value.trim(),
+    port: Number($('#setFtpPort').value) || 21,
+    user: $('#setFtpUser').value.trim(),
+    password: $('#setFtpPassword').value,
+    remoteDir: $('#setFtpRemoteDir').value.trim() || '/',
+    secure: $('#setFtpSecure').checked,
+    clearRemoteFirst: $('#setFtpClear').checked,
+  };
+  return {
+    brand: b,
+    palette,
+    naming: {
+      pattern: $('#setNamePattern').value.trim() || '{nn}_{slug}',
+      padStart: Number($('#setPadStart').value) || 2,
+      separator: $('#setSeparator').value || '_',
+      lowercase: $('#setLowercase').checked,
+      prefixWithOrder: true,
+    },
+    ftp,
+  };
 }
 
 $('#btnSetPreview').addEventListener('click', async () => {

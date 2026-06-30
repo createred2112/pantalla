@@ -118,10 +118,21 @@ app.get('/api/fontcss', (req, res) => {
 
 // Ajustes de diseño: leer.
 app.get('/api/settings', (req, res) => {
-  res.json({ brand: cfg.brand, palette: cfg.palette || {}, screen: cfg.screen, fonts: fontFamilies() });
+  const { ftpConfig } = require('./config');
+  const ftp = cfg.ftp || {};
+  const effectiveFtp = ftpConfig();
+  delete effectiveFtp.password;
+  res.json({
+    brand: cfg.brand,
+    palette: cfg.palette || {},
+    screen: cfg.screen,
+    naming: cfg.naming || {},
+    ftp: { ...ftp, password: '', hasPassword: Boolean(ftp.password || process.env.FTP_PASSWORD), effective: effectiveFtp },
+    fonts: fontFamilies(),
+  });
 });
 
-// Ajustes de diseño: guardar (solo brand/palette/screen). Se aplica en caliente.
+// Ajustes generales: guardar. Se aplica en caliente.
 app.put('/api/settings', (req, res) => {
   const { saveConfig } = require('./config');
   const body = req.body || {};
@@ -129,9 +140,15 @@ app.put('/api/settings', (req, res) => {
   if (body.brand) partial.brand = body.brand;
   if (body.palette) partial.palette = body.palette;
   if (body.screen) partial.screen = body.screen;
+  if (body.naming) partial.naming = body.naming;
+  if (body.ftp) {
+    const nextFtp = { ...(cfg.ftp || {}), ...body.ftp };
+    if (!body.ftp.password) nextFtp.password = (cfg.ftp && cfg.ftp.password) || '';
+    partial.ftp = nextFtp;
+  }
   saveConfig(partial);
   log.info('settings', 'Ajustes de diseño actualizados', Object.keys(partial));
-  res.json({ ok: true, brand: cfg.brand, palette: cfg.palette, screen: cfg.screen });
+  res.json({ ok: true, brand: cfg.brand, palette: cfg.palette, screen: cfg.screen, naming: cfg.naming, ftp: { ...cfg.ftp, password: '' } });
 });
 
 app.get('/api/cards', (req, res) => res.json(store.list()));
@@ -265,9 +282,11 @@ app.post('/api/publish', async (req, res) => {
 });
 
 app.get('/api/status', (req, res) => {
+  const { ftpConfig } = require('./config');
+  const ftpCfg = ftpConfig();
   res.json({
     status: status.read(),
-    ftpConfigured: Boolean(env.ftp.host && env.ftp.user),
+    ftpConfigured: Boolean(ftpCfg.host && ftpCfg.user),
     screen: cfg.screen,
   });
 });

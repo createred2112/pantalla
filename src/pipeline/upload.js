@@ -4,7 +4,7 @@
 const fs = require('fs');
 const path = require('path');
 const ftp = require('basic-ftp');
-const { cfg, paths, env } = require('../config');
+const { paths, ftpConfig } = require('../config');
 const log = require('../util/logger');
 const status = require('../util/status');
 
@@ -23,11 +23,12 @@ async function upload({ dryRun, files: plannedFiles } = {}) {
     return r;
   }
 
-  const hasCreds = env.ftp.host && env.ftp.user;
+  const ftpCfg = ftpConfig();
+  const hasCreds = ftpCfg.host && ftpCfg.user;
   if (dryRun || !hasCreds) {
-    const reason = dryRun ? 'dry-run solicitado' : 'faltan credenciales FTP en .env';
+    const reason = dryRun ? 'dry-run solicitado' : 'faltan credenciales FTP';
     log.warn('upload', `Subida simulada (${reason}). Archivos: ${files.join(', ')}`);
-    const r = { ok: true, dryRun: true, files, reason, remoteDir: cfg.ftp.remoteDir };
+    const r = { ok: true, dryRun: true, files, reason, remoteDir: ftpCfg.remoteDir };
     status.set('upload', r);
     return r;
   }
@@ -36,20 +37,20 @@ async function upload({ dryRun, files: plannedFiles } = {}) {
   client.ftp.verbose = false;
   try {
     await client.access({
-      host: env.ftp.host,
-      port: env.ftp.port,
-      user: env.ftp.user,
-      password: env.ftp.password,
-      secure: env.ftp.secure,
+      host: ftpCfg.host,
+      port: ftpCfg.port,
+      user: ftpCfg.user,
+      password: ftpCfg.password,
+      secure: ftpCfg.secure,
       // Acepta certificados TLS auto-firmados / con nombre no coincidente (FTPS
       // de paneles como CloudPanel). El canal sigue cifrado.
       secureOptions: { rejectUnauthorized: false },
     });
-    log.info('upload', `Conectado a ${env.ftp.host}:${env.ftp.port} (secure=${env.ftp.secure})`);
+    log.info('upload', `Conectado a ${ftpCfg.host}:${ftpCfg.port} (secure=${ftpCfg.secure})`);
 
-    await client.ensureDir(cfg.ftp.remoteDir);
+    await client.ensureDir(ftpCfg.remoteDir);
 
-    if (cfg.ftp.clearRemoteFirst) {
+    if (ftpCfg.clearRemoteFirst) {
       try {
         await client.clearWorkingDir();
         log.info('upload', 'Carpeta remota limpiada');
@@ -60,9 +61,9 @@ async function upload({ dryRun, files: plannedFiles } = {}) {
 
     // Sube todo publish/ (incluye playlist.json); sobreescribe por defecto.
     await client.uploadFromDir(paths.publish);
-    log.info('upload', `Subidos ${files.length} archivo(s) a ${cfg.ftp.remoteDir}`);
+    log.info('upload', `Subidos ${files.length} archivo(s) a ${ftpCfg.remoteDir}`);
 
-    const r = { ok: true, files, remoteDir: cfg.ftp.remoteDir };
+    const r = { ok: true, files, remoteDir: ftpCfg.remoteDir };
     status.set('upload', r);
     return r;
   } catch (e) {

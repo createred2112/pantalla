@@ -73,6 +73,25 @@ const env = {
   panelToken: process.env.PANEL_TOKEN || '',
 };
 
+function ftpConfig() {
+  const f = cfg.ftp || {};
+  const usesConfig = Boolean(f.host || f.user || f.password);
+  return {
+    host: f.host || process.env.FTP_HOST || '',
+    port: Number(usesConfig ? (f.port || 21) : (process.env.FTP_PORT || f.port || 21)),
+    user: f.user || process.env.FTP_USER || '',
+    password: f.password || process.env.FTP_PASSWORD || '',
+    secure: usesConfig ? String(f.secure || false) === 'true' : (process.env.FTP_SECURE != null ? String(process.env.FTP_SECURE) === 'true' : String(f.secure || false) === 'true'),
+    remoteDir: f.remoteDir || '/',
+    clearRemoteFirst: f.clearRemoteFirst === true,
+    source: {
+      host: f.host ? 'config' : 'env',
+      user: f.user ? 'config' : 'env',
+      password: f.password ? 'config' : 'env',
+    },
+  };
+}
+
 // Mezcla profunda (objetos planos) usada por saveConfig.
 function deepMerge(target, src) {
   for (const k of Object.keys(src)) {
@@ -93,4 +112,4 @@ function saveConfig(partial) {
   return cfg;
 }
 
-module.exports = { ROOT, cfg, paths, abs, ensureDirs, env, reload: load, saveConfig };
+module.exports = { ROOT, cfg, paths, abs, ensureDirs, env, ftpConfig, reload: load, saveConfig };
