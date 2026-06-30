@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Vista previa · LA PANTALLA</title>
+<style>
+  :root{
+    --bg:#0b1f3a; --panel:#13294b; --line:#244170; --accent:#e2231a;
+    --txt:#eaf0fb; --muted:#9fb2d4; --ok:#2bb673; --warn:#e0a106;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:var(--txt);-webkit-text-size-adjust:100%}
+  header{position:sticky;top:0;z-index:10;background:#081729;border-bottom:1px solid var(--line);padding:12px 14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  h1{font-size:17px;margin:0;flex:1}
+  button,a.button{font:inherit;border:0;border-radius:10px;padding:11px 14px;color:#fff;background:var(--line);cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;justify-content:center}
+  button.primary{background:var(--accent)}
+  button:disabled{opacity:.5;cursor:wait}
+  main{width:min(1120px,100%);margin:0 auto;padding:14px 12px 40px}
+  .status{color:var(--muted);font-size:13px;margin:0 0 14px;line-height:1.4}
+  .status b{color:var(--txt)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  .media{width:100%;aspect-ratio:16/9;background:#000;display:block;object-fit:contain}
+  .meta{padding:10px 12px}
+  .top{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+  .num{font-weight:900;color:#081729;background:var(--warn);border-radius:999px;padding:3px 8px;font-size:12px}
+  .title{font-weight:750;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .file{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;color:#bcd;background:#06101f;border:1px solid var(--line);border-radius:8px;padding:8px;overflow-wrap:anywhere}
+  .tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+  .tag{font-size:11px;padding:3px 8px;border-radius:999px;background:#0a3d62;color:#bfe3ff}
+  .empty{padding:40px 12px;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:12px;background:#0a1a30}
+  .error{padding:14px;border:1px solid #6d1c22;border-radius:12px;background:#341018;color:#ffd2d6}
+  @media (max-width:640px){
+    header{align-items:stretch}
+    h1{flex-basis:100%}
+    header a.button,header button{flex:1 1 0;padding:10px 8px}
+    .grid{grid-template-columns:1fr}
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Vista previa</h1>
+  <a class="button" href="/">Volver</a>
+  <button class="primary" id="btnReload">Regenerar</button>
+</header>
+<main>
+  <p class="status" id="status">Preparando una prueba sin subir nada al FTP...</p>
+  <div id="content"></div>
+</main>
+<script src="review.js"></script>
+</body>
+</html>

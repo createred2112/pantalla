@@ -540,6 +540,7 @@ async function doPublish(dryRun) {
 }
 $('#btnPublish').addEventListener('click', () => preparePublish());
 $('#btnDry').addEventListener('click', () => doPublish(true));
+$('#btnReview').addEventListener('click', () => window.open('/review.html', '_blank'));
 $('#btnPublishCancel').addEventListener('click', () => publishDlg.close());
 $('#btnPublishCancelTop').addEventListener('click', () => publishDlg.close());
 $('#btnPublishConfirm').addEventListener('click', async () => {
