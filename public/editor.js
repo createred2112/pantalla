@@ -56,11 +56,14 @@ function renderEl(el, i) {
   if (el.type === 'text') renderText(d, el);
   else if (el.type === 'chip') renderChip(d, el);
   else if (el.type === 'rect' || el.type === 'band') { d.style.background = el.gradient || el.color || '#000'; if (el.radius) d.style.borderRadius = el.radius + 'px'; }
-  else if (el.type === 'svg') d.innerHTML = el.svg || '';
+  else if (el.type === 'svg') {
+    d.innerHTML = el.svg || '';
+    if (el.decorative || !el.bind) d.style.pointerEvents = 'none';
+  }
   else if (el.type === 'image') d.style.background = '#1a2a44';
 
-  d.addEventListener('mousedown', (e) => startDrag(e, i));
-  if (i === SEL && el.type !== 'chip') { const h = document.createElement('div'); h.className = 'handle'; h.addEventListener('mousedown', (e) => startResize(e, i)); d.appendChild(h); }
+  if (d.style.pointerEvents !== 'none') d.addEventListener('mousedown', (e) => startDrag(e, i));
+  if (i === SEL && el.type !== 'chip' && d.style.pointerEvents !== 'none') { const h = document.createElement('div'); h.className = 'handle'; h.addEventListener('mousedown', (e) => startResize(e, i)); d.appendChild(h); }
   return d;
 }
 

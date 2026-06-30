@@ -55,7 +55,9 @@ module.exports = {
     const cs = Math.round(botH * 0.22), chx = W - pad - Math.round(W * 0.02), chy = H - botH / 2;
     let chev = '';
     [0, 1].forEach((k) => { const x = chx - k * cs * 1.1; chev += `<polyline points="${x - cs},${chy - cs} ${x},${chy} ${x - cs},${chy + cs}" fill="none" stroke="${acc}" stroke-width="${Math.round(cs * 0.4)}" stroke-linecap="round" stroke-linejoin="round"/>`; });
-    els.push({ type: 'svg', x: 0, y: 0, w: W, h: H, svg: `<svg viewBox="0 0 ${W} ${H}" width="100%" height="100%">${chev}</svg>` });
+    const chevX = Math.round(chx - cs * 2.4), chevY = Math.round(chy - cs * 1.5);
+    const chevW = Math.round(cs * 3.0), chevH = Math.round(cs * 3.0);
+    els.push({ type: 'svg', decorative: true, x: chevX, y: chevY, w: chevW, h: chevH, svg: `<svg viewBox="${chevX} ${chevY} ${chevW} ${chevH}" width="100%" height="100%">${chev}</svg>` });
 
     return { background: { type: 'solid', color: theme.bg }, elements: els };
   },
