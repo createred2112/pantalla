@@ -15,11 +15,39 @@
   h1{font-size:17px;margin:0;flex:1}
   button,a.button{font:inherit;border:0;border-radius:10px;padding:11px 14px;color:#fff;background:var(--line);cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;justify-content:center}
   button.primary{background:var(--accent)}
-  button:disabled{opacity:.5;cursor:wait}
-  main{width:min(1120px,100%);margin:0 auto;padding:14px 12px 40px}
+  button:disabled{opacity:.55;cursor:wait}
+  main{width:min(1180px,100%);margin:0 auto;padding:14px 12px 40px}
   .status{color:var(--muted);font-size:13px;margin:0 0 14px;line-height:1.4}
   .status b{color:var(--txt)}
-  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}
+  .loading{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px}
+  .steps{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:12px 0}
+  .step{border:1px solid var(--line);border-radius:10px;padding:10px;background:#0a1a30;color:var(--muted);font-size:12px}
+  .step b{display:block;color:var(--txt);font-size:13px;margin-bottom:3px}
+  .step.on{border-color:var(--warn);color:#ffe4a8}
+  .step.ok{border-color:var(--ok);color:#bff0d5}
+  .live{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;background:#06101f;border:1px solid var(--line);border-radius:10px;padding:10px;max-height:180px;overflow:auto;white-space:pre-wrap;color:#bcd}
+  .player{display:none}
+  .player.ready{display:block}
+  .screen{position:relative;background:#000;border:1px solid var(--line);border-radius:12px;overflow:hidden;aspect-ratio:16/9;width:100%;box-shadow:0 14px 45px rgba(0,0,0,.28)}
+  .screen-media,.screen-media img,.screen-media video{width:100%;height:100%;display:block;background:#000}
+  .screen-media img,.screen-media video{object-fit:contain}
+  .screen-overlay{display:flex;align-items:center;gap:10px;padding:10px 0}
+  .counter{font-weight:900;color:#081729;background:var(--warn);border-radius:999px;padding:4px 9px;font-size:12px;white-space:nowrap}
+  .now{min-width:0;flex:1}
+  .now b{display:block;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .now span{display:block;color:#c9d5ea;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .timer{width:120px;height:5px;appearance:none;border:0;border-radius:999px;background:#ffffff33;overflow:hidden}
+  .timer::-webkit-progress-bar{background:#ffffff33}
+  .timer::-webkit-progress-value{background:var(--warn)}
+  .controls{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 14px}
+  .controls button{flex:0 0 auto}
+  .controls .grow{flex:1}
+  .strip{display:flex;gap:8px;overflow:auto;padding-bottom:8px;margin-bottom:14px}
+  .thumb{flex:0 0 150px;border:1px solid var(--line);border-radius:10px;background:#0a1a30;padding:6px;color:var(--muted);cursor:pointer}
+  .thumb.on{border-color:var(--warn);box-shadow:0 0 0 1px var(--warn) inset;color:var(--txt)}
+  .thumb-media{width:100%;aspect-ratio:16/9;background:#000;border-radius:6px;object-fit:cover;display:block}
+  .thumb-title{font-size:11px;margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
   .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
   .media{width:100%;aspect-ratio:16/9;background:#000;display:block;object-fit:contain}
   .meta{padding:10px 12px}
@@ -31,10 +59,14 @@
   .tag{font-size:11px;padding:3px 8px;border-radius:999px;background:#0a3d62;color:#bfe3ff}
   .empty{padding:40px 12px;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:12px;background:#0a1a30}
   .error{padding:14px;border:1px solid #6d1c22;border-radius:12px;background:#341018;color:#ffd2d6}
-  @media (max-width:640px){
+  .screen:fullscreen{width:100vw;height:100vh;aspect-ratio:auto;border:0;border-radius:0}
+  @media (max-width:760px){
     header{align-items:stretch}
     h1{flex-basis:100%}
     header a.button,header button{flex:1 1 0;padding:10px 8px}
+    .steps{grid-template-columns:1fr 1fr}
+    .controls button{flex:1 1 calc(50% - 8px)}
+    .controls .grow{flex-basis:100%}
     .grid{grid-template-columns:1fr}
   }
 </style>
@@ -47,6 +79,30 @@
 </header>
 <main>
   <p class="status" id="status">Preparando una prueba sin subir nada al FTP...</p>
+
+  <section class="loading" id="loading">
+    <div class="steps" id="steps"></div>
+    <div class="live" id="liveLog">Arrancando...</div>
+  </section>
+
+  <section class="player" id="player">
+    <div class="screen" id="screen">
+      <div class="screen-media" id="screenMedia"></div>
+    </div>
+    <div class="screen-overlay">
+      <span class="counter" id="counter">1/1</span>
+      <div class="now"><b id="nowTitle"></b><span id="nowFile"></span></div>
+      <progress class="timer" id="timer" value="0" max="1"></progress>
+    </div>
+    <div class="controls">
+      <button id="btnPrev">Anterior</button>
+      <button class="primary" id="btnPlay">Pausa</button>
+      <button id="btnNext">Siguiente</button>
+      <button class="grow" id="btnFull">Pantalla completa</button>
+    </div>
+    <div class="strip" id="strip"></div>
+  </section>
+
   <div id="content"></div>
 </main>
 <script src="review.js"></script>
