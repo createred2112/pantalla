@@ -55,8 +55,9 @@ function normalize(card) {
     photo: card.photo || null,   // ruta a foto de fondo (para generated)
     file: card.file || null,     // ruta a archivo ya listo (image/video)
     duration: card.duration != null ? Number(card.duration) : cfg.defaults.duration,
-    source: card.source || 'manual', // manual | worker
+    source: card.source || 'manual', // manual | worker | rundown
     slug: card.slug || null,
+    rundownSlot: card.rundownSlot || null,
     updatedAt: new Date().toISOString(),
   };
 }

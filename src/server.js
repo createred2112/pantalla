@@ -13,6 +13,7 @@ const { renderToBuffer } = require('./generator/renderCard');
 const { publish } = require('./pipeline/publish');
 const { importWorker } = require('./pipeline/importWorker');
 const auth = require('./auth');
+const rundown = require('./rundown');
 
 ensureDirs();
 const app = express();
@@ -155,6 +156,24 @@ app.put('/api/settings', (req, res) => {
 });
 
 app.get('/api/cards', (req, res) => res.json(store.list()));
+
+app.get('/api/rundown', (req, res) => {
+  res.json(rundown.read());
+});
+
+app.put('/api/rundown', (req, res) => {
+  res.json(rundown.save(req.body || {}));
+});
+
+app.post('/api/rundown/reset', (req, res) => {
+  res.json(rundown.reset());
+});
+
+app.post('/api/rundown/materialize', (req, res) => {
+  const result = rundown.materialize();
+  log.info('rundown', `Escaleta generada: ${result.count} cartela(s)`);
+  res.json(result);
+});
 
 // Frame resuelto de una cartela (para el editor visual): elementos posicionados.
 app.get('/api/frame/:id', (req, res) => {

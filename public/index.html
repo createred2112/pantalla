@@ -32,6 +32,7 @@
   .card .row{display:flex;gap:6px;padding:0 10px 10px;flex-wrap:wrap;align-items:center}
   .tag{font-size:11px;padding:3px 8px;border-radius:999px;background:#0a3d62;color:#bfe3ff}
   .tag.worker{background:#3d2a0a;color:#ffd98a}
+  .tag.rundown{background:#173d2c;color:#bff0d5}
   .tag.off{background:#3a1320;color:#ff9bb0}
   .spacer{flex:1}
   .iconbtn{padding:8px 10px;background:var(--line)}
@@ -69,6 +70,20 @@
     display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:18px}
   .tplimg img{width:100%;height:100%;object-fit:cover;display:block}
   .tpllbl{font-size:11px;line-height:1.15}
+  .slot{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:start;background:#0a1a30;border:1px solid var(--line);border-radius:12px;padding:10px;margin:8px 0}
+  .slot.off{opacity:.58}
+  .slot.missing{border-color:#e0a106}
+  .slot input[type=checkbox]{width:auto;margin-top:4px}
+  .slot-main{min-width:0}
+  .slot-title{font-weight:800;font-size:14px}
+  .slot-meta{color:var(--muted);font-size:12px;margin-top:2px}
+  .slot-note{color:#ffd98a;font-size:12px;margin-top:4px}
+  .slot-actions{display:flex;gap:4px;flex-direction:column}
+  .slot-actions .iconbtn{padding:6px 8px}
+  .slot-edit{grid-column:1 / -1;display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px}
+  .slot-edit label{margin-top:0}
+  .slot-edit textarea{grid-column:1 / -1;min-height:62px}
+  .slot-wide{grid-column:1 / -1}
   .spin{display:inline-block;animation:spin 1s linear infinite}
   @keyframes spin{to{transform:rotate(360deg)}}
   @media (max-width:640px){
@@ -100,6 +115,7 @@
 
 <main>
   <div class="bar">
+    <button class="ghost" id="btnRundown">Escaleta</button>
     <button class="ghost" id="btnImport">Importar worker</button>
     <button class="ghost" id="btnRefresh">↻ Refrescar</button>
   </div>
@@ -291,6 +307,23 @@
   <div class="dlg-f">
     <button class="ghost" id="btnPublishCancel">Cancelar</button>
     <button class="primary" id="btnPublishConfirm">Subir ahora</button>
+  </div>
+</dialog>
+
+<!-- Escaleta -->
+<dialog id="rundownDlg">
+  <div class="dlg-h"><h2>Escaleta</h2><button class="ghost" id="btnRundownClose">✕</button></div>
+  <div class="dlg-b">
+    <label>Título</label>
+    <input id="rundownTitle">
+    <div class="status" id="rundownSummary"></div>
+    <div id="rundownList"></div>
+  </div>
+  <div class="dlg-f">
+    <button class="ghost" id="btnRundownAdd">Añadir bloque</button>
+    <button class="ghost" id="btnRundownReset">Reset</button>
+    <button class="ghost" id="btnRundownSave">Guardar</button>
+    <button class="primary" id="btnRundownMake">Generar cartelas</button>
   </div>
 </dialog>
 

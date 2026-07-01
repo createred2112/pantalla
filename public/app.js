@@ -20,6 +20,7 @@ function toast(msg) {
 let cards = [];
 let TEMPLATES = [];
 let PALETTE = {};
+let RUNDOWN = null;
 
 // Galería visual de plantillas (probar varias con los datos actuales).
 let galleryOpen = false;
@@ -283,6 +284,7 @@ function render() {
         <span class="tag">${c.type}</span>
         ${c.type === 'generated' && c.video ? '<span class="tag worker">MP4 animado</span>' : ''}
         ${c.source === 'worker' ? '<span class="tag worker">worker</span>' : ''}
+        ${c.source === 'rundown' ? '<span class="tag rundown">escaleta</span>' : ''}
         ${c.enabled === false ? '<span class="tag off">oculta</span>' : ''}
         <span class="tag">${c.duration||10}s</span>
         <span class="spacer"></span>
@@ -296,7 +298,7 @@ function render() {
   });
 }
 
-function esc(s){return (s||'').replace(/[&<>]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[m]));}
+function esc(s){return (s||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
 
 // --- Reordenar ---
 async function move(i, dir) {
@@ -531,6 +533,147 @@ $('#btnRefresh').addEventListener('click', load);
 $('#btnImport').addEventListener('click', async () => {
   const r = await api('/import', { method: 'POST' });
   toast(`Worker: ${r.added.length} nuevo(s) de ${r.scanned}`); load();
+});
+
+// --- Escaleta editorial ---
+const rundownDlg = $('#rundownDlg');
+
+async function openRundown() {
+  RUNDOWN = await api('/rundown');
+  renderRundown();
+  rundownDlg.showModal();
+}
+
+function reportForSlot(slot) {
+  return ((RUNDOWN && RUNDOWN.report) || []).find((r) => r.id === slot.id) || {};
+}
+
+function renderRundown() {
+  if (!RUNDOWN) return;
+  const rd = RUNDOWN.rundown || { slots: [] };
+  const slots = rd.slots || [];
+  $('#rundownTitle').value = rd.title || 'Escaleta';
+  const active = slots.filter((s) => s.enabled !== false).length;
+  const missing = ((RUNDOWN.report || []).filter((r) => r.missing)).length;
+  $('#rundownSummary').innerHTML =
+    `<b>${active}</b> bloques activos · <b style="color:${missing ? '#e0a106' : '#bff0d5'}">${missing}</b> por completar`;
+  $('#rundownList').innerHTML = slots.map((s, i) => {
+    const rep = reportForSlot(s);
+    const source = s.source === 'library' ? `biblioteca · ${esc(s.libraryKey)}` :
+      (s.source === 'worker' ? `worker · ${esc(s.workerKey)}` : 'fijo');
+    return `
+      <div class="slot ${s.enabled === false ? 'off' : ''} ${rep.missing ? 'missing' : ''}" data-slot="${esc(s.id)}">
+        <input type="checkbox" data-rd-enabled="${i}" ${s.enabled !== false ? 'checked' : ''} title="Activo">
+        <div class="slot-main">
+          <div class="slot-title">${i + 1}. ${esc(s.label)}</div>
+          <div class="slot-meta">${source} · ${esc(rep.title || s.title || 'sin título')} · ${Number(s.duration) || 8}s${s.video ? ' · MP4' : ''}</div>
+          ${rep.note ? `<div class="slot-note">${esc(rep.note)}</div>` : ''}
+        </div>
+        <div class="slot-actions">
+          <button class="iconbtn" data-rd-up="${i}" ${i === 0 ? 'disabled' : ''}>▲</button>
+          <button class="iconbtn" data-rd-down="${i}" ${i === slots.length - 1 ? 'disabled' : ''}>▼</button>
+          <button class="iconbtn" data-rd-del="${i}">🗑</button>
+        </div>
+        <div class="slot-edit">
+          <label>Nombre<input data-rd-field="${i}:label" value="${esc(s.label)}"></label>
+          <label>Plantilla<input data-rd-field="${i}:template" value="${esc(s.template || '')}" placeholder="Auto"></label>
+          <label>Título<input data-rd-field="${i}:title" value="${esc(s.title || '')}"></label>
+          <label>Subtítulo<input data-rd-field="${i}:subtitle" value="${esc(s.subtitle || '')}"></label>
+          <label class="slot-wide">Texto<textarea data-rd-field="${i}:body">${esc(s.body || '')}</textarea></label>
+          <label>Duración<input type="number" min="1" data-rd-field="${i}:duration" value="${Number(s.duration) || 8}"></label>
+          <label><input type="checkbox" data-rd-video="${i}" ${s.video ? 'checked' : ''}> Animada</label>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function collectRundown() {
+  const rd = RUNDOWN.rundown || { slots: [] };
+  rd.title = $('#rundownTitle').value.trim() || 'Escaleta';
+  $('#rundownList').querySelectorAll('[data-rd-field]').forEach((el) => {
+    const [idx, key] = el.dataset.rdField.split(':');
+    const slot = rd.slots[Number(idx)];
+    if (!slot) return;
+    slot[key] = key === 'duration' ? Number(el.value) || 8 : el.value;
+  });
+  $('#rundownList').querySelectorAll('[data-rd-enabled]').forEach((el) => {
+    const slot = rd.slots[Number(el.dataset.rdEnabled)];
+    if (slot) slot.enabled = el.checked;
+  });
+  $('#rundownList').querySelectorAll('[data-rd-video]').forEach((el) => {
+    const slot = rd.slots[Number(el.dataset.rdVideo)];
+    if (slot) slot.video = el.checked;
+  });
+  return rd;
+}
+
+async function saveRundown() {
+  RUNDOWN = await api('/rundown', { method: 'PUT', body: JSON.stringify(collectRundown()) });
+  renderRundown();
+  toast('Escaleta guardada');
+}
+
+async function makeRundown() {
+  await saveRundown();
+  const btn = $('#btnRundownMake');
+  btn.disabled = true;
+  try {
+    const r = await api('/rundown/materialize', { method: 'POST' });
+    toast(`Escaleta generada: ${r.count} cartela(s)`);
+    rundownDlg.close();
+    load();
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+$('#btnRundown').addEventListener('click', openRundown);
+$('#btnRundownClose').addEventListener('click', () => rundownDlg.close());
+$('#btnRundownSave').addEventListener('click', saveRundown);
+$('#btnRundownMake').addEventListener('click', makeRundown);
+$('#btnRundownAdd').addEventListener('click', () => {
+  if (!RUNDOWN) return;
+  collectRundown();
+  RUNDOWN.rundown.slots.push({
+    id: 'manual_' + Date.now().toString(36),
+    label: 'Nuevo bloque',
+    enabled: true,
+    source: 'fixed',
+    template: 'noticia',
+    theme: '',
+    title: '',
+    subtitle: '',
+    body: '',
+    duration: 8,
+    video: false,
+  });
+  renderRundown();
+});
+$('#btnRundownReset').addEventListener('click', async () => {
+  if (!confirm('¿Restaurar la protoescaleta inicial?')) return;
+  RUNDOWN = await api('/rundown/reset', { method: 'POST' });
+  renderRundown();
+  toast('Escaleta restaurada');
+});
+$('#rundownList').addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b || !RUNDOWN) return;
+  const slots = RUNDOWN.rundown.slots || [];
+  if (b.dataset.rdDel != null) {
+    collectRundown();
+    slots.splice(Number(b.dataset.rdDel), 1);
+    renderRundown();
+    return;
+  }
+  const i = b.dataset.rdUp != null ? Number(b.dataset.rdUp) : (b.dataset.rdDown != null ? Number(b.dataset.rdDown) : -1);
+  const dir = b.dataset.rdUp != null ? -1 : 1;
+  const j = i + dir;
+  if (i < 0 || j < 0 || j >= slots.length) return;
+  collectRundown();
+  [slots[i], slots[j]] = [slots[j], slots[i]];
+  renderRundown();
+});
+$('#rundownList').addEventListener('change', () => {
+  if (RUNDOWN) { collectRundown(); renderRundown(); }
 });
 
 const publishDlg = $('#publishDlg');

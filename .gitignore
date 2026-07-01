@@ -7,6 +7,8 @@ output/
 publish/
 preview/
 data/cards.json
+data/rundown.json
+data/content-library.json
 data/uploads/
 data/worker-inbox/
 !data/.gitkeep
