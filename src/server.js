@@ -14,6 +14,7 @@ const { publish } = require('./pipeline/publish');
 const { importWorker } = require('./pipeline/importWorker');
 const auth = require('./auth');
 const rundown = require('./rundown');
+const renderGuard = require('./util/renderGuard');
 
 ensureDirs();
 const app = express();
@@ -89,7 +90,7 @@ const upload = multer({
 // --- API ---
 const templates = require('./generator/templates');
 app.get('/api/config', (req, res) => {
-  res.json({ screen: cfg.screen, brand: cfg.brand, defaults: cfg.defaults, templates: templates.list(), palette: cfg.palette || {} });
+  res.json({ screen: cfg.screen, brand: cfg.brand, defaults: cfg.defaults, templates: templates.list(), palette: cfg.palette || {}, safety: renderGuard.safetyInfo() });
 });
 
 // Fuentes disponibles (familias empaquetadas en assets/fonts).
@@ -293,6 +294,7 @@ app.post('/api/preview', async (req, res) => {
 // reutilizando output/preview.mp4 para que el editor pueda enseñarlo al momento.
 app.post('/api/preview-video', async (req, res) => {
   try {
+    renderGuard.assertCanUseChrome('video');
     const card = store.normalize({
       ...req.body,
       id: 'preview',
@@ -345,6 +347,7 @@ app.get('/api/status', (req, res) => {
     ftpConfigured: Boolean(ftpCfg.host && ftpCfg.user),
     screen: cfg.screen,
     screenProfile: cfg.screenProfile || {},
+    safety: renderGuard.safetyInfo(),
   });
 });
 

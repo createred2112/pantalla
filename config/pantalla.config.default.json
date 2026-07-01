@@ -94,7 +94,8 @@
     "uploads": "data/uploads"
   },
   "video": {
-    "fps": 25
+    "fps": 18,
+    "allowOnLowMemory": false
   },
   "ftp": {
     "host": "",

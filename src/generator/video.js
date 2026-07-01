@@ -10,6 +10,7 @@ const ffmpeg = require('ffmpeg-static');
 const { cfg, paths, abs } = require('../config');
 const { buildHtml, withPage, AUTOFIT } = require('./htmlRender');
 const { prepare } = require('./renderCard');
+const renderGuard = require('../util/renderGuard');
 
 // Se inyecta en la página: crea una coreografía completa (en pausa) y expone
 // __setT(ms). No usa azar: el MP4 se renderiza igual en cada ejecución.
@@ -221,6 +222,7 @@ function bumperPath(card, field, label) {
 
 // Renderiza la cartela a un MP4 en output/. Devuelve { file, ext:'mp4' }.
 async function renderVideoToFile(card) {
+  renderGuard.assertCanUseChrome('video');
   const prep = prepare(card);
   if (!prep) throw new Error('plantilla no animable');
   const { ctx, tpl, frame } = prep;

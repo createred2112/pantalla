@@ -51,7 +51,11 @@ function fileBase(card, pos) {
 // Resuelve el archivo de origen de una card según su tipo.
 function sourceFile(card) {
   if (card.type === 'generated') {
-    const ext = card.video ? 'mp4' : (cfg.screen.format || 'jpg').toLowerCase().replace('jpeg', 'jpg');
+    if (card.video) {
+      const mp4 = path.join(paths.output, `${card.id}.mp4`);
+      if (fs.existsSync(mp4)) return mp4;
+    }
+    const ext = (cfg.screen.format || 'jpg').toLowerCase().replace('jpeg', 'jpg');
     return path.join(paths.output, `${card.id}.${ext}`);
   }
   // image | video: archivo ya listo (del worker de codex o subido a mano)

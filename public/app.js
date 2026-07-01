@@ -20,6 +20,7 @@ function toast(msg) {
 let cards = [];
 let TEMPLATES = [];
 let PALETTE = {};
+let SAFETY = {};
 let RUNDOWN = null;
 let RUNDOWN_SELECTED = 0;
 let LIBRARY_CATEGORY = 'datosUtiles';
@@ -34,9 +35,16 @@ async function loadConfig() {
     const cfg = await api('/config');
     TEMPLATES = cfg.templates || [];
     PALETTE = cfg.palette || {};
+    SAFETY = cfg.safety || {};
     $('#edTemplate').innerHTML = TEMPLATES.map((t) => `<option value="${t.id}">${t.label}</option>`).join('');
     $('#edTheme').innerHTML = '<option value="">Auto (según plantilla)</option>' +
       Object.keys(PALETTE).map((k) => `<option value="${k}">${k}</option>`).join('');
+    if (SAFETY.safeMode) {
+      $('#btnGallery').textContent = 'Galería desactivada en modo seguro';
+      $('#btnGallery').disabled = true;
+      $('#edVideo').disabled = true;
+      $('#edVideo').checked = false;
+    }
   } catch {}
 }
 function renderSwatches() {
@@ -271,13 +279,15 @@ function render() {
   }
   el.innerHTML = '';
   cards.forEach((c, i) => {
-    const thumb = c.type === 'generated'
+    const heavyThumb = SAFETY.safeMode && c.type === 'generated';
+    const thumb = heavyThumb ? ''
+      : c.type === 'generated'
       ? `/api/preview/${c.id}?t=${c.updatedAt || ''}&v=${DV}`
       : (c.file ? '/media/' + c.file.replace('data/worker-inbox/', 'inbox/').replace('data/uploads/', 'uploads/') : '');
     const div = document.createElement('div');
     div.className = 'card';
     div.innerHTML = `
-      <img class="thumb" src="${thumb}" alt="" onerror="this.style.opacity=.25">
+      ${thumb ? `<img class="thumb" src="${thumb}" alt="" onerror="this.style.opacity=.25">` : `<div class="thumb" style="display:flex;align-items:center;justify-content:center;color:#9fb2d4;font-weight:800">Vista segura</div>`}
       <div class="meta">
         <p class="t">${esc(c.title) || '(sin título)'}</p>
         <p class="s">${esc(c.subtitle) || ''}</p>
@@ -328,6 +338,7 @@ function openEditor(card) {
   $('#edDuration').value = card?.duration || 10;
   $('#edEnabled').checked = card?.enabled !== false;
   $('#edVideo').checked = card?.video === true;
+  if (SAFETY.safeMode) $('#edVideo').checked = false;
   $('#edVideoIntro').value = card?.videoIntro || '';
   $('#edVideoOutro').value = card?.videoOutro || '';
   $('#edPreview').style.display = 'none';
@@ -339,6 +350,7 @@ function openEditor(card) {
   galleryOpen = false; galleryToken++;
   $('#tplGallery').innerHTML = '';
   $('#btnGallery').textContent = '🖼 Probar plantillas visualmente';
+  if (SAFETY.safeMode) $('#btnGallery').textContent = 'Galería desactivada en modo seguro';
   applyHints();
   toggleType();
   editor.showModal();
@@ -375,6 +387,10 @@ function highlightTpl() {
   });
 }
 async function renderTemplateGallery(force) {
+  if (SAFETY.safeMode) {
+    toast('Galería desactivada en modo seguro');
+    return;
+  }
   const wrap = $('#tplGallery');
   const data = collect();
   if (data.type !== 'generated') { wrap.innerHTML = ''; galleryOpen = false; return; }
@@ -492,6 +508,10 @@ $('#btnPreview').addEventListener('click', async () => {
   img.style.display = 'none';
   video.style.display = 'none';
   if (data.video) {
+    if (!SAFETY.videoAllowed) {
+      toast('MP4 desactivado en modo seguro');
+      return;
+    }
     toast('Generando MP4 de prueba...');
     const r = await api('/preview-video', { method: 'POST', body: JSON.stringify(data) });
     video.src = r.url;

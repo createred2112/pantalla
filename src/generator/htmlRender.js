@@ -7,6 +7,7 @@ const fs = require('fs');
 const path = require('path');
 const sharp = require('sharp');
 const { cfg, abs } = require('../config');
+const renderGuard = require('../util/renderGuard');
 
 let _browser = null;
 let _fontCss = null;
@@ -30,6 +31,7 @@ function scheduleClose() {
 async function browser() {
   clearTimeout(_idleTimer);
   if (_browser && _browser.connected) return _browser;
+  renderGuard.assertCanUseChrome('render');
   const puppeteer = require('puppeteer');
   _browser = await puppeteer.launch({
     headless: 'new',
@@ -47,6 +49,10 @@ async function browser() {
       '--no-first-run',
       '--no-default-browser-check',
       '--no-zygote',
+      '--renderer-process-limit=1',
+      '--disable-site-isolation-trials',
+      '--disable-features=site-per-process,IsolateOrigins,VizDisplayCompositor,AudioServiceOutOfProcess',
+      '--js-flags=--max-old-space-size=64',
       '--force-color-profile=srgb',
       '--font-render-hinting=none',
     ],
