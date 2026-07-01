@@ -10,7 +10,7 @@ module.exports = {
   build(card, ctx) {
     const { W, H, theme, hasPhoto } = ctx;
     const pad = Math.round(W * 0.05);
-    const bottomStrip = Math.round(H * 0.13);
+    const bottomStrip = Math.round(H * 0.16);
     const text = hasPhoto ? '#ffffff' : theme.text;
     const els = [];
 
@@ -33,8 +33,8 @@ module.exports = {
 
     if (card.date) {
       els.push({
-        type: 'text', x: Math.round(W * 0.45), y: H - bottomStrip - Math.round(H * 0.02), w: Math.round(W * 0.5) - pad, h: Math.round(H * 0.05),
-        text: card.date.toUpperCase(), font: 'text', weight: 700, color: text, align: 'right', valign: 'bottom', size: Math.round(H * 0.03),
+        type: 'text', x: Math.round(W * 0.58), y: H - bottomStrip + Math.round(H * 0.015), w: Math.round(W * 0.42) - pad, h: Math.round(H * 0.08),
+        text: card.date.toUpperCase(), font: 'text', weight: 900, color: text, align: 'right', valign: 'center', size: Math.round(H * 0.048),
       });
     }
 

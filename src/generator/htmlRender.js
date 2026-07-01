@@ -110,7 +110,8 @@ async function elHtml(el, ctx) {
   return '';
 }
 
-// Logo (wordmark o imagen) como elemento posicionado en una esquina.
+// Logo real como elemento posicionado en una esquina. Si no hay imagen cargada,
+// mejor sin marca que una marca falsa.
 async function logoHtml(ctx, tpl) {
   if (tpl.logo === false) return '';
   const { W, H, theme } = ctx;
@@ -118,19 +119,13 @@ async function logoHtml(ctx, tpl) {
   const onDark = ctx._onDark;
   const mx = Math.round(W * 0.045), my = Math.round(H * 0.05);
   const corner = `position:absolute;${pos.includes('r') ? `right:${mx}px;` : `left:${mx}px;`}${pos.includes('t') ? `top:${my}px;` : `bottom:${my}px;`}`;
-  const useImg = cfg.brand.logoMode !== 'wordmark';
+  const useImg = cfg.brand.logoMode !== 'none';
   const chosen = onDark ? (cfg.brand.logoLight || cfg.brand.logo) : (cfg.brand.logoDark || cfg.brand.logo);
   if (useImg && chosen) {
     const uri = logoUri(chosen);
     if (uri) { const hh = Math.round(H * ((Number(cfg.brand.logoWidth) || 9) / 100)); return `<img src="${uri}" style="${corner}height:${hh}px;width:auto;"/>`; }
   }
-  // Wordmark de texto.
-  const wm = cfg.brand.wordmark || { a: 'Gasteiz', b: 'Berri' };
-  const fam = famOf('text');
-  const size = Math.round(H * 0.04);
-  const txt = onDark ? '#fff' : theme.text;
-  const acc = onDark ? '#D6FF00' : (theme.logoAccent || theme.accent);
-  return `<div style="${corner}font-family:${fam};font-weight:800;font-size:${size}px;"><span style="color:${txt}">${esc(wm.a)}</span><span style="color:${acc}">${esc(wm.b)}</span></div>`;
+  return '';
 }
 
 // Script de auto-ajuste: agranda cada [data-fit] hasta llenar su caja.

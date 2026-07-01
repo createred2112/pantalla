@@ -9,7 +9,7 @@ module.exports = {
   build(card, ctx) {
     const { W, H, theme, hasPhoto } = ctx;
     const pad = Math.round(W * 0.05);
-    const strip = Math.round(H * 0.13);
+    const strip = Math.round(H * 0.16);
     const text = hasPhoto ? '#ffffff' : theme.text;
     const soft = hasPhoto ? 'rgba(255,255,255,0.92)' : theme.textMuted;
     const els = [];
@@ -20,13 +20,13 @@ module.exports = {
     }
 
     const bottomY = H - strip - Math.round(H * 0.02);
-    const bodyH = card.body ? Math.round(H * 0.085) : 0;
+    const bodyH = card.body ? Math.round(H * 0.12) : 0;
     const bodyY = bottomY - bodyH;
     const titleH = Math.round(H * 0.24);
     const titleY = bodyY - Math.round(H * 0.012) - titleH;
 
     if (card.subtitle) {
-      els.push({ type: 'chip', x: pad, y: titleY - Math.round(H * 0.055), size: Math.round(H * 0.026), bg: theme.accent, color: theme.accentText, text: card.subtitle, letterSpacing: 1.5 });
+      els.push({ type: 'chip', x: pad, y: titleY - Math.round(H * 0.07), size: Math.round(H * 0.036), bg: theme.accent, color: theme.accentText, text: card.subtitle, letterSpacing: 1.5 });
     }
     els.push({
       type: 'text', x: pad, y: titleY, w: Math.round(W * 0.88), h: titleH,
@@ -35,10 +35,10 @@ module.exports = {
       autofit: { min: Math.round(H * 0.05), max: Math.round(H * 0.092), lines: 3 },
     });
     if (card.body) {
-      els.push({ type: 'text', x: pad, y: bodyY, w: Math.round(W * 0.88), h: bodyH, text: card.body, font: 'text', weight: 400, color: soft, align: 'left', valign: 'top', size: Math.round(H * 0.032), lineHeight: 1.25 });
+      els.push({ type: 'text', x: pad, y: bodyY, w: Math.round(W * 0.82), h: bodyH, text: card.body, font: 'text', weight: 700, color: soft, align: 'left', valign: 'top', size: Math.round(H * 0.05), lineHeight: 1.12 });
     }
     if (card.date) {
-      els.push({ type: 'text', x: Math.round(W * 0.5), y: H - strip + Math.round(H * 0.02), w: Math.round(W * 0.5) - pad, h: Math.round(H * 0.05), text: card.date.toUpperCase(), font: 'text', weight: 700, color: text, align: 'right', valign: 'center', size: Math.round(H * 0.028) });
+      els.push({ type: 'text', x: Math.round(W * 0.58), y: H - strip + Math.round(H * 0.025), w: Math.round(W * 0.42) - pad, h: Math.round(H * 0.08), text: card.date.toUpperCase(), font: 'text', weight: 900, color: text, align: 'right', valign: 'center', size: Math.round(H * 0.048) });
     }
 
     return { background: { type: hasPhoto ? 'photo' : 'solid', color: theme.bg }, elements: els };

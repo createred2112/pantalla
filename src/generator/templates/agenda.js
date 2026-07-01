@@ -42,15 +42,11 @@ module.exports = {
       if (hasV) els.push({ type: 'text', x: nameX, y: Math.round(cyy + rowH * 0.1), w: nameW, h: Math.round(rowH * 0.2), text: it.venue, font: 'text', weight: 700, color: dark, align: 'left', valign: 'center', size: Math.round(rowH * 0.16) });
     });
 
-    // Banda inferior: marca (logo claro o wordmark) + chevrons.
+    // Banda inferior: logo real + chevrons. Si no hay logo, no se inventa marca.
     els.push({ type: 'rect', x: 0, y: H - botH, w: W, h: botH, color: dark });
     if (ctx.logo && ctx.logo.light) {
-      const lh = Math.round(botH * 0.5);
+      const lh = Math.round(botH * 0.64);
       els.push({ type: 'svg', x: pad, y: Math.round(H - botH + (botH - lh) / 2), w: Math.round(W * 0.32), h: lh, svg: `<img src="${ctx.logo.light}" style="height:${lh}px;width:auto;display:block"/>` });
-    } else {
-      const wm = ctx.brand.wordmark || { a: 'Gasteiz', b: 'Berri' };
-      const ws = Math.round(botH * 0.42), lh = Math.round(ws * 1.4);
-      els.push({ type: 'svg', x: pad, y: Math.round(H - botH + (botH - lh) / 2), w: Math.round(W * 0.4), h: lh, svg: `<div style="font-family:${ctx.font};font-weight:800;font-size:${ws}px;line-height:${lh}px"><span style="color:#fff">${wm.a}</span><span style="color:${acc}">${wm.b}</span></div>` });
     }
     const cs = Math.round(botH * 0.22), chx = W - pad - Math.round(W * 0.02), chy = H - botH / 2;
     let chev = '';

@@ -193,7 +193,7 @@
     <label>Modo</label>
     <select id="setLogoMode">
       <option value="image">Imagen (mi logo)</option>
-      <option value="wordmark">Texto "GasteizBerri"</option>
+      <option value="none">Sin logo</option>
     </select>
     <label>Logo claro (para fondos oscuros)</label>
     <input type="file" id="setLogoLight" accept="image/png,image/*">
@@ -202,11 +202,11 @@
     <input type="file" id="setLogoDark" accept="image/png,image/*">
     <img id="setLogoDarkPrev" style="height:40px;margin-top:6px;background:#F2F1ED;border-radius:6px;padding:4px;display:none">
     <label>Tamaño del logo: <span id="setLogoWVal"></span>% de alto</label>
-    <input type="range" id="setLogoW" min="5" max="16" step="1">
+    <input type="range" id="setLogoW" min="5" max="22" step="1">
 
     <h3 style="margin:16px 0 2px;font-size:14px">Texto</h3>
     <label>Tamaño global del texto: <span id="setScaleVal"></span></label>
-    <input type="range" id="setScale" min="0.8" max="1.4" step="0.05">
+    <input type="range" id="setScale" min="0.9" max="1.8" step="0.05">
     <label>Fuente de titulares</label>
     <select id="setFontDisplay"></select>
     <label>Fuente de textos</label>

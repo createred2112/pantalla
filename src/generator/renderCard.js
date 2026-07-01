@@ -55,33 +55,10 @@ function resolveTheme(card, tpl) {
   return Object.assign({ key }, FALLBACK_THEME, t);
 }
 
-// Wordmark "GasteizBerri" en SVG, según colores del tema. Sobre foto va siempre
-// en blanco + acento lima. Posición configurable (por defecto abajo-izquierda).
-function buildWordmark(W, H, theme, hasPhoto, pos) {
-  const wm = cfg.brand.wordmark;
-  if (!wm) return null;
-  const esc = templates.lib.escapeXml;
-  const size = Math.round(H * 0.044);
-  const m = Math.round(W * 0.045);
-  const a = wm.a, b = wm.b;
-  const textCol = hasPhoto ? '#FFFFFF' : theme.text;
-  const accentCol = hasPhoto ? '#D6FF00' : (theme.logoAccent || theme.accent);
-  const aw = templates.lib.estimateWidth(a, size, 800);
-  const total = aw + templates.lib.estimateWidth(b, size, 800);
-  const x = pos.includes('r') ? W - m - total : m;
-  const y = pos.includes('t') ? Math.round(H * 0.06) + size : H - m;
-  return Buffer.from(
-    `<svg width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">
-      <text x="${x}" y="${y}" font-family="${cfg.brand.fontFamily}" font-size="${size}" font-weight="800" fill="${textCol}">${esc(a)}</text>
-      <text x="${Math.round(x + aw)}" y="${y}" font-family="${cfg.brand.fontFamily}" font-size="${size}" font-weight="800" fill="${accentCol}">${esc(b)}</text>
-    </svg>`
-  );
-}
-
 // Contexto de render (tema, fuentes, logo, foto) compartido por render y editor.
 function buildCtx(card, tpl) {
   const W = cfg.screen.width, H = cfg.screen.height;
-  const useImg = cfg.brand.logoMode !== 'wordmark';
+  const useImg = cfg.brand.logoMode !== 'none';
   const theme = resolveTheme(card, tpl);
   const hasPhoto = Boolean(card.photo) && (tpl.usesPhoto !== false);
   return {
@@ -157,16 +134,16 @@ async function renderToBuffer(card) {
 
   const layers = [{ input: Buffer.from(svg) }];
 
-  // Marca: imagen (logo subido) o wordmark de texto. Posición por plantilla.
+  // Marca: solo imagen real subida. Si no existe, no se inventa una marca.
   if (tpl.logo !== false) {
     const pos = tpl.logoPos || 'bl';
     const darkBg = hasPhoto || String(ctx.theme.text).toLowerCase() === '#ffffff';
     // Elige logo claro (fondos oscuros) u oscuro (fondos claros); fallback al que haya.
     const chosen = darkBg ? (cfg.brand.logoLight || cfg.brand.logo) : (cfg.brand.logoDark || cfg.brand.logo);
-    const logoPath = (cfg.brand.logoMode !== 'wordmark' && chosen) ? abs(chosen) : null;
+    const logoPath = (cfg.brand.logoMode !== 'none' && chosen) ? abs(chosen) : null;
 
     if (logoPath && fs.existsSync(logoPath)) {
-      // Tamaño por ALTO (cabe en la franja del wordmark), con tope de ancho.
+      // Tamaño por ALTO, con tope de ancho.
       const pct = Number(cfg.brand.logoWidth) || 9;
       const boxH = Math.round(H * (pct / 100));
       const boxW = Math.round(W * 0.24);
@@ -177,9 +154,6 @@ async function renderToBuffer(card) {
       const left = pos.includes('r') ? W - mx - (meta.width || 0) : mx;
       const top = pos.includes('b') ? H - my - (meta.height || 0) : my;
       layers.push({ input: logo, top, left });
-    } else {
-      const wm = buildWordmark(W, H, ctx.theme, hasPhoto, pos);
-      if (wm) layers.push({ input: wm });
     }
   }
 

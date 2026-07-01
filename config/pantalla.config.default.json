@@ -8,19 +8,15 @@
   },
   "brand": {
     "name": "gasteizberri",
-    "wordmark": {
-      "a": "Gasteiz",
-      "b": "Berri"
-    },
     "tagline": "LOCAL EN CLARO",
     "website": "gasteizberri.com",
     "fontFamily": "'Oswald', 'Archivo', 'Liberation Sans', Arial, sans-serif",
     "fontDisplay": "'Anton', 'Oswald', 'Archivo', Arial, sans-serif",
-    "textScale": 1,
-    "logoMode": "wordmark",
+    "textScale": 1.15,
+    "logoMode": "image",
     "logoLight": "",
     "logoDark": "",
-    "logoWidth": 9
+    "logoWidth": 12
   },
   "naming": {
     "pattern": "{nn}_{slug}",

@@ -66,9 +66,9 @@ $('#btnSettings').addEventListener('click', openSettings);
 async function openSettings() {
   SETTINGS = await api('/settings');
   const b = SETTINGS.brand;
-  $('#setLogoMode').value = b.logoMode || 'image';
-  $('#setLogoW').value = b.logoWidth || 14; $('#setLogoWVal').textContent = $('#setLogoW').value;
-  $('#setScale').value = b.textScale || 1; $('#setScaleVal').textContent = (b.textScale || 1);
+  $('#setLogoMode').value = b.logoMode === 'none' ? 'none' : 'image';
+  $('#setLogoW').value = b.logoWidth || 12; $('#setLogoWVal').textContent = $('#setLogoW').value;
+  $('#setScale').value = b.textScale || 1.15; $('#setScaleVal').textContent = (b.textScale || 1.15);
   const fams = SETTINGS.fonts || [];
   const opts = fams.map((f) => `<option value="'${f}', sans-serif">${f}</option>`).join('');
   $('#setFontDisplay').innerHTML = opts; $('#setFontText').innerHTML = opts;
