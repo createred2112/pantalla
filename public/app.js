@@ -280,6 +280,7 @@ function render() {
   el.innerHTML = '';
   cards.forEach((c, i) => {
     const rendered = c.rendered || null;
+    const staleRendered = c.staleRendered || null;
     const thumb = c.type === 'generated'
       ? (rendered && rendered.url)
       : (c.file ? '/media/' + c.file.replace('data/worker-inbox/', 'inbox/').replace('data/uploads/', 'uploads/') : '');
@@ -287,7 +288,7 @@ function render() {
       ? (rendered && rendered.type === 'video'
         ? `<video class="thumb" src="${thumb}" muted playsinline preload="metadata"></video>`
         : `<img class="thumb" src="${thumb}" alt="" loading="lazy" onerror="this.style.opacity=.25">`)
-      : `<div class="thumb" style="display:flex;align-items:center;justify-content:center;color:#9fb2d4;font-weight:800;text-align:center;padding:10px">Pendiente de generar</div>`;
+      : `<div class="thumb" style="display:flex;align-items:center;justify-content:center;color:#9fb2d4;font-weight:800;text-align:center;padding:10px">${staleRendered ? 'Modificada: regenerar' : 'Pendiente de generar'}</div>`;
     const div = document.createElement('div');
     div.className = 'card';
     div.innerHTML = `
@@ -300,8 +301,8 @@ function render() {
         <span class="tag">${c.type}</span>
         ${c.type === 'generated' && c.video ? '<span class="tag worker">MP4 animado</span>' : ''}
         ${c.type === 'generated' && c.rendered ? `<span class="tag">${c.rendered.ext.toUpperCase()} listo</span>` : ''}
-        ${c.type === 'generated' && c.rendered && c.rendered.stale ? '<span class="tag off">archivo antiguo</span>' : ''}
-        ${c.type === 'generated' && !c.rendered ? '<span class="tag off">sin archivo</span>' : ''}
+        ${c.type === 'generated' && c.staleRendered ? '<span class="tag off">modificada</span>' : ''}
+        ${c.type === 'generated' && !c.rendered && !c.staleRendered ? '<span class="tag off">sin archivo</span>' : ''}
         ${c.source === 'worker' ? '<span class="tag worker">worker</span>' : ''}
         ${c.source === 'rundown' ? '<span class="tag rundown">escaleta</span>' : ''}
         ${c.enabled === false ? '<span class="tag off">oculta</span>' : ''}
@@ -310,7 +311,7 @@ function render() {
         <button class="iconbtn" data-up="${i}" ${i===0?'disabled':''}>▲</button>
         <button class="iconbtn" data-down="${i}" ${i===cards.length-1?'disabled':''}>▼</button>
         <button class="iconbtn" data-edit="${c.id}">✎</button>
-        ${c.type === 'generated' ? `<button class="iconbtn" data-render="${c.id}" title="Generar archivo">⚙</button>` : ''}
+        ${c.type === 'generated' ? `<button class="iconbtn" data-render="${c.id}" title="Generar o regenerar archivo">⟳</button>` : ''}
         ${c.type === 'generated' ? `<button class="iconbtn" data-design="${c.id}" title="Editor de diseño">🎨</button>` : ''}
         <button class="iconbtn" data-del="${c.id}">🗑</button>
       </div>`;

@@ -106,24 +106,34 @@ function fontFamilies() {
   } catch { return ['Anton', 'Oswald', 'Archivo']; }
 }
 
-function renderedInfo(card) {
+function renderedCandidates(card) {
   if (!card || card.type !== 'generated') return null;
   const exts = card.video ? ['mp4', 'jpg', 'jpeg', 'png', 'webp'] : ['jpg', 'jpeg', 'png', 'webp', 'mp4'];
+  const updatedMs = card.updatedAt ? Date.parse(card.updatedAt) : 0;
+  const candidates = [];
   for (const ext of exts) {
     const file = path.join(paths.output, `${card.id}.${ext}`);
     if (!fs.existsSync(file)) continue;
     const st = fs.statSync(file);
-    const updatedMs = card.updatedAt ? Date.parse(card.updatedAt) : 0;
-    return {
+    candidates.push({
       file: `${card.id}.${ext}`,
       url: `/media/output/${encodeURIComponent(card.id)}.${ext}?v=${Math.round(st.mtimeMs)}`,
       ext,
       type: ext === 'mp4' ? 'video' : 'image',
       stale: Boolean(updatedMs && st.mtimeMs + 1000 < updatedMs),
+      mtimeMs: st.mtimeMs,
       mtime: st.mtime.toISOString(),
-    };
+    });
   }
-  return null;
+  return candidates;
+}
+
+function renderedInfo(card, opts = {}) {
+  const candidates = renderedCandidates(card) || [];
+  const current = candidates.find((item) => !item.stale);
+  if (current) return current;
+  if (!opts.includeStale) return null;
+  return candidates.sort((a, b) => b.mtimeMs - a.mtimeMs)[0] || null;
 }
 
 // CSS @font-face de las fuentes empaquetadas (para el editor visual).
@@ -177,7 +187,10 @@ app.put('/api/settings', (req, res) => {
 });
 
 app.get('/api/cards', (req, res) => {
-  res.json(store.list().map((card) => ({ ...card, rendered: renderedInfo(card) })));
+  res.json(store.list().map((card) => {
+    const rendered = renderedInfo(card);
+    return { ...card, rendered, staleRendered: rendered ? null : renderedInfo(card, { includeStale: true }) };
+  }));
 });
 
 app.get('/api/rundown', (req, res) => {
