@@ -106,6 +106,26 @@ function fontFamilies() {
   } catch { return ['Anton', 'Oswald', 'Archivo']; }
 }
 
+function renderedInfo(card) {
+  if (!card || card.type !== 'generated') return null;
+  const exts = card.video ? ['mp4', 'jpg', 'jpeg', 'png', 'webp'] : ['jpg', 'jpeg', 'png', 'webp', 'mp4'];
+  for (const ext of exts) {
+    const file = path.join(paths.output, `${card.id}.${ext}`);
+    if (!fs.existsSync(file)) continue;
+    const st = fs.statSync(file);
+    const updatedMs = card.updatedAt ? Date.parse(card.updatedAt) : 0;
+    return {
+      file: `${card.id}.${ext}`,
+      url: `/media/output/${encodeURIComponent(card.id)}.${ext}?v=${Math.round(st.mtimeMs)}`,
+      ext,
+      type: ext === 'mp4' ? 'video' : 'image',
+      stale: Boolean(updatedMs && st.mtimeMs + 1000 < updatedMs),
+      mtime: st.mtime.toISOString(),
+    };
+  }
+  return null;
+}
+
 // CSS @font-face de las fuentes empaquetadas (para el editor visual).
 app.get('/api/fontcss', (req, res) => {
   const dir = path.join(__dirname, '..', 'assets', 'fonts');
@@ -156,7 +176,9 @@ app.put('/api/settings', (req, res) => {
   res.json({ ok: true, brand: cfg.brand, palette: cfg.palette, screen: cfg.screen, screenProfile: cfg.screenProfile, naming: cfg.naming, ftp: { ...cfg.ftp, password: '' } });
 });
 
-app.get('/api/cards', (req, res) => res.json(store.list()));
+app.get('/api/cards', (req, res) => {
+  res.json(store.list().map((card) => ({ ...card, rendered: renderedInfo(card) })));
+});
 
 app.get('/api/rundown', (req, res) => {
   res.json(rundown.read({ date: req.query.date }));
@@ -221,6 +243,22 @@ app.put('/api/cards/:id', (req, res) => {
 
 app.delete('/api/cards/:id', (req, res) => {
   res.json({ ok: store.remove(req.params.id) });
+});
+
+app.post('/api/cards/:id/render', async (req, res) => {
+  const card = store.list().find((c) => c.id === req.params.id);
+  if (!card) return res.status(404).json({ error: 'no existe' });
+  if (card.type !== 'generated') return res.status(400).json({ error: 'solo cartelas generadas' });
+  try {
+    const file = await require('./pipeline/generate').renderOne(card);
+    try { await require('./generator/htmlRender').close(); } catch {}
+    log.info('generate', `Render manual ${card.id} -> ${file}`);
+    res.json({ ok: true, file, rendered: renderedInfo(card) });
+  } catch (e) {
+    try { await require('./generator/htmlRender').close(); } catch {}
+    log.error('generate', `FALLO render manual ${card.id}: ${e.message}`);
+    res.status(500).json({ error: e.message });
+  }
 });
 
 app.post('/api/reorder', (req, res) => {

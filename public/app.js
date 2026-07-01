@@ -279,15 +279,19 @@ function render() {
   }
   el.innerHTML = '';
   cards.forEach((c, i) => {
-    const heavyThumb = c.type === 'generated';
-    const thumb = heavyThumb ? ''
-      : c.type === 'generated'
-      ? `/api/preview/${c.id}?t=${c.updatedAt || ''}&v=${DV}`
+    const rendered = c.rendered || null;
+    const thumb = c.type === 'generated'
+      ? (rendered && rendered.url)
       : (c.file ? '/media/' + c.file.replace('data/worker-inbox/', 'inbox/').replace('data/uploads/', 'uploads/') : '');
+    const thumbHtml = thumb
+      ? (rendered && rendered.type === 'video'
+        ? `<video class="thumb" src="${thumb}" muted playsinline preload="metadata"></video>`
+        : `<img class="thumb" src="${thumb}" alt="" loading="lazy" onerror="this.style.opacity=.25">`)
+      : `<div class="thumb" style="display:flex;align-items:center;justify-content:center;color:#9fb2d4;font-weight:800;text-align:center;padding:10px">Pendiente de generar</div>`;
     const div = document.createElement('div');
     div.className = 'card';
     div.innerHTML = `
-      ${thumb ? `<img class="thumb" src="${thumb}" alt="" onerror="this.style.opacity=.25">` : `<div class="thumb" style="display:flex;align-items:center;justify-content:center;color:#9fb2d4;font-weight:800">Sin render automático</div>`}
+      ${thumbHtml}
       <div class="meta">
         <p class="t">${esc(c.title) || '(sin título)'}</p>
         <p class="s">${esc(c.subtitle) || ''}</p>
@@ -295,6 +299,9 @@ function render() {
       <div class="row">
         <span class="tag">${c.type}</span>
         ${c.type === 'generated' && c.video ? '<span class="tag worker">MP4 animado</span>' : ''}
+        ${c.type === 'generated' && c.rendered ? `<span class="tag">${c.rendered.ext.toUpperCase()} listo</span>` : ''}
+        ${c.type === 'generated' && c.rendered && c.rendered.stale ? '<span class="tag off">archivo antiguo</span>' : ''}
+        ${c.type === 'generated' && !c.rendered ? '<span class="tag off">sin archivo</span>' : ''}
         ${c.source === 'worker' ? '<span class="tag worker">worker</span>' : ''}
         ${c.source === 'rundown' ? '<span class="tag rundown">escaleta</span>' : ''}
         ${c.enabled === false ? '<span class="tag off">oculta</span>' : ''}
@@ -303,6 +310,7 @@ function render() {
         <button class="iconbtn" data-up="${i}" ${i===0?'disabled':''}>▲</button>
         <button class="iconbtn" data-down="${i}" ${i===cards.length-1?'disabled':''}>▼</button>
         <button class="iconbtn" data-edit="${c.id}">✎</button>
+        ${c.type === 'generated' ? `<button class="iconbtn" data-render="${c.id}" title="Generar archivo">⚙</button>` : ''}
         ${c.type === 'generated' ? `<button class="iconbtn" data-design="${c.id}" title="Editor de diseño">🎨</button>` : ''}
         <button class="iconbtn" data-del="${c.id}">🗑</button>
       </div>`;
@@ -537,11 +545,23 @@ $('#btnSave').addEventListener('click', async () => {
 });
 
 // --- Delegación de eventos de la lista ---
-$('#list').addEventListener('click', (e) => {
+$('#list').addEventListener('click', async (e) => {
   const b = e.target.closest('button'); if (!b) return;
   if (b.dataset.up != null) move(+b.dataset.up, -1);
   else if (b.dataset.down != null) move(+b.dataset.down, +1);
   else if (b.dataset.edit) openEditor(cards.find(c => c.id === b.dataset.edit));
+  else if (b.dataset.render) {
+    b.disabled = true;
+    toast('Generando archivo...');
+    try {
+      await api('/cards/' + b.dataset.render + '/render', { method: 'POST' });
+      toast('Archivo generado');
+      load();
+    } catch (err) {
+      toast('Error: ' + err.message);
+      b.disabled = false;
+    }
+  }
   else if (b.dataset.design) location.href = '/editor.html?id=' + b.dataset.design;
   else if (b.dataset.del) {
     if (confirm('¿Eliminar esta cartela?'))
