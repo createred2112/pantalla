@@ -127,6 +127,7 @@ app.get('/api/settings', (req, res) => {
     brand: cfg.brand,
     palette: cfg.palette || {},
     screen: cfg.screen,
+    screenProfile: cfg.screenProfile || {},
     naming: cfg.naming || {},
     ftp: { ...ftp, password: '', hasPassword: Boolean(ftp.password || process.env.FTP_PASSWORD), effective: effectiveFtp },
     fonts: fontFamilies(),
@@ -141,6 +142,7 @@ app.put('/api/settings', (req, res) => {
   if (body.brand) partial.brand = body.brand;
   if (body.palette) partial.palette = body.palette;
   if (body.screen) partial.screen = body.screen;
+  if (body.screenProfile) partial.screenProfile = body.screenProfile;
   if (body.naming) partial.naming = body.naming;
   if (body.ftp) {
     const nextFtp = { ...(cfg.ftp || {}), ...body.ftp };
@@ -149,7 +151,7 @@ app.put('/api/settings', (req, res) => {
   }
   saveConfig(partial);
   log.info('settings', 'Ajustes de diseño actualizados', Object.keys(partial));
-  res.json({ ok: true, brand: cfg.brand, palette: cfg.palette, screen: cfg.screen, naming: cfg.naming, ftp: { ...cfg.ftp, password: '' } });
+  res.json({ ok: true, brand: cfg.brand, palette: cfg.palette, screen: cfg.screen, screenProfile: cfg.screenProfile, naming: cfg.naming, ftp: { ...cfg.ftp, password: '' } });
 });
 
 app.get('/api/cards', (req, res) => res.json(store.list()));
@@ -282,6 +284,12 @@ app.post('/api/publish', async (req, res) => {
   res.json(result);
 });
 
+app.post('/api/ftp-test', async (req, res) => {
+  const result = await require('./pipeline/upload').testFtpConnection();
+  log[result.ok ? 'info' : 'warn']('ftp-test', result.ok ? `FTP OK en ${result.host}:${result.port}` : `FTP fallo: ${result.error}`);
+  res.status(result.ok ? 200 : 400).json(result);
+});
+
 app.get('/api/status', (req, res) => {
   const { ftpConfig } = require('./config');
   const ftpCfg = ftpConfig();
@@ -289,6 +297,7 @@ app.get('/api/status', (req, res) => {
     status: status.read(),
     ftpConfigured: Boolean(ftpCfg.host && ftpCfg.user),
     screen: cfg.screen,
+    screenProfile: cfg.screenProfile || {},
   });
 });
 

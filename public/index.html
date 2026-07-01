@@ -225,7 +225,21 @@
     <h3 style="margin:16px 0 2px;font-size:14px">Colores (temas)</h3>
     <div id="setColors"></div>
 
-    <h3 style="margin:16px 0 2px;font-size:14px">Publicación</h3>
+    <h3 style="margin:16px 0 2px;font-size:14px">Perfil de pantalla</h3>
+    <label>Nombre del perfil</label>
+    <input id="setProfileName" placeholder="Pantalla principal">
+    <div style="display:flex;gap:8px">
+      <div style="flex:1"><label>Ancho</label><input id="setScreenW" type="number" min="1"></div>
+      <div style="flex:1"><label>Alto</label><input id="setScreenH" type="number" min="1"></div>
+      <div style="flex:1"><label>Formato imagen</label><select id="setScreenFormat"><option value="jpg">JPG</option><option value="png">PNG</option></select></div>
+    </div>
+    <label><input type="checkbox" id="setAcceptImage" style="width:auto;margin-right:8px">Acepta imágenes JPG/PNG</label>
+    <label><input type="checkbox" id="setAcceptVideo" style="width:auto;margin-right:8px">Acepta vídeos MP4</label>
+    <label><input type="checkbox" id="setIncludePlaylist" style="width:auto;margin-right:8px">Subir playlist.json</label>
+    <label>Notas técnicas</label>
+    <textarea id="setProfileNotes" placeholder="Ejemplo: el técnico pide diapo{n}.jpg en la carpeta /pantalla"></textarea>
+
+    <h3 style="margin:16px 0 2px;font-size:14px">Nombres de archivo</h3>
     <label>Nombre de archivos</label>
     <input id="setNamePattern" placeholder="{nn}_{slug}">
     <div class="hint" style="margin-top:4px">Variables: {n}=1, {nn}=01, {nnn}=001, {slug}=titulo. Ejemplos: diapo{n}, diapositiva_{nnn}, {nn}_{slug}.</div>
@@ -245,6 +259,8 @@
     <label>Carpeta remota</label><input id="setFtpRemoteDir" placeholder="/">
     <label><input type="checkbox" id="setFtpSecure" style="width:auto;margin-right:8px">FTPS explícito</label>
     <label><input type="checkbox" id="setFtpClear" style="width:auto;margin-right:8px">Limpiar carpeta remota antes de subir</label>
+    <button type="button" class="ghost" id="btnFtpTest" style="margin-top:8px;width:100%">Probar conexión FTP</button>
+    <div class="status" id="setFtpTest" style="display:none;margin-top:8px"></div>
     <div class="hint" id="setFtpHint" style="margin-top:4px"></div>
 
     <img class="preview" id="setPreview" alt="previsualización" style="display:none">

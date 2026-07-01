@@ -258,8 +258,9 @@ async function load() {
     const manifest = (result.steps.sequence && result.steps.sequence.manifest) || [];
     const map = new Map(cards.map((c) => [c.id, c]));
     renderPlayer(manifest, map);
-    const files = manifest.length + 1;
-    $('#status').innerHTML = `Simulación lista: <b>${manifest.length}</b> cartela(s). Si publicas ahora, se subirían <b>${files}</b> archivo(s), incluyendo <b>playlist.json</b>.`;
+    const files = (result.steps.sequence && result.steps.sequence.files) || manifest.map((m) => m.file);
+    const playlistText = files.includes('playlist.json') ? ', incluyendo <b>playlist.json</b>' : '';
+    $('#status').innerHTML = `Simulación lista: <b>${manifest.length}</b> cartela(s). Si publicas ahora, se subirían <b>${files.length}</b> archivo(s)${playlistText}.`;
   } catch (e) {
     $('#content').innerHTML = `<div class="error">${esc(e.message)}</div>`;
     $('#status').textContent = 'No se pudo preparar la vista previa.';

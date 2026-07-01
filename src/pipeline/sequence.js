@@ -65,6 +65,23 @@ function writePlaylist(dir, manifest) {
   );
 }
 
+function includePlaylist() {
+  return !(cfg.screenProfile && cfg.screenProfile.includePlaylist === false);
+}
+
+function filesForPublish(files) {
+  return includePlaylist() ? [...files, 'playlist.json'] : files;
+}
+
+function allowedByProfile(ext) {
+  const profile = cfg.screenProfile || {};
+  const isVideo = ext === 'mp4';
+  const isImage = ['jpg', 'jpeg', 'png', 'webp'].includes(ext);
+  if (isVideo && profile.acceptVideo === false) return false;
+  if (isImage && profile.acceptImage === false) return false;
+  return true;
+}
+
 function swapPublishDir(stagingDir) {
   const parent = path.dirname(paths.publish);
   const backupDir = path.join(parent, `.publish-backup-${Date.now()}-${process.pid}`);
@@ -93,6 +110,7 @@ function sequence({ dryRun } = {}) {
   const manifest = [];
   const copies = [];
   const missing = [];
+  const unsupported = [];
   let pos = 1;
 
   for (const card of cards) {
@@ -102,6 +120,10 @@ function sequence({ dryRun } = {}) {
       continue;
     }
     const ext = path.extname(src).replace('.', '').toLowerCase() || 'jpg';
+    if (!allowedByProfile(ext)) {
+      unsupported.push({ id: card.id, type: card.type, ext, title: card.title || '' });
+      continue;
+    }
     const name = fileBase(card, pos);
     const dest = path.join(paths.publish, `${name}.${ext}`);
     manifest.push({
@@ -114,6 +136,13 @@ function sequence({ dryRun } = {}) {
     copies.push({ src, file: path.basename(dest) });
     log.info('sequence', `${pad(pos)} -> ${path.basename(dest)}`);
     pos++;
+  }
+
+  if (unsupported.length) {
+    const r = { ok: false, error: `El perfil de pantalla no acepta ${unsupported.length} archivo(s) de ese formato`, count: manifest.length, manifest, unsupported };
+    status.set('sequence', r);
+    for (const u of unsupported) log.warn('sequence', `Formato no permitido para ${u.id}: .${u.ext}`);
+    return r;
   }
 
   if (missing.length) {
@@ -131,7 +160,7 @@ function sequence({ dryRun } = {}) {
   }
 
   if (dryRun) {
-    const r = { ok: true, dryRun: true, count: manifest.length, manifest, files: copies.map((c) => c.file) };
+    const r = { ok: true, dryRun: true, count: manifest.length, manifest, files: filesForPublish(copies.map((c) => c.file)) };
     status.set('sequence', r);
     log.info('sequence', `Prueba de secuencia OK: ${manifest.length} archivo(s); publish/ no se modifica`);
     return r;
@@ -141,7 +170,7 @@ function sequence({ dryRun } = {}) {
   try {
     fs.mkdirSync(stagingDir, { recursive: true });
     for (const c of copies) fs.copyFileSync(c.src, path.join(stagingDir, c.file));
-    writePlaylist(stagingDir, manifest);
+    if (includePlaylist()) writePlaylist(stagingDir, manifest);
     swapPublishDir(stagingDir);
   } catch (e) {
     try { fs.rmSync(stagingDir, { recursive: true, force: true }); } catch {}
@@ -151,9 +180,9 @@ function sequence({ dryRun } = {}) {
     return r;
   }
 
-  status.set('sequence', { ok: true, count: manifest.length, manifest });
+  status.set('sequence', { ok: true, count: manifest.length, manifest, files: filesForPublish(copies.map((c) => c.file)) });
   log.info('sequence', `Secuencia lista: ${manifest.length} archivo(s) en publish/`);
-  return { ok: true, manifest };
+  return { ok: true, manifest, files: filesForPublish(copies.map((c) => c.file)) };
 }
 
 module.exports = { sequence };

@@ -78,6 +78,16 @@ async function openSettings() {
   setSelectByFamily($('#setFontText'), cur(b.fontFamily));
   showLogoPrev('setLogoLightPrev', b.logoLight || b.logo);
   showLogoPrev('setLogoDarkPrev', b.logoDark);
+  const screen = SETTINGS.screen || {};
+  const profile = SETTINGS.screenProfile || {};
+  $('#setProfileName').value = profile.name || 'Pantalla principal';
+  $('#setScreenW').value = screen.width || 1920;
+  $('#setScreenH').value = screen.height || 1080;
+  $('#setScreenFormat').value = (screen.format || 'jpg').toLowerCase();
+  $('#setAcceptImage').checked = profile.acceptImage !== false;
+  $('#setAcceptVideo').checked = profile.acceptVideo !== false;
+  $('#setIncludePlaylist').checked = profile.includePlaylist !== false;
+  $('#setProfileNotes').value = profile.notes || '';
   const naming = SETTINGS.naming || {};
   $('#setNamePattern').value = naming.pattern || '{nn}_{slug}';
   $('#setPadStart').value = naming.padStart || 2;
@@ -93,6 +103,7 @@ async function openSettings() {
   $('#setFtpClear').checked = ftp.clearRemoteFirst === true;
   const eff = ftp.effective || {};
   $('#setFtpHint').textContent = `${ftp.hasPassword ? 'Hay contraseña guardada. ' : ''}FTP activo: ${eff.host || 'sin servidor'}:${eff.port || 21} · carpeta ${eff.remoteDir || '/'}`;
+  $('#setFtpTest').style.display = 'none';
   buildColorEditor();
   $('#setPreview').style.display = 'none';
   settingsDlg.showModal();
@@ -150,6 +161,19 @@ function collectSettings() {
   return {
     brand: b,
     palette,
+    screen: {
+      ...(SETTINGS.screen || {}),
+      width: Number($('#setScreenW').value) || 1920,
+      height: Number($('#setScreenH').value) || 1080,
+      format: $('#setScreenFormat').value || 'jpg',
+    },
+    screenProfile: {
+      name: $('#setProfileName').value.trim() || 'Pantalla principal',
+      acceptImage: $('#setAcceptImage').checked,
+      acceptVideo: $('#setAcceptVideo').checked,
+      includePlaylist: $('#setIncludePlaylist').checked,
+      notes: $('#setProfileNotes').value.trim(),
+    },
     naming: {
       pattern: $('#setNamePattern').value.trim() || '{nn}_{slug}',
       padStart: Number($('#setPadStart').value) || 2,
@@ -161,12 +185,40 @@ function collectSettings() {
   };
 }
 
+function showFtpTest(msg, ok) {
+  const box = $('#setFtpTest');
+  box.style.display = 'block';
+  box.style.color = ok ? '#bff0d5' : '#ffb8c0';
+  box.innerHTML = msg;
+}
+
 $('#btnSetPreview').addEventListener('click', async () => {
   await api('/settings', { method: 'PUT', body: JSON.stringify(collectSettings()) });
   DV = Date.now();
   const r = await fetch('/api/preview', { method: 'POST', headers: H, body: JSON.stringify({ template: 'mensaje', title: 'Vitoria en verde.', theme: 'lima' }) });
   const img = $('#setPreview'); img.src = URL.createObjectURL(await r.blob()); img.style.display = 'block';
   toast('Aplicado');
+});
+$('#btnFtpTest').addEventListener('click', async () => {
+  const btn = $('#btnFtpTest');
+  btn.disabled = true;
+  showFtpTest('Guardando ajustes y probando FTP...', true);
+  try {
+    await api('/settings', { method: 'PUT', body: JSON.stringify(collectSettings()) });
+    const r = await fetch('/api/ftp-test', { method: 'POST', headers: H });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.error || 'No se pudo conectar');
+    showFtpTest(
+      `<b>FTP OK</b><br>${esc(j.host)}:${j.port} · carpeta ${esc(j.remoteDir)}<br>${(j.steps || []).map(esc).join('<br>')}`,
+      true
+    );
+    toast('FTP OK');
+  } catch (e) {
+    showFtpTest(`<b>FTP falló</b><br>${esc(e.message)}`, false);
+    toast('FTP falló');
+  } finally {
+    btn.disabled = false;
+  }
 });
 $('#btnFontUpload').addEventListener('click', async () => {
   const f = $('#setFontFile').files[0];

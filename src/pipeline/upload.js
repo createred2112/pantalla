@@ -76,4 +76,58 @@ async function upload({ dryRun, files: plannedFiles } = {}) {
   }
 }
 
-module.exports = { upload };
+async function testFtpConnection() {
+  const ftpCfg = ftpConfig();
+  if (!ftpCfg.host || !ftpCfg.user || !ftpCfg.password) {
+    return { ok: false, error: 'Faltan servidor, usuario o contraseña FTP' };
+  }
+
+  const client = new ftp.Client(30000);
+  client.ftp.verbose = false;
+  const remoteName = `.pantalla-test-${Date.now()}.txt`;
+  const localTest = path.join(paths.logs, remoteName);
+  const steps = [];
+
+  try {
+    fs.mkdirSync(paths.logs, { recursive: true });
+    fs.writeFileSync(localTest, `pantalla ftp test ${new Date().toISOString()}\n`);
+    await client.access({
+      host: ftpCfg.host,
+      port: ftpCfg.port,
+      user: ftpCfg.user,
+      password: ftpCfg.password,
+      secure: ftpCfg.secure,
+      secureOptions: { rejectUnauthorized: false },
+    });
+    steps.push('Conexión OK');
+
+    await client.ensureDir(ftpCfg.remoteDir);
+    steps.push(`Carpeta OK: ${ftpCfg.remoteDir}`);
+
+    await client.uploadFrom(localTest, remoteName);
+    steps.push('Escritura OK');
+
+    try {
+      await client.remove(remoteName);
+      steps.push('Borrado de prueba OK');
+    } catch (e) {
+      steps.push(`No se pudo borrar el archivo de prueba: ${e.message}`);
+    }
+
+    return {
+      ok: true,
+      host: ftpCfg.host,
+      port: ftpCfg.port,
+      secure: ftpCfg.secure,
+      remoteDir: ftpCfg.remoteDir,
+      steps,
+    };
+  } catch (e) {
+    return { ok: false, error: e.message, host: ftpCfg.host, port: ftpCfg.port, remoteDir: ftpCfg.remoteDir, steps };
+  } finally {
+    try { fs.rmSync(localTest, { force: true }); } catch {}
+    client.close();
+  }
+}
+
+module.exports = { upload, testFtpConnection };

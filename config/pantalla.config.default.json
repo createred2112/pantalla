@@ -29,6 +29,13 @@
     "lowercase": true,
     "prefixWithOrder": true
   },
+  "screenProfile": {
+    "name": "Pantalla principal",
+    "acceptImage": true,
+    "acceptVideo": true,
+    "includePlaylist": true,
+    "notes": ""
+  },
   "defaults": {
     "duration": 10,
     "template": "titular",

@@ -29,7 +29,7 @@ async function publish({ dryRun, skipImport } = {}) {
   if (steps.sequence.ok === false) {
     return stop(steps, 'sequence', 'falló sequence');
   }
-  const plannedFiles = dryRun ? [...(steps.sequence.files || []), 'playlist.json'] : undefined;
+  const plannedFiles = dryRun ? (steps.sequence.files || []) : undefined;
   steps.upload = await upload({ dryRun, files: plannedFiles });
   const ok = steps.generate.ok && steps.sequence.ok && steps.upload.ok;
   log.info('publish', `=== Fin de publicación (ok=${ok}) ===`);
