@@ -111,6 +111,17 @@ function renderedCandidates(card) {
   const exts = card.video ? ['mp4', 'jpg', 'jpeg', 'png', 'webp'] : ['jpg', 'jpeg', 'png', 'webp', 'mp4'];
   const updatedMs = card.updatedAt ? Date.parse(card.updatedAt) : 0;
   const candidates = [];
+  const posterFile = path.join(paths.output, `${card.id}.jpg`);
+  let poster = null;
+  if (fs.existsSync(posterFile)) {
+    const st = fs.statSync(posterFile);
+    if (!updatedMs || st.mtimeMs + 1000 >= updatedMs) {
+      poster = {
+        url: `/media/output/${encodeURIComponent(card.id)}.jpg?v=${Math.round(st.mtimeMs)}`,
+        mtimeMs: st.mtimeMs,
+      };
+    }
+  }
   for (const ext of exts) {
     const file = path.join(paths.output, `${card.id}.${ext}`);
     if (!fs.existsSync(file)) continue;
@@ -120,6 +131,7 @@ function renderedCandidates(card) {
       url: `/media/output/${encodeURIComponent(card.id)}.${ext}?v=${Math.round(st.mtimeMs)}`,
       ext,
       type: ext === 'mp4' ? 'video' : 'image',
+      posterUrl: ext === 'mp4' && poster ? poster.url : null,
       stale: Boolean(updatedMs && st.mtimeMs + 1000 < updatedMs),
       mtimeMs: st.mtimeMs,
       mtime: st.mtime.toISOString(),

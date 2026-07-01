@@ -249,6 +249,11 @@ async function renderVideoToFile(card) {
       await page.screenshot({ path: path.join(dir, 'f' + String(i).padStart(5, '0') + '.jpg'), type: 'jpeg', quality: 92, clip: { x: 0, y: 0, width: W, height: H } });
     }
     fs.mkdirSync(paths.output, { recursive: true });
+    const posterFrame = Math.min(frames - 1, Math.max(0, Math.round(fps * Math.min(1.2, duration * 0.35))));
+    const posterSrc = path.join(dir, 'f' + String(posterFrame).padStart(5, '0') + '.jpg');
+    if (!card._previewVideo && fs.existsSync(posterSrc)) {
+      fs.copyFileSync(posterSrc, path.join(paths.output, card.id + '.jpg'));
+    }
     const out = path.join(paths.output, card.id + '.mp4');
     const main = path.join(dir, 'main.mp4');
     await encode(dir, fps, main);

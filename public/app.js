@@ -286,7 +286,7 @@ function render() {
       : (c.file ? '/media/' + c.file.replace('data/worker-inbox/', 'inbox/').replace('data/uploads/', 'uploads/') : '');
     const thumbHtml = thumb
       ? (rendered && rendered.type === 'video'
-        ? `<video class="thumb" src="${thumb}" muted playsinline preload="metadata"></video>`
+        ? `<video class="thumb" src="${thumb}" ${rendered.posterUrl ? `poster="${rendered.posterUrl}"` : ''} muted playsinline controls preload="metadata"></video>`
         : `<img class="thumb" src="${thumb}" alt="" loading="lazy" onerror="this.style.opacity=.25">`)
       : `<div class="thumb" style="display:flex;align-items:center;justify-content:center;color:#9fb2d4;font-weight:800;text-align:center;padding:10px">${staleRendered ? 'Modificada: regenerar' : 'Pendiente de generar'}</div>`;
     const div = document.createElement('div');
