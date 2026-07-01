@@ -21,6 +21,7 @@ async function generate() {
       log.error('generate', `FALLO ${card.id}: ${e.message}`);
     }
   }
+  try { await require('../generator/htmlRender').close(); } catch {}
   const ok = results.every((r) => r.ok);
   status.set('generate', { ok, count: results.length, results });
   return { ok, results };

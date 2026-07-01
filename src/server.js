@@ -298,7 +298,8 @@ app.post('/api/preview-video', async (req, res) => {
       id: 'preview',
       type: 'generated',
       video: true,
-      duration: Math.min(6, Math.max(2, Number(req.body && req.body.duration) || 4)),
+      duration: Math.min(3, Math.max(2, Number(req.body && req.body.duration) || 3)),
+      _previewVideo: true,
     });
     const out = await require('./generator/video').renderVideoToFile(card);
     res.json({ ok: true, url: `/media/output/${path.basename(out.file)}?v=${Date.now()}`, duration: card.duration });

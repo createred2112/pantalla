@@ -8,7 +8,7 @@ const os = require('os');
 const { spawn } = require('child_process');
 const ffmpeg = require('ffmpeg-static');
 const { cfg, paths, abs } = require('../config');
-const { buildHtml, browser, AUTOFIT } = require('./htmlRender');
+const { buildHtml, withPage, AUTOFIT } = require('./htmlRender');
 const { prepare } = require('./renderCard');
 
 // Se inyecta en la página: crea una coreografía completa (en pausa) y expone
@@ -226,14 +226,13 @@ async function renderVideoToFile(card) {
   const { ctx, tpl, frame } = prep;
   const { W, H } = ctx;
   const duration = Math.max(2, Math.min(20, Number(card.duration) || 6));
-  const fps = Number(cfg.video && cfg.video.fps) || 25;
+  const fps = card._previewVideo ? Math.min(12, Number(cfg.video && cfg.video.fps) || 25) : (Number(cfg.video && cfg.video.fps) || 25);
   const frames = Math.round(duration * fps);
 
   const html = await buildHtml(card, ctx, tpl, frame);
-  const b = await browser();
-  const page = await b.newPage();
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pantalla-vid-'));
   try {
+    return await withPage(async (page) => {
     await page.setViewport({ width: W, height: H, deviceScaleFactor: 1 });
     await page.setContent(html, { waitUntil: 'load' });
     try { await page.evaluate('document.fonts.ready'); } catch {}
@@ -255,8 +254,8 @@ async function renderVideoToFile(card) {
     const outro = bumperPath(card, 'videoOutro', 'de salida');
     await stitchClips([intro, main, outro].filter(Boolean), out, dir, W, H, fps);
     return { file: out, ext: 'mp4' };
+    });
   } finally {
-    await page.close();
     try { for (const f of fs.readdirSync(dir)) fs.rmSync(path.join(dir, f)); fs.rmdirSync(dir); } catch {}
   }
 }

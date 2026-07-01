@@ -10,15 +10,64 @@ const { cfg, abs } = require('../config');
 
 let _browser = null;
 let _fontCss = null;
+let _queue = Promise.resolve();
+let _idleTimer = null;
+
+const IDLE_CLOSE_MS = Number(process.env.PANTALLA_CHROME_IDLE_MS || 15000);
+
+function enqueue(task) {
+  const run = _queue.catch(() => {}).then(task);
+  _queue = run.finally(() => {});
+  return run;
+}
+
+function scheduleClose() {
+  clearTimeout(_idleTimer);
+  _idleTimer = setTimeout(() => { close(); }, IDLE_CLOSE_MS);
+  if (_idleTimer.unref) _idleTimer.unref();
+}
 
 async function browser() {
+  clearTimeout(_idleTimer);
   if (_browser && _browser.connected) return _browser;
   const puppeteer = require('puppeteer');
   _browser = await puppeteer.launch({
     headless: 'new',
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-gpu', '--force-color-profile=srgb', '--font-render-hinting=none'],
+    protocolTimeout: 120000,
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-gpu',
+      '--disable-extensions',
+      '--disable-background-networking',
+      '--disable-background-timer-throttling',
+      '--disable-renderer-backgrounding',
+      '--disable-sync',
+      '--no-first-run',
+      '--no-default-browser-check',
+      '--no-zygote',
+      '--force-color-profile=srgb',
+      '--font-render-hinting=none',
+    ],
   });
+  _browser.on('disconnected', () => { _browser = null; });
   return _browser;
+}
+
+async function withPage(task) {
+  return enqueue(async () => {
+    const b = await browser();
+    const page = await b.newPage();
+    try {
+      page.setDefaultTimeout(120000);
+      page.setDefaultNavigationTimeout(120000);
+      return await task(page);
+    } finally {
+      try { await page.close(); } catch {}
+      scheduleClose();
+    }
+  });
 }
 
 // @font-face con las fuentes empaquetadas (base64, sin depender de origen).
@@ -171,9 +220,7 @@ async function buildHtml(card, ctx, tpl, frame, opts = {}) {
 async function renderFrame(card, ctx, tpl, frame) {
   const { W, H } = ctx;
   const html = await buildHtml(card, ctx, tpl, frame);
-  const b = await browser();
-  const page = await b.newPage();
-  try {
+  return withPage(async (page) => {
     await page.setViewport({ width: W, height: H, deviceScaleFactor: 1 });
     await page.setContent(html, { waitUntil: 'load' });
     try { await page.evaluate('document.fonts.ready'); } catch {}
@@ -181,11 +228,17 @@ async function renderFrame(card, ctx, tpl, frame) {
     const ext = (cfg.screen.format || 'jpg').toLowerCase();
     const buffer = await page.screenshot({ type: ext === 'png' ? 'png' : 'jpeg', quality: ext === 'png' ? undefined : (cfg.screen.quality || 90), clip: { x: 0, y: 0, width: W, height: H } });
     return { buffer, ext: ext === 'jpeg' ? 'jpg' : ext };
-  } finally {
-    await page.close();
-  }
+  });
 }
 
-async function close() { if (_browser) { try { await _browser.close(); } catch {} _browser = null; } }
+async function close() {
+  clearTimeout(_idleTimer);
+  _idleTimer = null;
+  if (_browser) { try { await _browser.close(); } catch {} _browser = null; }
+}
 
-module.exports = { renderFrame, buildHtml, browser, AUTOFIT, close, invalidateFonts };
+for (const sig of ['SIGINT', 'SIGTERM']) {
+  process.once(sig, () => { close().finally(() => process.exit(0)); });
+}
+
+module.exports = { renderFrame, buildHtml, browser, withPage, AUTOFIT, close, invalidateFonts };
