@@ -69,15 +69,16 @@ function logoUri(p) {
 async function elHtml(el, ctx) {
   const { W, H } = ctx;
   const scale = Number(cfg.brand.textScale) || 1;
+  const attrs = `class="el el-${el.type || 'item'}" data-kind="${el.type || 'item'}"`;
   const box = `position:absolute;left:${el.x}px;top:${el.y}px;width:${el.w}px;height:${el.h}px;overflow:hidden;`;
 
   if (el.type === 'rect' || el.type === 'band') {
-    return `<div style="${box}background:${el.gradient || el.color || '#000'};border-radius:${el.radius || 0}px;"></div>`;
+    return `<div ${attrs} style="${box}background:${el.gradient || el.color || '#000'};border-radius:${el.radius || 0}px;"></div>`;
   }
   if (el.type === 'image') {
     const uri = await imgDataUri(el.src, el.w, el.h, el.fit);
     if (!uri) return '';
-    return `<div style="${box}"><img src="${uri}" style="width:100%;height:100%;object-fit:${el.fit || 'cover'};display:block"/></div>`;
+    return `<div ${attrs} style="${box}"><img src="${uri}" style="width:100%;height:100%;object-fit:${el.fit || 'cover'};display:block"/></div>`;
   }
   if (el.type === 'text') {
     const fam = famOf(el.font);
@@ -92,20 +93,20 @@ async function elHtml(el, ctx) {
       ? `data-fit="1" data-min="${Math.round(el.autofit.min * scale)}" data-max="${Math.round(el.autofit.max * scale)}"`
       : '';
     const size = el.autofit ? Math.round(el.autofit.max * scale) : Math.round((el.size || 40) * scale);
-    return `<div style="${box}display:flex;justify-content:${just};align-items:${valign};text-align:${align};">` +
+    return `<div ${attrs} style="${box}display:flex;justify-content:${just};align-items:${valign};text-align:${align};">` +
       `<div ${fit} style="font-family:${fam};font-weight:${el.weight || 700};font-size:${size}px;line-height:${lh};color:${el.color || '#fff'};${ls}${tt}${nowrap}max-width:100%;">${esc(el.text)}</div></div>`;
   }
   if (el.type === 'chip') {
     const fam = famOf(el.font || 'text');
     const cs = Math.round((el.size || 30) * scale);
     // Ancho automático: posición por esquina sup-izq, sin caja fija.
-    return `<div style="position:absolute;left:${el.x}px;top:${el.y}px;display:inline-flex;align-items:center;` +
+    return `<div ${attrs} style="position:absolute;left:${el.x}px;top:${el.y}px;display:inline-flex;align-items:center;` +
       `background:${el.bg};color:${el.color};font-family:${fam};font-weight:700;font-size:${cs}px;` +
       `letter-spacing:${el.letterSpacing != null ? el.letterSpacing : 2}px;height:${Math.round(cs * 1.9)}px;padding:0 ${Math.round(cs * 0.6)}px;` +
       `border-radius:${el.radius != null ? el.radius : Math.round(cs * 0.35)}px;text-transform:uppercase;white-space:nowrap;">${esc(el.text)}</div>`;
   }
   if (el.type === 'svg') {
-    return `<div style="${box}">${el.svg}</div>`;
+    return `<div ${attrs} style="${box}">${el.svg}</div>`;
   }
   return '';
 }
@@ -123,7 +124,7 @@ async function logoHtml(ctx, tpl) {
   const chosen = onDark ? (cfg.brand.logoLight || cfg.brand.logo) : (cfg.brand.logoDark || cfg.brand.logo);
   if (useImg && chosen) {
     const uri = logoUri(chosen);
-    if (uri) { const hh = Math.round(H * ((Number(cfg.brand.logoWidth) || 9) / 100)); return `<img src="${uri}" style="${corner}height:${hh}px;width:auto;"/>`; }
+    if (uri) { const hh = Math.round(H * ((Number(cfg.brand.logoWidth) || 9) / 100)); return `<img class="el el-logo" data-kind="logo" src="${uri}" style="${corner}height:${hh}px;width:auto;"/>`; }
   }
   return '';
 }
@@ -162,7 +163,7 @@ async function buildHtml(card, ctx, tpl, frame, opts = {}) {
   return `<!doctype html><html><head><meta charset="utf-8"><style>` +
     fontFaceCss() +
     `*{margin:0;padding:0;box-sizing:border-box}html,body{width:${W}px;height:${H}px;overflow:hidden}` +
-    `body{background:${bodyBg};position:relative}</style></head><body>` +
+    `body{background:${bodyBg};position:relative}</style></head><body data-template="${tpl.id || ''}">` +
     bgHtml + parts.join('') +
     `<script>${AUTOFIT}</script></body></html>`;
 }

@@ -11,19 +11,159 @@ const { cfg, paths, abs } = require('../config');
 const { buildHtml, browser, AUTOFIT } = require('./htmlRender');
 const { prepare } = require('./renderCard');
 
-// Se inyecta en la página: crea las animaciones (en pausa) y expone __setT(ms).
-function setupAnim(durMs) {
-  const els = [].slice.call(document.querySelectorAll('.el'));
-  els.forEach((el, i) => {
-    const a = el.animate(
-      [{ opacity: 0, transform: 'translateY(40px)' }, { opacity: 1, transform: 'translateY(0)' }],
-      { duration: 700, delay: i * 120, easing: 'cubic-bezier(.2,.7,.2,1)', fill: 'both' }
-    );
+// Se inyecta en la página: crea una coreografía completa (en pausa) y expone
+// __setT(ms). No usa azar: el MP4 se renderiza igual en cada ejecución.
+function setupAnim(durMs, motion) {
+  const W = window.innerWidth;
+  const H = window.innerHeight;
+  const accent = motion.accent || '#D6FF00';
+  const text = motion.text || '#FFFFFF';
+  const template = document.body.dataset.template || '';
+  const easeOut = 'cubic-bezier(.16,.86,.28,1)';
+  const easeHard = 'cubic-bezier(.13,.92,.18,1)';
+  const animations = [];
+
+  document.documentElement.style.background = '#000';
+  document.body.style.transformOrigin = '50% 50%';
+
+  function add(el, frames, opts) {
+    const a = el.animate(frames, Object.assign({ fill: 'both' }, opts));
     a.pause();
-  });
+    animations.push(a);
+    return a;
+  }
+
+  function overlay(cls, css) {
+    const el = document.createElement('div');
+    el.className = cls;
+    el.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:999;' + css;
+    document.body.appendChild(el);
+    return el;
+  }
+
+  const sweep = overlay('motion-sweep', `background:${accent};mix-blend-mode:screen;opacity:.22;transform:translateX(-130%) skewX(-14deg);`);
+  add(sweep, [
+    { transform: 'translateX(-130%) skewX(-14deg)', opacity: 0 },
+    { transform: 'translateX(-40%) skewX(-14deg)', opacity: .28, offset: .25 },
+    { transform: 'translateX(130%) skewX(-14deg)', opacity: 0 },
+  ], { duration: 1050, delay: 120, easing: easeHard });
+
+  const flash = overlay('motion-flash', `background:${text};opacity:0;`);
+  add(flash, [
+    { opacity: 0 },
+    { opacity: .16, offset: .2 },
+    { opacity: 0 },
+  ], { duration: 340, delay: 120, easing: 'ease-out' });
+
+  const shade = overlay('motion-shade', 'background:radial-gradient(circle at 20% 10%, rgba(255,255,255,.18), transparent 28%), linear-gradient(115deg, transparent 0%, rgba(255,255,255,.10) 45%, transparent 72%);opacity:0;');
+  add(shade, [
+    { opacity: 0, transform: 'translateX(-8%)' },
+    { opacity: .5, transform: 'translateX(3%)', offset: .35 },
+    { opacity: .16, transform: 'translateX(8%)' },
+  ], { duration: durMs, easing: 'ease-in-out' });
+
   const bg = document.querySelector('#bgimg');
-  if (bg) { const a = bg.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.10)' }], { duration: durMs, easing: 'ease-out', fill: 'both' }); a.pause(); }
-  window.__setT = function (ms) { document.getAnimations().forEach((a) => { try { a.currentTime = ms; } catch (e) {} }); };
+  if (bg) {
+    bg.style.transformOrigin = template === 'foto' ? '45% 45%' : '50% 50%';
+    add(bg, [
+      { transform: 'scale(1.025) translate3d(-1.2%, .4%, 0)', filter: 'brightness(.92)' },
+      { transform: 'scale(1.13) translate3d(1.8%, -1.4%, 0)', filter: 'brightness(.98)' },
+    ], { duration: durMs, easing: 'ease-in-out' });
+  } else {
+    add(document.body, [
+      { filter: 'brightness(.92) saturate(1.05)' },
+      { filter: 'brightness(1.05) saturate(1.16)', offset: .18 },
+      { filter: 'brightness(1) saturate(1.08)' },
+    ], { duration: Math.min(durMs, 2600), easing: 'ease-out' });
+  }
+
+  const els = [].slice.call(document.querySelectorAll('.el'));
+  const textEls = els.filter((el) => el.dataset.kind === 'text');
+  const hero = textEls.reduce((best, el) => {
+    const r = el.getBoundingClientRect();
+    const area = r.width * r.height;
+    return !best || area > best.area ? { el, area } : best;
+  }, null);
+
+  els.forEach((el, i) => {
+    const kind = el.dataset.kind || 'item';
+    const rect = el.getBoundingClientRect();
+    const isHero = hero && hero.el === el;
+    const fromLeft = rect.left < W * .52;
+    const delay = isHero ? 380 : 170 + i * 95;
+    el.style.willChange = 'transform, opacity, clip-path, filter';
+    el.style.transformOrigin = fromLeft ? '0% 50%' : '100% 50%';
+
+    if (kind === 'rect' || kind === 'band') {
+      add(el, [
+        { opacity: 0, transform: fromLeft ? 'scaleX(0)' : 'scaleY(0)' },
+        { opacity: 1, transform: 'scaleX(1) scaleY(1)' },
+      ], { duration: 620, delay: Math.max(0, delay - 160), easing: easeOut });
+      return;
+    }
+
+    if (kind === 'chip') {
+      add(el, [
+        { opacity: 0, transform: `translate3d(${fromLeft ? -90 : 90}px,0,0) scale(.84)`, filter: 'blur(6px)' },
+        { opacity: 1, transform: 'translate3d(0,0,0) scale(1.08)', filter: 'blur(0)', offset: .72 },
+        { opacity: 1, transform: 'translate3d(0,0,0) scale(1)', filter: 'blur(0)' },
+      ], { duration: 700, delay, easing: easeHard });
+      add(el, [
+        { transform: 'translate3d(0,0,0) scale(1)' },
+        { transform: 'translate3d(0,0,0) scale(1.045)', offset: .5 },
+        { transform: 'translate3d(0,0,0) scale(1)' },
+      ], { duration: 1300, delay: delay + 950, iterations: Math.max(1, Math.floor(durMs / 1500)), easing: 'ease-in-out' });
+      return;
+    }
+
+    if (kind === 'text' && isHero) {
+      add(el, [
+        { opacity: 0, clipPath: 'inset(0 100% 0 0)', transform: 'translate3d(-70px,0,0) scale(.98)', filter: 'blur(8px)' },
+        { opacity: 1, clipPath: 'inset(0 0 0 0)', transform: 'translate3d(10px,0,0) scale(1.015)', filter: 'blur(0)', offset: .76 },
+        { opacity: 1, clipPath: 'inset(0 0 0 0)', transform: 'translate3d(0,0,0) scale(1)', filter: 'blur(0)' },
+      ], { duration: 980, delay, easing: easeHard });
+      add(el, [
+        { transform: 'translate3d(0,0,0) scale(1)' },
+        { transform: 'translate3d(8px,-3px,0) scale(1.012)', offset: .5 },
+        { transform: 'translate3d(0,0,0) scale(1)' },
+      ], { duration: Math.max(2400, durMs - delay - 500), delay: delay + 980, easing: 'ease-in-out' });
+      return;
+    }
+
+    if (kind === 'text') {
+      add(el, [
+        { opacity: 0, transform: `translate3d(${fromLeft ? -55 : 55}px,26px,0)`, filter: 'blur(5px)' },
+        { opacity: 1, transform: 'translate3d(0,0,0)', filter: 'blur(0)' },
+      ], { duration: 760, delay, easing: easeOut });
+      add(el, [
+        { transform: 'translate3d(0,0,0)' },
+        { transform: 'translate3d(0,-4px,0)', offset: .5 },
+        { transform: 'translate3d(0,0,0)' },
+      ], { duration: 2600, delay: delay + 900, easing: 'ease-in-out' });
+      return;
+    }
+
+    add(el, [
+      { opacity: 0, transform: 'translate3d(0,34px,0) scale(.96)', filter: 'blur(4px)' },
+      { opacity: 1, transform: 'translate3d(0,0,0) scale(1)', filter: 'blur(0)' },
+    ], { duration: 740, delay, easing: easeOut });
+  });
+
+  const exitStart = Math.max(1200, durMs - 650);
+  add(document.body, [
+    { opacity: 1, transform: 'scale(1)', filter: 'brightness(1)' },
+    { opacity: 1, transform: 'scale(1.012)', filter: 'brightness(1.08)', offset: .55 },
+    { opacity: 0, transform: 'scale(1.025)', filter: 'brightness(.85)' },
+  ], { duration: 650, delay: exitStart, easing: 'ease-in' });
+
+  window.__setT = function (ms) {
+    animations.forEach((a) => {
+      try {
+        const end = a.effect.getComputedTiming().endTime || (a.effect.getTiming().delay + a.effect.getTiming().duration);
+        a.currentTime = Math.max(0, Math.min(ms, end));
+      } catch (e) {}
+    });
+  };
 }
 
 function runFfmpeg(args) {
@@ -98,7 +238,11 @@ async function renderVideoToFile(card) {
     await page.setContent(html, { waitUntil: 'load' });
     try { await page.evaluate('document.fonts.ready'); } catch {}
     await page.evaluate(AUTOFIT);
-    await page.evaluate(setupAnim, duration * 1000);
+    await page.evaluate(setupAnim, duration * 1000, {
+      accent: ctx.theme.accent,
+      text: ctx.theme.text,
+      bg: ctx.theme.bg,
+    });
     for (let i = 0; i < frames; i++) {
       await page.evaluate((ms) => window.__setT(ms), (i / fps) * 1000);
       await page.screenshot({ path: path.join(dir, 'f' + String(i).padStart(5, '0') + '.jpg'), type: 'jpeg', quality: 92, clip: { x: 0, y: 0, width: W, height: H } });
