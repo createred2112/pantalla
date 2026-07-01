@@ -286,7 +286,7 @@ function render() {
       : (c.file ? '/media/' + c.file.replace('data/worker-inbox/', 'inbox/').replace('data/uploads/', 'uploads/') : '');
     const thumbHtml = thumb
       ? (rendered && rendered.type === 'video'
-        ? `<video class="thumb" src="${thumb}" ${rendered.posterUrl ? `poster="${rendered.posterUrl}"` : ''} muted playsinline controls preload="metadata"></video>`
+        ? `<video class="thumb" src="${thumb}" ${rendered.posterUrl ? `poster="${rendered.posterUrl}"` : ''} muted playsinline controls preload="auto"></video>`
         : `<img class="thumb" src="${thumb}" alt="" loading="lazy" onerror="this.style.opacity=.25">`)
       : `<div class="thumb" style="display:flex;align-items:center;justify-content:center;color:#9fb2d4;font-weight:800;text-align:center;padding:10px">${staleRendered ? 'Modificada: regenerar' : 'Pendiente de generar'}</div>`;
     const div = document.createElement('div');
@@ -312,6 +312,7 @@ function render() {
         <button class="iconbtn" data-down="${i}" ${i===cards.length-1?'disabled':''}>▼</button>
         <button class="iconbtn" data-edit="${c.id}">✎</button>
         ${c.type === 'generated' ? `<button class="iconbtn" data-render="${c.id}" title="Generar o regenerar archivo">⟳</button>` : ''}
+        ${c.rendered && c.rendered.type === 'video' ? `<button class="iconbtn" data-view-video="${c.id}" title="Ver vídeo generado">▶</button>` : ''}
         ${c.type === 'generated' ? `<button class="iconbtn" data-design="${c.id}" title="Editor de diseño">🎨</button>` : ''}
         <button class="iconbtn" data-del="${c.id}">🗑</button>
       </div>`;
@@ -562,6 +563,12 @@ $('#list').addEventListener('click', async (e) => {
       toast('Error: ' + err.message);
       b.disabled = false;
     }
+  }
+  else if (b.dataset.viewVideo) {
+    const card = cards.find(c => c.id === b.dataset.viewVideo);
+    const url = card && card.rendered && card.rendered.url;
+    if (!url) return toast('Vídeo no generado');
+    window.open(url, '_blank');
   }
   else if (b.dataset.design) location.href = '/editor.html?id=' + b.dataset.design;
   else if (b.dataset.del) {
