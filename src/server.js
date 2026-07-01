@@ -262,6 +262,25 @@ app.post('/api/preview', async (req, res) => {
   }
 });
 
+// Previsualización animada desde datos sin guardar. Genera un MP4 temporal
+// reutilizando output/preview.mp4 para que el editor pueda enseñarlo al momento.
+app.post('/api/preview-video', async (req, res) => {
+  try {
+    const card = store.normalize({
+      ...req.body,
+      id: 'preview',
+      type: 'generated',
+      video: true,
+      duration: Math.min(6, Math.max(2, Number(req.body && req.body.duration) || 4)),
+    });
+    const out = await require('./generator/video').renderVideoToFile(card);
+    res.json({ ok: true, url: `/media/output/${path.basename(out.file)}?v=${Date.now()}`, duration: card.duration });
+  } catch (e) {
+    log.error('preview-video', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.post('/api/import', (req, res) => res.json(importWorker()));
 
 // Extraer datos de una URL (WordPress API / Open Graph) para prerrellenar una cartela.

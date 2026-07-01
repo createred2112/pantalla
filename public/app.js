@@ -281,6 +281,7 @@ function render() {
       </div>
       <div class="row">
         <span class="tag">${c.type}</span>
+        ${c.type === 'generated' && c.video ? '<span class="tag worker">MP4 animado</span>' : ''}
         ${c.source === 'worker' ? '<span class="tag worker">worker</span>' : ''}
         ${c.enabled === false ? '<span class="tag off">oculta</span>' : ''}
         <span class="tag">${c.duration||10}s</span>
@@ -326,6 +327,8 @@ function openEditor(card) {
   $('#edVideoIntro').value = card?.videoIntro || '';
   $('#edVideoOutro').value = card?.videoOutro || '';
   $('#edPreview').style.display = 'none';
+  $('#edVideoPreview').style.display = 'none';
+  $('#edVideoPreview').removeAttribute('src');
   $('#edUrl').value = '';
   $('#urlHint').textContent = 'Pega el enlace y rellenamos los campos. Luego edítalos a tu gusto.';
   // Cierra la galería de plantillas al (re)abrir el editor.
@@ -480,10 +483,23 @@ $('#btnExtract').addEventListener('click', async () => {
 $('#btnPreview').addEventListener('click', async () => {
   const data = collect();
   if (data.type !== 'generated') { toast('Solo cartelas generadas'); return; }
-  const r = await fetch('/api/preview', { method: 'POST', headers: H, body: JSON.stringify(data) });
-  const blob = await r.blob();
   const img = $('#edPreview');
-  img.src = URL.createObjectURL(blob); img.style.display = 'block';
+  const video = $('#edVideoPreview');
+  img.style.display = 'none';
+  video.style.display = 'none';
+  if (data.video) {
+    toast('Generando MP4 de prueba...');
+    const r = await api('/preview-video', { method: 'POST', body: JSON.stringify(data) });
+    video.src = r.url;
+    video.style.display = 'block';
+    video.load();
+    video.play().catch(() => {});
+    toast('Vista animada lista');
+  } else {
+    const r = await fetch('/api/preview', { method: 'POST', headers: H, body: JSON.stringify(data) });
+    const blob = await r.blob();
+    img.src = URL.createObjectURL(blob); img.style.display = 'block';
+  }
 });
 
 $('#btnSave').addEventListener('click', async () => {
