@@ -83,22 +83,25 @@
   .tl-title{font-weight:900;font-size:14px;margin-top:5px;line-height:1.15}
   .tl-meta{font-size:11px;color:var(--muted);margin-top:6px;line-height:1.25}
   .tl-warn{font-size:11px;color:#ffd98a;margin-top:5px}
-  .slot-panel,.daily-panel{background:#0a1a30;border:1px solid var(--line);border-radius:12px;padding:12px;margin-top:12px}
+  .slot-panel,.library-panel{background:#0a1a30;border:1px solid var(--line);border-radius:12px;padding:12px;margin-top:12px}
   .slot-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
   .slot-grid label{margin-top:0}
   .slot-wide{grid-column:1 / -1}
   .slot-tools{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
   .slot-tools button{padding:8px 10px}
-  .daily-head{display:flex;align-items:center;gap:10px;margin:6px 0 10px}
-  .daily-head h3{font-size:14px;margin:0;flex:1}
-  .daily-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px}
-  .daily-cat{border:1px solid var(--line);border-radius:10px;padding:10px;background:#081729}
-  .daily-cat h4{font-size:13px;margin:0 0 8px}
-  .daily-item{border-top:1px solid var(--line);padding-top:8px;margin-top:8px}
-  .daily-item:first-of-type{border-top:0;padding-top:0;margin-top:0}
-  .daily-item textarea{min-height:54px}
-  .daily-item .mini{display:grid;grid-template-columns:1fr 1fr;gap:6px}
-  .daily-cat button{padding:8px 10px;margin-top:8px}
+  .library-head{display:flex;align-items:center;gap:10px;margin:6px 0 10px;flex-wrap:wrap}
+  .library-head h3{font-size:14px;margin:0;flex:1}
+  .library-tools{display:grid;grid-template-columns:220px 1fr;gap:10px;align-items:end}
+  .bulk-box{background:#081729;border:1px dashed var(--line);border-radius:10px;padding:10px;margin:10px 0}
+  .bulk-box textarea{min-height:92px}
+  .library-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px}
+  .library-item{border:1px solid var(--line);border-radius:10px;padding:10px;background:#081729}
+  .library-item.off{opacity:.55}
+  .library-item .mini{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  .library-item textarea{min-height:54px}
+  .weekdays{display:flex;gap:4px;flex-wrap:wrap;margin-top:4px}
+  .weekdays label{margin:0;color:var(--txt);font-size:11px;background:#0a1a30;border:1px solid var(--line);border-radius:8px;padding:5px 7px}
+  .weekdays input{width:auto;margin:0 4px 0 0}
   .spin{display:inline-block;animation:spin 1s linear infinite}
   @keyframes spin{to{transform:rotate(360deg)}}
   @media (max-width:640px){
@@ -111,6 +114,7 @@
       font-size:12px!important;text-align:center;white-space:nowrap
     }
     .rundown-top{grid-template-columns:1fr}
+    .library-tools{grid-template-columns:1fr}
     .tl-card{flex-basis:132px}
     .slot-grid{grid-template-columns:1fr}
     .slot-wide{grid-column:1}
@@ -340,13 +344,22 @@
     <div class="status" id="rundownSummary"></div>
     <div class="timeline" id="rundownTimeline"></div>
     <div id="slotPanel" class="slot-panel"></div>
-    <div class="daily-panel">
-      <div class="daily-head">
-        <h3>Contenido diario</h3>
-        <button class="ghost" id="btnDailySave">Guardar batería del día</button>
+    <div class="library-panel">
+      <div class="library-head">
+        <h3>Nevera editorial</h3>
+        <button class="ghost" id="btnLibraryAdd">Añadir pieza</button>
+        <button class="ghost" id="btnLibrarySave">Guardar nevera</button>
       </div>
-      <div class="status" id="dailySummary"></div>
-      <div id="dailyLibrary" class="daily-grid"></div>
+      <div class="library-tools">
+        <label>Categoría<select id="libraryCategory"></select></label>
+        <div class="status" id="librarySummary"></div>
+      </div>
+      <div class="bulk-box">
+        <label>Carga masiva</label>
+        <textarea id="bulkImport" placeholder="Una pieza por línea: Título | firma/sección | texto | desde | hasta | días | fechas&#10;Ejemplo: Cambia tus contraseñas | Consejo informático | Usa frases largas | 2026-07-01 | 2026-08-31 | LMXJV |"></textarea>
+        <button class="ghost" id="btnBulkImport">Importar lote en esta categoría</button>
+      </div>
+      <div id="libraryList" class="library-list"></div>
     </div>
   </div>
   <div class="dlg-f">

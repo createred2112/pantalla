@@ -98,6 +98,12 @@ function todayKey() {
 }
 
 function normalizeLibraryItem(item, defaults) {
+  const dates = Array.isArray(item && item.dates)
+    ? item.dates
+    : String((item && item.dates) || '').split(',');
+  const weekdays = Array.isArray(item && item.weekdays)
+    ? item.weekdays
+    : String((item && item.weekdays) || '').split(',');
   return {
     title: String((item && item.title) || ''),
     subtitle: String((item && item.subtitle) || ''),
@@ -105,7 +111,28 @@ function normalizeLibraryItem(item, defaults) {
     template: String((item && item.template) || defaults.template || 'noticia'),
     theme: String((item && item.theme) || defaults.theme || ''),
     date: String((item && item.date) || ''),
+    enabled: !item || item.enabled !== false,
+    start: String((item && (item.start || item.from)) || ''),
+    end: String((item && (item.end || item.to)) || ''),
+    dates: dates.map((d) => String(d).trim()).filter(Boolean),
+    weekdays: weekdays.map((d) => Number(d)).filter((n) => n >= 1 && n <= 7),
+    notes: String((item && item.notes) || ''),
   };
+}
+
+function dayNumber(date) {
+  const jsDay = new Date(`${date}T12:00:00`).getDay();
+  return jsDay === 0 ? 7 : jsDay;
+}
+
+function itemApplies(item, date) {
+  const d = String(date || todayKey()).slice(0, 10);
+  if (item.enabled === false) return false;
+  if (item.dates && item.dates.length) return item.dates.includes(d);
+  if (item.start && d < item.start) return false;
+  if (item.end && d > item.end) return false;
+  if (item.weekdays && item.weekdays.length && !item.weekdays.includes(dayNumber(d))) return false;
+  return true;
 }
 
 function normalizeLibrary(library) {
@@ -138,7 +165,10 @@ function dailyPack(library, date) {
 function libraryItems(library, key, date) {
   const lib = normalizeLibrary(library);
   const daily = lib.days[date] && Array.isArray(lib.days[date][key]) ? lib.days[date][key] : [];
-  return daily.length ? daily : (Array.isArray(lib[key]) ? lib[key] : []);
+  const pool = Array.isArray(lib[key]) ? lib[key] : [];
+  const exact = pool.filter((item) => item.enabled !== false && item.dates && item.dates.includes(date));
+  const scheduled = exact.length ? exact : pool.filter((item) => itemApplies(item, date));
+  return [...daily, ...scheduled];
 }
 
 function read(options = {}) {

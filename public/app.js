@@ -22,6 +22,7 @@ let TEMPLATES = [];
 let PALETTE = {};
 let RUNDOWN = null;
 let RUNDOWN_SELECTED = 0;
+let LIBRARY_CATEGORY = 'datosUtiles';
 
 // Galería visual de plantillas (probar varias con los datos actuales).
 let galleryOpen = false;
@@ -575,7 +576,7 @@ function renderRundown() {
       </button>`;
   }).join('');
   renderSlotPanel();
-  renderDailyLibrary();
+  renderLibraryPanel();
 }
 
 function selectedSlot() {
@@ -593,7 +594,14 @@ function renderSlotPanel() {
   $('#slotPanel').innerHTML = `
     <div class="slot-grid">
       <label>Nombre<input data-rd-current="label" value="${esc(s.label)}"></label>
+      <label>Origen<select data-rd-current="source">
+        <option value="fixed" ${s.source === 'fixed' ? 'selected' : ''}>Manual</option>
+        <option value="library" ${s.source === 'library' ? 'selected' : ''}>Nevera editorial</option>
+        <option value="worker" ${s.source === 'worker' ? 'selected' : ''}>Worker</option>
+      </select></label>
       <label>Plantilla<input data-rd-current="template" value="${esc(s.template || '')}" placeholder="Auto"></label>
+      <label>Categoría nevera<input data-rd-current="libraryKey" value="${esc(s.libraryKey || '')}" placeholder="datosUtiles"></label>
+      <label>Clave worker<input data-rd-current="workerKey" value="${esc(s.workerKey || '')}" placeholder="weather"></label>
       <label>Título<input data-rd-current="title" value="${esc(s.title || '')}"></label>
       <label>Subtítulo<input data-rd-current="subtitle" value="${esc(s.subtitle || '')}"></label>
       <label class="slot-wide">Texto<textarea data-rd-current="body">${esc(s.body || '')}</textarea></label>
@@ -609,37 +617,73 @@ function renderSlotPanel() {
     </div>`;
 }
 
-function blankDailyItem(meta) {
-  return { title: '', subtitle: '', body: '', template: meta.template || 'noticia', theme: meta.theme || '' };
-}
-
-function renderDailyLibrary() {
+function currentLibraryMeta() {
   const keys = RUNDOWN.libraryKeys || [];
-  const daily = RUNDOWN.daily || {};
-  const total = keys.reduce((n, meta) => n + ((daily[meta.key] || []).filter((x) => x.title || x.body).length), 0);
-  $('#dailySummary').innerHTML = `<b>${total}</b> pieza(s) preparadas para ${esc(RUNDOWN.activeDate || '')}. Si una sección está vacía, se usará la biblioteca general.`;
-  $('#dailyLibrary').innerHTML = keys.map((meta) => {
-    const items = (daily[meta.key] && daily[meta.key].length ? daily[meta.key] : [blankDailyItem(meta)]);
-    return `<section class="daily-cat" data-daily-cat="${esc(meta.key)}">
-      <h4>${esc(meta.label)}</h4>
-      ${items.map((item, i) => dailyItemHtml(meta, item, i)).join('')}
-      <button class="ghost" data-daily-add="${esc(meta.key)}">Añadir ${esc(meta.label.toLowerCase())}</button>
-    </section>`;
-  }).join('');
+  return keys.find((x) => x.key === LIBRARY_CATEGORY) || keys[0] || { key: LIBRARY_CATEGORY, label: 'Contenido', template: 'noticia', theme: '' };
 }
 
-function dailyItemHtml(meta, item, i) {
-  return `<div class="daily-item" data-daily-item="${i}">
+function blankLibraryItem(meta) {
+  return { title: '', subtitle: '', body: '', template: meta.template || 'noticia', theme: meta.theme || '', enabled: true, start: '', end: '', dates: [], weekdays: [] };
+}
+
+function clientDayNumber(date) {
+  const jsDay = new Date(`${date}T12:00:00`).getDay();
+  return jsDay === 0 ? 7 : jsDay;
+}
+
+function clientItemApplies(item, date) {
+  if (item.enabled === false) return false;
+  const d = date || new Date().toISOString().slice(0, 10);
+  const dates = Array.isArray(item.dates) ? item.dates : [];
+  const weekdays = Array.isArray(item.weekdays) ? item.weekdays.map(Number) : [];
+  if (dates.length) return dates.includes(d);
+  if (item.start && d < item.start) return false;
+  if (item.end && d > item.end) return false;
+  if (weekdays.length && !weekdays.includes(clientDayNumber(d))) return false;
+  return true;
+}
+
+function renderLibraryPanel() {
+  const keys = RUNDOWN.libraryKeys || [];
+  if (!keys.some((x) => x.key === LIBRARY_CATEGORY) && keys[0]) LIBRARY_CATEGORY = keys[0].key;
+  $('#libraryCategory').innerHTML = keys.map((meta) => `<option value="${esc(meta.key)}" ${meta.key === LIBRARY_CATEGORY ? 'selected' : ''}>${esc(meta.label)}</option>`).join('');
+  const meta = currentLibraryMeta();
+  const items = (RUNDOWN.library && Array.isArray(RUNDOWN.library[meta.key])) ? RUNDOWN.library[meta.key] : [];
+  const activeDate = RUNDOWN.activeDate || new Date().toISOString().slice(0, 10);
+  const eligible = items.filter((item) => clientItemApplies(item, activeDate)).length;
+  const totalAll = keys.reduce((n, k) => n + (((RUNDOWN.library || {})[k.key] || []).length), 0);
+  $('#librarySummary').innerHTML =
+    `<b>${items.length}</b> en esta categoría · <b>${eligible}</b> entran el ${esc(activeDate)} · <b>${totalAll}</b> piezas totales en nevera`;
+  $('#libraryList').innerHTML = items.length ? items.map((item, i) => libraryItemHtml(meta, item, i)).join('') :
+    '<div class="empty">Carga un lote o añade una pieza. Esta categoría todavía está vacía.</div>';
+}
+
+function weekdayBox(item, n, label) {
+  const on = Array.isArray(item.weekdays) && item.weekdays.map(Number).includes(n);
+  return `<label><input type="checkbox" data-lib-weekday="${n}" ${on ? 'checked' : ''}>${label}</label>`;
+}
+
+function libraryItemHtml(meta, item, i) {
+  return `<div class="library-item ${item.enabled === false ? 'off' : ''}" data-lib-item="${i}">
     <div class="mini">
-      <label>Título<input data-daily-field="title" value="${esc(item.title || '')}"></label>
-      <label>Firma/sección<input data-daily-field="subtitle" value="${esc(item.subtitle || '')}"></label>
+      <label><input type="checkbox" data-lib-field="enabled" ${item.enabled !== false ? 'checked' : ''} style="width:auto;margin-right:8px"> Activa</label>
+      <label>Título<input data-lib-field="title" value="${esc(item.title || '')}"></label>
     </div>
-    <label>Texto<textarea data-daily-field="body">${esc(item.body || '')}</textarea></label>
+    <label>Firma/sección<input data-lib-field="subtitle" value="${esc(item.subtitle || '')}"></label>
+    <label>Texto<textarea data-lib-field="body">${esc(item.body || '')}</textarea></label>
     <div class="mini">
-      <label>Plantilla<input data-daily-field="template" value="${esc(item.template || meta.template || '')}"></label>
-      <label>Tema<input data-daily-field="theme" value="${esc(item.theme || meta.theme || '')}"></label>
+      <label>Desde<input type="date" data-lib-field="start" value="${esc(item.start || '')}"></label>
+      <label>Hasta<input type="date" data-lib-field="end" value="${esc(item.end || '')}"></label>
     </div>
-    <button class="ghost" data-daily-del>Quitar</button>
+    <label>Días de semana</label>
+    <div class="weekdays">${weekdayBox(item, 1, 'L')}${weekdayBox(item, 2, 'M')}${weekdayBox(item, 3, 'X')}${weekdayBox(item, 4, 'J')}${weekdayBox(item, 5, 'V')}${weekdayBox(item, 6, 'S')}${weekdayBox(item, 7, 'D')}</div>
+    <label>Fechas concretas<input data-lib-field="dates" value="${esc((item.dates || []).join(', '))}" placeholder="2026-07-15, 2026-08-04"></label>
+    <div class="mini">
+      <label>Plantilla<input data-lib-field="template" value="${esc(item.template || meta.template || '')}"></label>
+      <label>Tema<input data-lib-field="theme" value="${esc(item.theme || meta.theme || '')}"></label>
+    </div>
+    <label>Notas internas<input data-lib-field="notes" value="${esc(item.notes || '')}"></label>
+    <button class="ghost" data-lib-del>Quitar</button>
   </div>`;
 }
 
@@ -659,17 +703,53 @@ function collectRundown() {
   return rd;
 }
 
-function collectDaily() {
-  const pack = {};
-  $('#dailyLibrary').querySelectorAll('[data-daily-cat]').forEach((cat) => {
-    const key = cat.dataset.dailyCat;
-    pack[key] = [...cat.querySelectorAll('.daily-item')].map((item) => {
+function collectLibraryCategory() {
+  if (!RUNDOWN || !RUNDOWN.library) return;
+  const meta = currentLibraryMeta();
+  RUNDOWN.library[meta.key] = [...$('#libraryList').querySelectorAll('.library-item')].map((item) => {
       const obj = {};
-      item.querySelectorAll('[data-daily-field]').forEach((field) => { obj[field.dataset.dailyField] = field.value; });
+      item.querySelectorAll('[data-lib-field]').forEach((field) => {
+        const key = field.dataset.libField;
+        if (field.type === 'checkbox') obj[key] = field.checked;
+        else if (key === 'dates') obj[key] = field.value.split(/[,\s]+/).map((x) => x.trim()).filter(Boolean);
+        else obj[key] = field.value;
+      });
+      obj.weekdays = [...item.querySelectorAll('[data-lib-weekday]:checked')].map((field) => Number(field.dataset.libWeekday));
       return obj;
     }).filter((item) => item.title || item.body);
-  });
-  return pack;
+}
+
+function parseWeekdays(text) {
+  const src = String(text || '').toUpperCase();
+  const map = { L: 1, M: 2, X: 3, J: 4, V: 5, S: 6, D: 7 };
+  const nums = [];
+  for (const part of src.split(/[,\s]+/).filter(Boolean)) {
+    if (/^[1-7]$/.test(part)) nums.push(Number(part));
+    else for (const ch of part) if (map[ch]) nums.push(map[ch]);
+  }
+  return [...new Set(nums)];
+}
+
+function parseBulkItems(text, meta) {
+  const raw = text.trim();
+  if (!raw) return [];
+  if (raw[0] === '[') {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.map((x) => ({ ...blankLibraryItem(meta), ...x })) : [];
+  }
+  return raw.split(/\r?\n/).map((line) => {
+    const parts = line.split('|').map((x) => x.trim());
+    return {
+      ...blankLibraryItem(meta),
+      title: parts[0] || '',
+      subtitle: parts[1] || '',
+      body: parts[2] || '',
+      start: parts[3] || '',
+      end: parts[4] || '',
+      weekdays: parseWeekdays(parts[5] || ''),
+      dates: (parts[6] || '').split(/[,\s]+/).map((x) => x.trim()).filter(Boolean),
+    };
+  }).filter((item) => item.title || item.body);
 }
 
 async function saveRundown() {
@@ -698,12 +778,33 @@ $('#btnRundown').addEventListener('click', openRundown);
 $('#btnRundownClose').addEventListener('click', () => rundownDlg.close());
 $('#btnRundownSave').addEventListener('click', saveRundown);
 $('#btnRundownMake').addEventListener('click', makeRundown);
-$('#btnDailySave').addEventListener('click', async () => {
-  collectRundown();
+$('#btnLibrarySave').addEventListener('click', async () => {
   const date = $('#rundownDate').value || new Date().toISOString().slice(0, 10);
-  RUNDOWN = await api('/rundown/day/' + encodeURIComponent(date), { method: 'PUT', body: JSON.stringify(collectDaily()) });
+  collectRundown();
+  collectLibraryCategory();
+  RUNDOWN = await api('/rundown/library?date=' + encodeURIComponent(date), { method: 'PUT', body: JSON.stringify(RUNDOWN.library) });
   renderRundown();
-  toast('Batería diaria guardada');
+  toast('Nevera editorial guardada');
+});
+$('#btnLibraryAdd').addEventListener('click', () => {
+  if (!RUNDOWN) return;
+  collectLibraryCategory();
+  const meta = currentLibraryMeta();
+  if (!Array.isArray(RUNDOWN.library[meta.key])) RUNDOWN.library[meta.key] = [];
+  RUNDOWN.library[meta.key].push(blankLibraryItem(meta));
+  renderLibraryPanel();
+});
+$('#btnBulkImport').addEventListener('click', () => {
+  if (!RUNDOWN) return;
+  collectLibraryCategory();
+  const meta = currentLibraryMeta();
+  const items = parseBulkItems($('#bulkImport').value, meta);
+  if (!items.length) { toast('No he encontrado piezas para importar'); return; }
+  if (!Array.isArray(RUNDOWN.library[meta.key])) RUNDOWN.library[meta.key] = [];
+  RUNDOWN.library[meta.key].push(...items);
+  $('#bulkImport').value = '';
+  renderLibraryPanel();
+  toast(`Importadas ${items.length} pieza(s)`);
 });
 $('#btnRundownAdd').addEventListener('click', () => {
   if (!RUNDOWN) return;
@@ -764,24 +865,22 @@ $('#slotPanel').addEventListener('click', (e) => {
 });
 $('#slotPanel').addEventListener('input', () => { if (RUNDOWN) collectRundown(); });
 $('#slotPanel').addEventListener('change', () => { if (RUNDOWN) { collectRundown(); renderRundown(); } });
-$('#dailyLibrary').addEventListener('click', (e) => {
-  const add = e.target.closest('[data-daily-add]');
-  const del = e.target.closest('[data-daily-del]');
-  if (!RUNDOWN || (!add && !del)) return;
-  RUNDOWN.daily = collectDaily();
-  if (add) {
-    const meta = (RUNDOWN.libraryKeys || []).find((x) => x.key === add.dataset.dailyAdd);
-    if (!RUNDOWN.daily[add.dataset.dailyAdd]) RUNDOWN.daily[add.dataset.dailyAdd] = [];
-    RUNDOWN.daily[add.dataset.dailyAdd].push(blankDailyItem(meta || {}));
-  }
-  if (del) {
-    const cat = del.closest('[data-daily-cat]');
-    const item = del.closest('.daily-item');
-    const key = cat.dataset.dailyCat;
-    const idx = [...cat.querySelectorAll('.daily-item')].indexOf(item);
-    if (RUNDOWN.daily[key]) RUNDOWN.daily[key].splice(idx, 1);
-  }
-  renderDailyLibrary();
+$('#libraryCategory').addEventListener('change', () => {
+  collectLibraryCategory();
+  LIBRARY_CATEGORY = $('#libraryCategory').value;
+  renderLibraryPanel();
+});
+$('#libraryList').addEventListener('input', () => { if (RUNDOWN) collectLibraryCategory(); });
+$('#libraryList').addEventListener('change', () => { if (RUNDOWN) { collectLibraryCategory(); renderLibraryPanel(); } });
+$('#libraryList').addEventListener('click', (e) => {
+  const del = e.target.closest('[data-lib-del]');
+  if (!RUNDOWN || !del) return;
+  collectLibraryCategory();
+  const meta = currentLibraryMeta();
+  const item = del.closest('.library-item');
+  const idx = [...$('#libraryList').querySelectorAll('.library-item')].indexOf(item);
+  if (RUNDOWN.library[meta.key]) RUNDOWN.library[meta.key].splice(idx, 1);
+  renderLibraryPanel();
 });
 
 const publishDlg = $('#publishDlg');
