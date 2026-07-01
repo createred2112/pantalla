@@ -279,7 +279,7 @@ function render() {
   }
   el.innerHTML = '';
   cards.forEach((c, i) => {
-    const heavyThumb = SAFETY.safeMode && c.type === 'generated';
+    const heavyThumb = c.type === 'generated';
     const thumb = heavyThumb ? ''
       : c.type === 'generated'
       ? `/api/preview/${c.id}?t=${c.updatedAt || ''}&v=${DV}`
@@ -287,7 +287,7 @@ function render() {
     const div = document.createElement('div');
     div.className = 'card';
     div.innerHTML = `
-      ${thumb ? `<img class="thumb" src="${thumb}" alt="" onerror="this.style.opacity=.25">` : `<div class="thumb" style="display:flex;align-items:center;justify-content:center;color:#9fb2d4;font-weight:800">Vista segura</div>`}
+      ${thumb ? `<img class="thumb" src="${thumb}" alt="" onerror="this.style.opacity=.25">` : `<div class="thumb" style="display:flex;align-items:center;justify-content:center;color:#9fb2d4;font-weight:800">Sin render automático</div>`}
       <div class="meta">
         <p class="t">${esc(c.title) || '(sin título)'}</p>
         <p class="s">${esc(c.subtitle) || ''}</p>

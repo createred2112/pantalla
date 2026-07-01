@@ -11,6 +11,7 @@
   header{position:sticky;top:0;background:#081729;border-bottom:1px solid var(--line);padding:12px 16px;display:flex;align-items:center;gap:12px;z-index:5}
   header h1{font-size:16px;margin:0;flex:1}
   a.btn{text-decoration:none;background:var(--line);color:#fff;padding:9px 13px;border-radius:9px;font-size:14px}
+  button.btn{border:0;background:var(--accent);cursor:pointer}
   main{padding:16px;max-width:1100px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px}
   .cell{background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden}
   .cell .lbl{padding:8px 12px;font-size:13px;display:flex;justify-content:space-between;align-items:center}
@@ -25,9 +26,10 @@
 <header>
   <h1>Galería de plantillas</h1>
   <span id="ver" style="color:var(--muted);font-size:12px"></span>
+  <button class="btn" id="btnGenerate">Generar muestras</button>
   <a class="btn" href="/">← Volver al panel</a>
 </header>
-<main id="grid"><div class="note">Generando muestras…</div></main>
+<main id="grid"><div class="note">Galería dormida. Pulsa <b>Generar muestras</b> para renderizar plantillas.</div></main>
 <script>
 const SAMPLES = {
   titular:{ title:'Vitoria, capital verde de Europa', subtitle:'Ciudad', date:'Hoy' },
@@ -59,7 +61,8 @@ async function go(){
     }catch{ cell.querySelector('img').classList.add('err'); }
   }
 }
-go();
+document.getElementById('btnGenerate').addEventListener('click', go);
+fetch('/api/whoami').then(r=>r.json()).then(w=>{ document.getElementById('ver').textContent = w.version?('v'+w.version):''; }).catch(()=>{});
 </script>
 </body>
 </html>

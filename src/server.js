@@ -329,7 +329,8 @@ app.post('/api/extract', async (req, res) => {
 
 app.post('/api/publish', async (req, res) => {
   const dryRun = req.body && req.body.dryRun;
-  const result = await publish({ dryRun });
+  const importWorker = req.body && req.body.importWorker === true;
+  const result = await publish({ dryRun, skipImport: !importWorker });
   res.json(result);
 });
 

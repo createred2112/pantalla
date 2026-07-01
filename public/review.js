@@ -12,7 +12,7 @@ let pollTimer = null;
 let loadStarted = 0;
 
 const stepNames = [
-  ['import', 'Importar', 'Revisando worker'],
+  ['import', 'Importar', 'Solo si se solicita'],
   ['generate', 'Generar', 'Creando JPG/MP4'],
   ['sequence', 'Ordenar', 'Nombres finales'],
   ['upload', 'FTP', 'Simulación sin subir'],
@@ -252,7 +252,7 @@ async function load() {
   loadStarted = Date.now() - 1000;
   startProgress();
   try {
-    const result = await api('/publish', { method: 'POST', body: JSON.stringify({ dryRun: true }) });
+    const result = await api('/publish', { method: 'POST', body: JSON.stringify({ dryRun: true, importWorker: false }) });
     if (!result.ok) throw new Error(publishError(result));
     const cards = await api('/cards');
     const manifest = (result.steps.sequence && result.steps.sequence.manifest) || [];
@@ -289,4 +289,4 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 
-load();
+renderSteps(null);

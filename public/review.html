@@ -75,12 +75,12 @@
 <header>
   <h1>Vista previa</h1>
   <a class="button" href="/">Volver</a>
-  <button class="primary" id="btnReload">Regenerar</button>
+  <button class="primary" id="btnReload">Generar vista previa</button>
 </header>
 <main>
-  <p class="status" id="status">Preparando una prueba sin subir nada al FTP...</p>
+  <p class="status" id="status">Vista previa sin generar. Pulsa el botón cuando quieras preparar una simulación.</p>
 
-  <section class="loading" id="loading">
+  <section class="loading" id="loading" style="display:none">
     <div class="steps" id="steps"></div>
     <div class="live" id="liveLog">Arrancando...</div>
   </section>
@@ -103,7 +103,7 @@
     <div class="strip" id="strip"></div>
   </section>
 
-  <div id="content"></div>
+  <div id="content"><div class="empty">No se usará CPU ni Chromium hasta que pulses <b>Generar vista previa</b>.</div></div>
 </main>
 <script src="review.js"></script>
 </body>
