@@ -21,6 +21,7 @@ let cards = [];
 let TEMPLATES = [];
 let PALETTE = {};
 let RUNDOWN = null;
+let RUNDOWN_SELECTED = 0;
 
 // Galería visual de plantillas (probar varias con los datos actuales).
 let galleryOpen = false;
@@ -539,7 +540,9 @@ $('#btnImport').addEventListener('click', async () => {
 const rundownDlg = $('#rundownDlg');
 
 async function openRundown() {
-  RUNDOWN = await api('/rundown');
+  const today = new Date().toISOString().slice(0, 10);
+  RUNDOWN = await api('/rundown?date=' + encodeURIComponent($('#rundownDate').value || today));
+  RUNDOWN_SELECTED = 0;
   renderRundown();
   rundownDlg.showModal();
 }
@@ -552,63 +555,126 @@ function renderRundown() {
   if (!RUNDOWN) return;
   const rd = RUNDOWN.rundown || { slots: [] };
   const slots = rd.slots || [];
+  if (RUNDOWN_SELECTED >= slots.length) RUNDOWN_SELECTED = Math.max(0, slots.length - 1);
   $('#rundownTitle').value = rd.title || 'Escaleta';
+  $('#rundownDate').value = RUNDOWN.activeDate || new Date().toISOString().slice(0, 10);
   const active = slots.filter((s) => s.enabled !== false).length;
   const missing = ((RUNDOWN.report || []).filter((r) => r.missing)).length;
   $('#rundownSummary').innerHTML =
-    `<b>${active}</b> bloques activos · <b style="color:${missing ? '#e0a106' : '#bff0d5'}">${missing}</b> por completar`;
-  $('#rundownList').innerHTML = slots.map((s, i) => {
+    `<b>${active}</b> bloques activos · <b style="color:${missing ? '#e0a106' : '#bff0d5'}">${missing}</b> por completar · ${slots.reduce((n, s) => n + (s.enabled === false ? 0 : (Number(s.duration) || 8)), 0)}s de vuelta`;
+  $('#rundownTimeline').innerHTML = slots.map((s, i) => {
     const rep = reportForSlot(s);
     const source = s.source === 'library' ? `biblioteca · ${esc(s.libraryKey)}` :
       (s.source === 'worker' ? `worker · ${esc(s.workerKey)}` : 'fijo');
     return `
-      <div class="slot ${s.enabled === false ? 'off' : ''} ${rep.missing ? 'missing' : ''}" data-slot="${esc(s.id)}">
-        <input type="checkbox" data-rd-enabled="${i}" ${s.enabled !== false ? 'checked' : ''} title="Activo">
-        <div class="slot-main">
-          <div class="slot-title">${i + 1}. ${esc(s.label)}</div>
-          <div class="slot-meta">${source} · ${esc(rep.title || s.title || 'sin título')} · ${Number(s.duration) || 8}s${s.video ? ' · MP4' : ''}</div>
-          ${rep.note ? `<div class="slot-note">${esc(rep.note)}</div>` : ''}
-        </div>
-        <div class="slot-actions">
-          <button class="iconbtn" data-rd-up="${i}" ${i === 0 ? 'disabled' : ''}>▲</button>
-          <button class="iconbtn" data-rd-down="${i}" ${i === slots.length - 1 ? 'disabled' : ''}>▼</button>
-          <button class="iconbtn" data-rd-del="${i}">🗑</button>
-        </div>
-        <div class="slot-edit">
-          <label>Nombre<input data-rd-field="${i}:label" value="${esc(s.label)}"></label>
-          <label>Plantilla<input data-rd-field="${i}:template" value="${esc(s.template || '')}" placeholder="Auto"></label>
-          <label>Título<input data-rd-field="${i}:title" value="${esc(s.title || '')}"></label>
-          <label>Subtítulo<input data-rd-field="${i}:subtitle" value="${esc(s.subtitle || '')}"></label>
-          <label class="slot-wide">Texto<textarea data-rd-field="${i}:body">${esc(s.body || '')}</textarea></label>
-          <label>Duración<input type="number" min="1" data-rd-field="${i}:duration" value="${Number(s.duration) || 8}"></label>
-          <label><input type="checkbox" data-rd-video="${i}" ${s.video ? 'checked' : ''}> Animada</label>
-        </div>
-      </div>`;
+      <button class="tl-card ${i === RUNDOWN_SELECTED ? 'sel' : ''} ${s.enabled === false ? 'off' : ''} ${rep.missing ? 'missing' : ''}" data-rd-select="${i}">
+        <div class="tl-num">${String(i + 1).padStart(2, '0')} · ${Number(s.duration) || 8}s</div>
+        <div class="tl-title">${esc(s.label)}</div>
+        <div class="tl-meta">${source}<br>${esc(rep.title || s.title || 'sin título')}${s.video ? '<br>MP4 animado' : ''}</div>
+        ${rep.note ? `<div class="tl-warn">${esc(rep.note)}</div>` : ''}
+      </button>`;
   }).join('');
+  renderSlotPanel();
+  renderDailyLibrary();
+}
+
+function selectedSlot() {
+  const slots = (RUNDOWN && RUNDOWN.rundown && RUNDOWN.rundown.slots) || [];
+  return slots[RUNDOWN_SELECTED] || null;
+}
+
+function renderSlotPanel() {
+  const s = selectedSlot();
+  if (!s) {
+    $('#slotPanel').innerHTML = '<div class="empty">Añade un bloque para empezar.</div>';
+    return;
+  }
+  const rep = reportForSlot(s);
+  $('#slotPanel').innerHTML = `
+    <div class="slot-grid">
+      <label>Nombre<input data-rd-current="label" value="${esc(s.label)}"></label>
+      <label>Plantilla<input data-rd-current="template" value="${esc(s.template || '')}" placeholder="Auto"></label>
+      <label>Título<input data-rd-current="title" value="${esc(s.title || '')}"></label>
+      <label>Subtítulo<input data-rd-current="subtitle" value="${esc(s.subtitle || '')}"></label>
+      <label class="slot-wide">Texto<textarea data-rd-current="body">${esc(s.body || '')}</textarea></label>
+      <label>Duración<input type="number" min="1" data-rd-current="duration" value="${Number(s.duration) || 8}"></label>
+      <label><input type="checkbox" data-rd-toggle="enabled" ${s.enabled !== false ? 'checked' : ''} style="width:auto;margin-right:8px"> Activa</label>
+      <label><input type="checkbox" data-rd-toggle="video" ${s.video ? 'checked' : ''} style="width:auto;margin-right:8px"> Animada</label>
+    </div>
+    <div class="status">${rep.note ? esc(rep.note) : 'Bloque listo para generar.'}</div>
+    <div class="slot-tools">
+      <button class="ghost" data-rd-move="-1" ${RUNDOWN_SELECTED === 0 ? 'disabled' : ''}>Mover izquierda</button>
+      <button class="ghost" data-rd-move="1" ${RUNDOWN_SELECTED === ((RUNDOWN.rundown.slots || []).length - 1) ? 'disabled' : ''}>Mover derecha</button>
+      <button class="ghost" data-rd-delete-current>Eliminar bloque</button>
+    </div>`;
+}
+
+function blankDailyItem(meta) {
+  return { title: '', subtitle: '', body: '', template: meta.template || 'noticia', theme: meta.theme || '' };
+}
+
+function renderDailyLibrary() {
+  const keys = RUNDOWN.libraryKeys || [];
+  const daily = RUNDOWN.daily || {};
+  const total = keys.reduce((n, meta) => n + ((daily[meta.key] || []).filter((x) => x.title || x.body).length), 0);
+  $('#dailySummary').innerHTML = `<b>${total}</b> pieza(s) preparadas para ${esc(RUNDOWN.activeDate || '')}. Si una sección está vacía, se usará la biblioteca general.`;
+  $('#dailyLibrary').innerHTML = keys.map((meta) => {
+    const items = (daily[meta.key] && daily[meta.key].length ? daily[meta.key] : [blankDailyItem(meta)]);
+    return `<section class="daily-cat" data-daily-cat="${esc(meta.key)}">
+      <h4>${esc(meta.label)}</h4>
+      ${items.map((item, i) => dailyItemHtml(meta, item, i)).join('')}
+      <button class="ghost" data-daily-add="${esc(meta.key)}">Añadir ${esc(meta.label.toLowerCase())}</button>
+    </section>`;
+  }).join('');
+}
+
+function dailyItemHtml(meta, item, i) {
+  return `<div class="daily-item" data-daily-item="${i}">
+    <div class="mini">
+      <label>Título<input data-daily-field="title" value="${esc(item.title || '')}"></label>
+      <label>Firma/sección<input data-daily-field="subtitle" value="${esc(item.subtitle || '')}"></label>
+    </div>
+    <label>Texto<textarea data-daily-field="body">${esc(item.body || '')}</textarea></label>
+    <div class="mini">
+      <label>Plantilla<input data-daily-field="template" value="${esc(item.template || meta.template || '')}"></label>
+      <label>Tema<input data-daily-field="theme" value="${esc(item.theme || meta.theme || '')}"></label>
+    </div>
+    <button class="ghost" data-daily-del>Quitar</button>
+  </div>`;
 }
 
 function collectRundown() {
   const rd = RUNDOWN.rundown || { slots: [] };
   rd.title = $('#rundownTitle').value.trim() || 'Escaleta';
-  $('#rundownList').querySelectorAll('[data-rd-field]').forEach((el) => {
-    const [idx, key] = el.dataset.rdField.split(':');
-    const slot = rd.slots[Number(idx)];
+  const slot = selectedSlot();
+  $('#slotPanel').querySelectorAll('[data-rd-current]').forEach((el) => {
     if (!slot) return;
+    const key = el.dataset.rdCurrent;
     slot[key] = key === 'duration' ? Number(el.value) || 8 : el.value;
   });
-  $('#rundownList').querySelectorAll('[data-rd-enabled]').forEach((el) => {
-    const slot = rd.slots[Number(el.dataset.rdEnabled)];
-    if (slot) slot.enabled = el.checked;
-  });
-  $('#rundownList').querySelectorAll('[data-rd-video]').forEach((el) => {
-    const slot = rd.slots[Number(el.dataset.rdVideo)];
-    if (slot) slot.video = el.checked;
+  $('#slotPanel').querySelectorAll('[data-rd-toggle]').forEach((el) => {
+    if (!slot) return;
+    slot[el.dataset.rdToggle] = el.checked;
   });
   return rd;
 }
 
+function collectDaily() {
+  const pack = {};
+  $('#dailyLibrary').querySelectorAll('[data-daily-cat]').forEach((cat) => {
+    const key = cat.dataset.dailyCat;
+    pack[key] = [...cat.querySelectorAll('.daily-item')].map((item) => {
+      const obj = {};
+      item.querySelectorAll('[data-daily-field]').forEach((field) => { obj[field.dataset.dailyField] = field.value; });
+      return obj;
+    }).filter((item) => item.title || item.body);
+  });
+  return pack;
+}
+
 async function saveRundown() {
-  RUNDOWN = await api('/rundown', { method: 'PUT', body: JSON.stringify(collectRundown()) });
+  const date = $('#rundownDate').value || new Date().toISOString().slice(0, 10);
+  RUNDOWN = await api('/rundown?date=' + encodeURIComponent(date), { method: 'PUT', body: JSON.stringify(collectRundown()) });
   renderRundown();
   toast('Escaleta guardada');
 }
@@ -618,7 +684,8 @@ async function makeRundown() {
   const btn = $('#btnRundownMake');
   btn.disabled = true;
   try {
-    const r = await api('/rundown/materialize', { method: 'POST' });
+    const date = $('#rundownDate').value || new Date().toISOString().slice(0, 10);
+    const r = await api('/rundown/materialize', { method: 'POST', body: JSON.stringify({ date }) });
     toast(`Escaleta generada: ${r.count} cartela(s)`);
     rundownDlg.close();
     load();
@@ -631,6 +698,13 @@ $('#btnRundown').addEventListener('click', openRundown);
 $('#btnRundownClose').addEventListener('click', () => rundownDlg.close());
 $('#btnRundownSave').addEventListener('click', saveRundown);
 $('#btnRundownMake').addEventListener('click', makeRundown);
+$('#btnDailySave').addEventListener('click', async () => {
+  collectRundown();
+  const date = $('#rundownDate').value || new Date().toISOString().slice(0, 10);
+  RUNDOWN = await api('/rundown/day/' + encodeURIComponent(date), { method: 'PUT', body: JSON.stringify(collectDaily()) });
+  renderRundown();
+  toast('Batería diaria guardada');
+});
 $('#btnRundownAdd').addEventListener('click', () => {
   if (!RUNDOWN) return;
   collectRundown();
@@ -647,6 +721,7 @@ $('#btnRundownAdd').addEventListener('click', () => {
     duration: 8,
     video: false,
   });
+  RUNDOWN_SELECTED = RUNDOWN.rundown.slots.length - 1;
   renderRundown();
 });
 $('#btnRundownReset').addEventListener('click', async () => {
@@ -655,25 +730,58 @@ $('#btnRundownReset').addEventListener('click', async () => {
   renderRundown();
   toast('Escaleta restaurada');
 });
-$('#rundownList').addEventListener('click', (e) => {
+$('#rundownDate').addEventListener('change', async () => {
+  if (!RUNDOWN) return;
+  collectRundown();
+  RUNDOWN = await api('/rundown?date=' + encodeURIComponent($('#rundownDate').value));
+  renderRundown();
+});
+$('#rundownTimeline').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-rd-select]'); if (!b || !RUNDOWN) return;
+  collectRundown();
+  RUNDOWN_SELECTED = Number(b.dataset.rdSelect);
+  renderRundown();
+});
+$('#slotPanel').addEventListener('click', (e) => {
   const b = e.target.closest('button'); if (!b || !RUNDOWN) return;
   const slots = RUNDOWN.rundown.slots || [];
-  if (b.dataset.rdDel != null) {
+  if (b.dataset.rdDeleteCurrent != null) {
     collectRundown();
-    slots.splice(Number(b.dataset.rdDel), 1);
+    slots.splice(RUNDOWN_SELECTED, 1);
+    RUNDOWN_SELECTED = Math.max(0, RUNDOWN_SELECTED - 1);
     renderRundown();
     return;
   }
-  const i = b.dataset.rdUp != null ? Number(b.dataset.rdUp) : (b.dataset.rdDown != null ? Number(b.dataset.rdDown) : -1);
-  const dir = b.dataset.rdUp != null ? -1 : 1;
+  if (b.dataset.rdMove == null) return;
+  const i = RUNDOWN_SELECTED;
+  const dir = Number(b.dataset.rdMove);
   const j = i + dir;
   if (i < 0 || j < 0 || j >= slots.length) return;
   collectRundown();
   [slots[i], slots[j]] = [slots[j], slots[i]];
+  RUNDOWN_SELECTED = j;
   renderRundown();
 });
-$('#rundownList').addEventListener('change', () => {
-  if (RUNDOWN) { collectRundown(); renderRundown(); }
+$('#slotPanel').addEventListener('input', () => { if (RUNDOWN) collectRundown(); });
+$('#slotPanel').addEventListener('change', () => { if (RUNDOWN) { collectRundown(); renderRundown(); } });
+$('#dailyLibrary').addEventListener('click', (e) => {
+  const add = e.target.closest('[data-daily-add]');
+  const del = e.target.closest('[data-daily-del]');
+  if (!RUNDOWN || (!add && !del)) return;
+  RUNDOWN.daily = collectDaily();
+  if (add) {
+    const meta = (RUNDOWN.libraryKeys || []).find((x) => x.key === add.dataset.dailyAdd);
+    if (!RUNDOWN.daily[add.dataset.dailyAdd]) RUNDOWN.daily[add.dataset.dailyAdd] = [];
+    RUNDOWN.daily[add.dataset.dailyAdd].push(blankDailyItem(meta || {}));
+  }
+  if (del) {
+    const cat = del.closest('[data-daily-cat]');
+    const item = del.closest('.daily-item');
+    const key = cat.dataset.dailyCat;
+    const idx = [...cat.querySelectorAll('.daily-item')].indexOf(item);
+    if (RUNDOWN.daily[key]) RUNDOWN.daily[key].splice(idx, 1);
+  }
+  renderDailyLibrary();
 });
 
 const publishDlg = $('#publishDlg');

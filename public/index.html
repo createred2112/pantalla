@@ -42,6 +42,7 @@
     border-radius:10px;padding:11px;font:inherit}
   textarea{min-height:70px;resize:vertical}
   dialog{border:0;border-radius:16px;background:var(--card);color:var(--txt);width:min(94vw,560px);padding:0}
+  #rundownDlg{width:min(96vw,1120px)}
   dialog::backdrop{background:rgba(0,0,0,.6)}
   .dlg-h{display:flex;align-items:center;padding:14px;border-bottom:1px solid var(--line)}
   .dlg-h h2{margin:0;font-size:16px;flex:1}
@@ -70,20 +71,34 @@
     display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:18px}
   .tplimg img{width:100%;height:100%;object-fit:cover;display:block}
   .tpllbl{font-size:11px;line-height:1.15}
-  .slot{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:start;background:#0a1a30;border:1px solid var(--line);border-radius:12px;padding:10px;margin:8px 0}
-  .slot.off{opacity:.58}
-  .slot.missing{border-color:#e0a106}
-  .slot input[type=checkbox]{width:auto;margin-top:4px}
-  .slot-main{min-width:0}
-  .slot-title{font-weight:800;font-size:14px}
-  .slot-meta{color:var(--muted);font-size:12px;margin-top:2px}
-  .slot-note{color:#ffd98a;font-size:12px;margin-top:4px}
-  .slot-actions{display:flex;gap:4px;flex-direction:column}
-  .slot-actions .iconbtn{padding:6px 8px}
-  .slot-edit{grid-column:1 / -1;display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px}
-  .slot-edit label{margin-top:0}
-  .slot-edit textarea{grid-column:1 / -1;min-height:62px}
+  .rundown-top{display:grid;grid-template-columns:1fr 170px;gap:10px}
+  .timeline{display:flex;gap:10px;overflow-x:auto;padding:12px 2px 18px;scroll-snap-type:x proximity;border-bottom:1px solid var(--line)}
+  .tl-card{position:relative;flex:0 0 154px;min-height:118px;padding:11px;background:#0a1a30;border:1px solid var(--line);border-radius:12px;color:var(--txt);text-align:left;scroll-snap-align:start}
+  .tl-card::after{content:"";position:absolute;right:-11px;top:50%;width:10px;border-top:2px solid var(--line)}
+  .tl-card:last-child::after{display:none}
+  .tl-card.sel{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
+  .tl-card.off{opacity:.55}
+  .tl-card.missing{border-color:#e0a106}
+  .tl-num{font-size:11px;color:var(--muted)}
+  .tl-title{font-weight:900;font-size:14px;margin-top:5px;line-height:1.15}
+  .tl-meta{font-size:11px;color:var(--muted);margin-top:6px;line-height:1.25}
+  .tl-warn{font-size:11px;color:#ffd98a;margin-top:5px}
+  .slot-panel,.daily-panel{background:#0a1a30;border:1px solid var(--line);border-radius:12px;padding:12px;margin-top:12px}
+  .slot-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .slot-grid label{margin-top:0}
   .slot-wide{grid-column:1 / -1}
+  .slot-tools{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+  .slot-tools button{padding:8px 10px}
+  .daily-head{display:flex;align-items:center;gap:10px;margin:6px 0 10px}
+  .daily-head h3{font-size:14px;margin:0;flex:1}
+  .daily-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px}
+  .daily-cat{border:1px solid var(--line);border-radius:10px;padding:10px;background:#081729}
+  .daily-cat h4{font-size:13px;margin:0 0 8px}
+  .daily-item{border-top:1px solid var(--line);padding-top:8px;margin-top:8px}
+  .daily-item:first-of-type{border-top:0;padding-top:0;margin-top:0}
+  .daily-item textarea{min-height:54px}
+  .daily-item .mini{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  .daily-cat button{padding:8px 10px;margin-top:8px}
   .spin{display:inline-block;animation:spin 1s linear infinite}
   @keyframes spin{to{transform:rotate(360deg)}}
   @media (max-width:640px){
@@ -95,6 +110,10 @@
       flex:1 1 calc(25% - 8px);min-width:0;padding:9px 6px!important;
       font-size:12px!important;text-align:center;white-space:nowrap
     }
+    .rundown-top{grid-template-columns:1fr}
+    .tl-card{flex-basis:132px}
+    .slot-grid{grid-template-columns:1fr}
+    .slot-wide{grid-column:1}
   }
   @media (max-width:380px){
     header>a.ghost,header>button.ghost{flex-basis:calc(50% - 8px)}
@@ -314,10 +333,21 @@
 <dialog id="rundownDlg">
   <div class="dlg-h"><h2>Escaleta</h2><button class="ghost" id="btnRundownClose">✕</button></div>
   <div class="dlg-b">
-    <label>Título</label>
-    <input id="rundownTitle">
+    <div class="rundown-top">
+      <label>Título<input id="rundownTitle"></label>
+      <label>Día<input id="rundownDate" type="date"></label>
+    </div>
     <div class="status" id="rundownSummary"></div>
-    <div id="rundownList"></div>
+    <div class="timeline" id="rundownTimeline"></div>
+    <div id="slotPanel" class="slot-panel"></div>
+    <div class="daily-panel">
+      <div class="daily-head">
+        <h3>Contenido diario</h3>
+        <button class="ghost" id="btnDailySave">Guardar batería del día</button>
+      </div>
+      <div class="status" id="dailySummary"></div>
+      <div id="dailyLibrary" class="daily-grid"></div>
+    </div>
   </div>
   <div class="dlg-f">
     <button class="ghost" id="btnRundownAdd">Añadir bloque</button>

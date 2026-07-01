@@ -10,6 +10,7 @@ const RUNDOWN_FILE = path.join(DATA_DIR, 'rundown.json');
 const LIBRARY_FILE = path.join(DATA_DIR, 'content-library.json');
 
 const DEFAULT_LIBRARY = {
+  days: {},
   datosUtiles: [
     { title: '112', subtitle: 'Emergencias', body: 'Guarda este número para cualquier urgencia.', template: 'dato', theme: 'lima' },
     { title: '010', subtitle: 'Atención ciudadana', body: 'Información municipal y trámites en Vitoria-Gasteiz.', template: 'dato', theme: 'azul' },
@@ -33,6 +34,15 @@ const DEFAULT_LIBRARY = {
     { title: 'La conversación también es ciudad.', subtitle: 'Comentario de la semana', body: 'Selecciona aquí un comentario destacado de GasteizBerri.', template: 'cita', theme: 'carbon' },
   ],
 };
+
+const LIBRARY_KEYS = [
+  { key: 'datosUtiles', label: 'Datos útiles', template: 'dato', theme: 'lima' },
+  { key: 'citasHistoricas', label: 'Citas históricas', template: 'cita', theme: 'carbon' },
+  { key: 'datosCuriosos', label: 'Datos curiosos', template: 'dato', theme: 'lima' },
+  { key: 'efemerides', label: 'Efemérides', template: 'noticia', theme: 'carbon' },
+  { key: 'consejosInformaticos', label: 'Consejos informáticos', template: 'noticia', theme: 'azul' },
+  { key: 'comentariosSemana', label: 'Comentarios de la semana', template: 'cita', theme: 'carbon' },
+];
 
 const DEFAULT_RUNDOWN = {
   title: 'Protoescaleta diaria',
@@ -83,22 +93,89 @@ function writeJson(file, data) {
   return data;
 }
 
-function read() {
-  ensureFiles();
-  const rundown = readJson(RUNDOWN_FILE, DEFAULT_RUNDOWN);
-  const library = readJson(LIBRARY_FILE, DEFAULT_LIBRARY);
-  if (!Array.isArray(rundown.slots)) rundown.slots = [];
-  return { rundown, library, report: report(rundown, library) };
+function todayKey() {
+  return new Date().toISOString().slice(0, 10);
 }
 
-function save(rundown) {
+function normalizeLibraryItem(item, defaults) {
+  return {
+    title: String((item && item.title) || ''),
+    subtitle: String((item && item.subtitle) || ''),
+    body: String((item && item.body) || ''),
+    template: String((item && item.template) || defaults.template || 'noticia'),
+    theme: String((item && item.theme) || defaults.theme || ''),
+    date: String((item && item.date) || ''),
+  };
+}
+
+function normalizeLibrary(library) {
+  const src = library && typeof library === 'object' ? library : {};
+  const next = { days: src.days && typeof src.days === 'object' ? src.days : {} };
+  for (const meta of LIBRARY_KEYS) {
+    const base = Array.isArray(src[meta.key]) ? src[meta.key] : DEFAULT_LIBRARY[meta.key];
+    next[meta.key] = (base || []).map((item) => normalizeLibraryItem(item, meta)).filter((item) => item.title || item.body);
+  }
+  for (const [date, pack] of Object.entries(next.days)) {
+    const clean = {};
+    for (const meta of LIBRARY_KEYS) {
+      clean[meta.key] = (Array.isArray(pack && pack[meta.key]) ? pack[meta.key] : [])
+        .map((item) => normalizeLibraryItem(item, meta))
+        .filter((item) => item.title || item.body);
+    }
+    next.days[date] = clean;
+  }
+  return next;
+}
+
+function dailyPack(library, date) {
+  const lib = normalizeLibrary(library);
+  const pack = lib.days[date] || {};
+  const clean = {};
+  for (const meta of LIBRARY_KEYS) clean[meta.key] = Array.isArray(pack[meta.key]) ? pack[meta.key] : [];
+  return clean;
+}
+
+function libraryItems(library, key, date) {
+  const lib = normalizeLibrary(library);
+  const daily = lib.days[date] && Array.isArray(lib.days[date][key]) ? lib.days[date][key] : [];
+  return daily.length ? daily : (Array.isArray(lib[key]) ? lib[key] : []);
+}
+
+function read(options = {}) {
+  ensureFiles();
+  const rundown = readJson(RUNDOWN_FILE, DEFAULT_RUNDOWN);
+  const library = normalizeLibrary(readJson(LIBRARY_FILE, DEFAULT_LIBRARY));
+  const date = options.date || todayKey();
+  if (!Array.isArray(rundown.slots)) rundown.slots = [];
+  return { rundown, library, libraryKeys: LIBRARY_KEYS, activeDate: date, daily: dailyPack(library, date), report: report(rundown, library, date) };
+}
+
+function save(rundown, options = {}) {
   const next = {
     title: rundown.title || 'Escaleta',
     updatedAt: new Date().toISOString(),
     slots: Array.isArray(rundown.slots) ? rundown.slots.map(normalizeSlot) : [],
   };
   writeJson(RUNDOWN_FILE, next);
-  return read();
+  return read(options);
+}
+
+function saveLibrary(library, options = {}) {
+  writeJson(LIBRARY_FILE, normalizeLibrary(library));
+  return read(options);
+}
+
+function saveDay(date, pack) {
+  const day = String(date || todayKey()).slice(0, 10);
+  const library = normalizeLibrary(readJson(LIBRARY_FILE, DEFAULT_LIBRARY));
+  library.days[day] = {};
+  for (const meta of LIBRARY_KEYS) {
+    library.days[day][meta.key] = (Array.isArray(pack && pack[meta.key]) ? pack[meta.key] : [])
+      .map((item) => normalizeLibraryItem(item, meta))
+      .filter((item) => item.title || item.body);
+  }
+  writeJson(LIBRARY_FILE, library);
+  return read({ date: day });
 }
 
 function reset() {
@@ -126,18 +203,18 @@ function normalizeSlot(slot) {
   };
 }
 
-function pickDaily(items, key) {
+function pickDaily(items, key, date) {
   if (!Array.isArray(items) || !items.length) return null;
-  const day = new Date().toISOString().slice(0, 10);
+  const day = date || todayKey();
   let h = 0;
   for (const ch of `${day}:${key}`) h = ((h << 5) - h + ch.charCodeAt(0)) | 0;
   return items[Math.abs(h) % items.length];
 }
 
-function slotPayload(slot, library) {
+function slotPayload(slot, library, date) {
   const s = normalizeSlot(slot);
   if (s.source === 'library') {
-    const item = pickDaily(library[s.libraryKey], s.id);
+    const item = pickDaily(libraryItems(library, s.libraryKey, date), s.id, date);
     return item ? { ...item } : {
       title: s.label,
       subtitle: 'Pendiente',
@@ -160,9 +237,9 @@ function slotPayload(slot, library) {
   return s;
 }
 
-function toCard(slot, library, order) {
+function toCard(slot, library, order, date) {
   const s = normalizeSlot(slot);
-  const p = slotPayload(s, library);
+  const p = slotPayload(s, library, date);
   return store.normalize({
     id: `rd_${s.id}`,
     order,
@@ -182,10 +259,10 @@ function toCard(slot, library, order) {
   });
 }
 
-function report(rundown, library) {
+function report(rundown, library, date) {
   return (rundown.slots || []).map((slot, i) => {
     const s = normalizeSlot(slot);
-    const p = slotPayload(s, library);
+    const p = slotPayload(s, library, date);
     const missing = s.enabled && (p.missing || !p.title);
     return {
       id: s.id,
@@ -204,10 +281,10 @@ function report(rundown, library) {
   });
 }
 
-function materialize() {
-  const { rundown, library, report: rep } = read();
+function materialize(options = {}) {
+  const { rundown, library, activeDate, report: rep } = read(options);
   const active = (rundown.slots || []).filter((s) => s.enabled !== false);
-  const generated = active.map((slot, i) => toCard(slot, library, i + 1));
+  const generated = active.map((slot, i) => toCard(slot, library, i + 1, activeDate));
   const manual = store.list()
     .filter((card) => card.source !== 'rundown')
     .map((card, i) => ({ ...card, order: generated.length + i + 1 }));
@@ -215,4 +292,4 @@ function materialize() {
   return { ok: true, count: generated.length, cards: generated, report: rep };
 }
 
-module.exports = { read, save, reset, materialize, RUNDOWN_FILE, LIBRARY_FILE };
+module.exports = { read, save, saveLibrary, saveDay, reset, materialize, RUNDOWN_FILE, LIBRARY_FILE };

@@ -158,11 +158,19 @@ app.put('/api/settings', (req, res) => {
 app.get('/api/cards', (req, res) => res.json(store.list()));
 
 app.get('/api/rundown', (req, res) => {
-  res.json(rundown.read());
+  res.json(rundown.read({ date: req.query.date }));
 });
 
 app.put('/api/rundown', (req, res) => {
-  res.json(rundown.save(req.body || {}));
+  res.json(rundown.save(req.body || {}, { date: req.query.date }));
+});
+
+app.put('/api/rundown/library', (req, res) => {
+  res.json(rundown.saveLibrary(req.body || {}, { date: req.query.date }));
+});
+
+app.put('/api/rundown/day/:date', (req, res) => {
+  res.json(rundown.saveDay(req.params.date, req.body || {}));
 });
 
 app.post('/api/rundown/reset', (req, res) => {
@@ -170,7 +178,7 @@ app.post('/api/rundown/reset', (req, res) => {
 });
 
 app.post('/api/rundown/materialize', (req, res) => {
-  const result = rundown.materialize();
+  const result = rundown.materialize({ date: (req.body && req.body.date) || req.query.date });
   log.info('rundown', `Escaleta generada: ${result.count} cartela(s)`);
   res.json(result);
 });
