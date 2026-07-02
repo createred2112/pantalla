@@ -17,7 +17,7 @@ module.exports = {
     const numH = Math.round(H * 0.4);
     const ruleH = Math.max(5, Math.round(H * 0.008));
     const labelH = Math.round(H * 0.12);
-    const bodyH = card.body ? Math.round(H * 0.05) : 0;
+    const bodyH = card.body ? Math.round(H * 0.06) : 0;
     const blockH = numH + gap + ruleH + gap + labelH + (card.body ? gap * 0.6 + bodyH : 0);
     let y = Math.round(areaTop + (areaBottom - areaTop - blockH) / 2);
 
@@ -27,13 +27,13 @@ module.exports = {
     const ruleW = Math.round(W * 0.12);
     els.push({ type: 'rect', x: Math.round((W - ruleW) / 2), y, w: ruleW, h: ruleH, color: theme.accent, radius: 3 });
     y += ruleH + gap;
-    els.push({ type: 'text', x: pad, y, w, h: labelH, text: (card.subtitle || '').toUpperCase(), font: 'text', weight: 700, color: theme.accent, align: 'center', valign: 'top', lineHeight: 1.1, autofit: { min: Math.round(H * 0.032), max: Math.round(H * 0.06), lines: 2 } });
+    els.push({ type: 'text', x: pad, y, w, h: labelH, text: (card.subtitle || '').toUpperCase(), font: 'text', weight: 700, color: theme.accent, align: 'center', valign: 'top', lineHeight: 1.1, autofit: { min: Math.round(H * 0.04), max: Math.round(H * 0.072), lines: 2 } });
     if (card.body) {
       y += labelH + gap * 0.6;
-      els.push({ type: 'text', x: pad, y, w, h: bodyH, text: card.body, font: 'text', weight: 400, color: theme.textMuted, align: 'center', valign: 'top', size: Math.round(H * 0.038) });
+      els.push({ type: 'text', x: pad, y, w, h: bodyH, text: card.body, font: 'text', weight: 600, color: theme.textMuted, align: 'center', valign: 'top', size: Math.round(H * 0.046) });
     }
     if (card.date) {
-      els.push({ type: 'text', x: pad, y: H - Math.round(H * 0.07), w, h: Math.round(H * 0.04), text: card.date.toUpperCase(), font: 'text', weight: 600, color: theme.textMuted, align: 'center', valign: 'center', size: Math.round(H * 0.026) });
+      els.push({ type: 'text', x: pad, y: H - Math.round(H * 0.075), w, h: Math.round(H * 0.05), text: card.date.toUpperCase(), font: 'text', weight: 700, color: theme.textMuted, align: 'center', valign: 'center', size: Math.round(H * 0.034) });
     }
     return { background: { type: 'solid', color: theme.bg }, elements: els };
   },
