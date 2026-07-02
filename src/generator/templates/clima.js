@@ -48,14 +48,14 @@ module.exports = {
     const kH = card.date ? Math.round(H * 0.1) : 0;
     const tH = Math.round(H * 0.34);
     const cH = card.subtitle ? Math.round(H * 0.11) : 0;
-    const bH = card.body ? Math.round(H * 0.05) : 0;
+    const bH = card.body ? Math.round(H * 0.06) : 0;
     const g = Math.round(H * 0.005);
     const total = kH + tH + cH + bH + g * 3;
     let y = Math.round((H - total) / 2);
     if (card.date) { els.push({ type: 'text', x: cx, y, w: cw, h: kH, text: card.date.toUpperCase(), font: 'display', weight: 800, color: theme.text, align: 'right', valign: 'bottom', autofit: { min: Math.round(H * 0.05), max: Math.round(H * 0.1), lines: 1 } }); y += kH + g; }
     els.push({ type: 'text', x: cx, y, w: cw, h: tH, text: (card.title || '').toUpperCase(), font: 'display', weight: 800, color: theme.text, align: 'right', valign: 'center', autofit: { min: Math.round(H * 0.16), max: Math.round(H * 0.34), lines: 1 } }); y += tH + g;
     if (card.subtitle) { els.push({ type: 'text', x: cx, y, w: cw, h: cH, text: card.subtitle.toUpperCase(), font: 'display', weight: 800, color: theme.text, align: 'right', valign: 'top', autofit: { min: Math.round(H * 0.05), max: Math.round(H * 0.11), lines: 1 } }); y += cH + g; }
-    if (card.body) { els.push({ type: 'text', x: cx, y, w: cw, h: bH, text: card.body, font: 'text', weight: 600, color: theme.textMuted, align: 'right', valign: 'top', size: Math.round(H * 0.04) }); }
+    if (card.body) { els.push({ type: 'text', x: cx, y, w: cw, h: bH, text: card.body, font: 'text', weight: 700, color: theme.textMuted, align: 'right', valign: 'top', size: Math.round(H * 0.048) }); }
 
     return { background: { type: 'solid', color: theme.bg }, elements: els };
   },

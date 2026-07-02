@@ -357,7 +357,7 @@ const SAMPLES_META = path.join(SAMPLES_DIR, 'meta.json');
 function samplesHash() {
   const crypto = require('crypto');
   return crypto.createHash('sha1').update(JSON.stringify({
-    v: 2, // subir al cambiar el diseño de las plantillas en código
+    v: 3, // subir al cambiar el diseño de las plantillas en código
     brand: cfg.brand, palette: cfg.palette, screen: cfg.screen,
     tpls: templates.list().map((t) => t.id), data: SAMPLE_DATA,
   })).digest('hex');
@@ -496,6 +496,37 @@ app.post('/api/ftp-test', async (req, res) => {
   res.status(result.ok ? 200 : 400).json(result);
 });
 
+// --- Piloto automático: la pantalla se alimenta sola cada día ---
+const autopilot = require('./autopilot');
+const workers = require('./workers');
+
+app.get('/api/autopilot', (req, res) => {
+  res.json({ ...autopilot.conf(), last: autopilot.state(), workers: workers.state() });
+});
+
+app.put('/api/autopilot', (req, res) => {
+  const c = autopilot.setConf(req.body || {});
+  log.info('autopilot', `Configuración: ${c.enabled ? 'ACTIVO a las ' + c.time : 'apagado'}${c.publish ? ' (con publicación)' : ''}`);
+  res.json({ ...c, last: autopilot.state(), workers: workers.state() });
+});
+
+// Ejecutar el ciclo completo AHORA (demo / prueba): workers + escaleta + publicar.
+app.post('/api/autopilot/run', async (req, res) => {
+  try {
+    const r = await autopilot.runNow();
+    res.json({ ok: true, ...r });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/api/workers', (req, res) => res.json({ workers: workers.state() }));
+
+app.post('/api/workers/refresh', async (req, res) => {
+  const r = await workers.refreshAll();
+  res.json(r);
+});
+
 app.get('/api/status', (req, res) => {
   const { ftpConfig } = require('./config');
   const ftpCfg = ftpConfig();
@@ -517,4 +548,6 @@ app.listen(env.port, () => {
   if (!auth.hasAdmins()) {
     log.warn('server', 'No hay administradores. Crea uno con:  npm run admin:add -- <usuario> <contraseña>');
   }
+  autopilot.start();
+  workers.start();
 });
