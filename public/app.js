@@ -637,6 +637,26 @@ $('#pilotTime').addEventListener('change', async () => {
   await savePilot({});
   toast('Hora del piloto: ' + PILOT.time);
 });
+$('#pilotRun').addEventListener('click', async (e) => {
+  if (!confirm('Ejecutar el ciclo completo AHORA: traer datos automáticos, generar la escaleta de hoy y PUBLICAR a la pantalla. ¿Seguimos?')) return;
+  const b = e.target;
+  b.disabled = true;
+  b.textContent = '⏳ Publicando…';
+  $('#dot').style.background = '#e0a106';
+  try {
+    const r = await api('/autopilot/run', { method: 'POST' });
+    $('#dot').style.background = r.published ? '#2bb673' : '#e0a106';
+    toast(`Hecho: ${r.cards} cartela(s)${r.published ? ' publicadas en pantalla ✓' : ' (no se publicó, mira Estado)'}`);
+    load();
+    loadPilot();
+  } catch (err) {
+    $('#dot').style.background = '#e2231a';
+    toast('Error: ' + err.message);
+  } finally {
+    b.disabled = false;
+    b.textContent = '▶ Ahora';
+  }
+});
 
 // --- Barra de acciones ---
 $('#btnAdd').addEventListener('click', () => openEditor(null));
