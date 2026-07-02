@@ -234,20 +234,30 @@
     *{transition:none!important;animation:none!important}
   }
 
-  /* Escaleta: lista vertical de bloques con edición inline */
-  .slot-list{display:flex;flex-direction:column;gap:8px;margin-top:12px}
-  .slot-item{border:1px solid var(--line);border-radius:12px;background:#0a1a30;padding:8px 10px}
-  .slot-item.off{opacity:.55}
-  .slot-item.missing{border-color:rgba(232,172,22,.6)}
-  .slot-item.open{border-color:var(--line2);background:#0c1e38;box-shadow:0 8px 22px rgba(0,0,0,.3)}
-  .slot-row{display:flex;width:100%;gap:10px;align-items:center;background:none;border:0;color:var(--txt);
-    padding:4px 2px;text-align:left;cursor:pointer;font:inherit}
-  .slot-num{font-size:11px;color:var(--muted);min-width:30px;font-weight:900;letter-spacing:1px}
-  .slot-name{font-weight:800;font-size:13px;flex:0 1 auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:38%}
-  .slot-today{font-size:12px;color:var(--muted);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .slot-today.warn{color:#ffd98a}
-  .slot-dur{font-size:11px;color:var(--muted);flex:none}
-  .slot-edit{border-top:1px solid var(--line);margin-top:8px;padding-top:6px}
+  /* Escaleta: STORYBOARD visual (miniaturas reales) + editor debajo */
+  .storyboard{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-top:12px}
+  .sb-card{position:relative;border:2px solid var(--line);border-radius:12px;overflow:hidden;background:#0a1a30;
+    cursor:pointer;padding:0;text-align:left;color:var(--txt);font:inherit;transition:border-color .12s,transform .08s}
+  .sb-card:hover{border-color:var(--line2)}
+  .sb-card:active{transform:scale(.985)}
+  .sb-card.sel{border-color:var(--accent);box-shadow:0 0 0 2px rgba(226,35,26,.3)}
+  .sb-card.off{opacity:.4;filter:saturate(.4)}
+  .sb-card.missing{border-color:rgba(232,172,22,.7)}
+  .sb-thumb{aspect-ratio:16/9;background:#05080f;display:flex;align-items:center;justify-content:center;
+    font-size:24px;position:relative;color:var(--muted)}
+  .sb-thumb img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+  .sb-num{position:absolute;top:6px;left:6px;z-index:2;background:rgba(4,9,18,.85);border:1px solid var(--line);
+    border-radius:6px;padding:2px 7px;font-size:11px;font-weight:900;letter-spacing:1px}
+  .sb-dur{position:absolute;bottom:6px;right:6px;z-index:2;background:rgba(4,9,18,.85);border-radius:6px;padding:2px 6px;font-size:10px}
+  .sb-meta{padding:7px 9px 8px}
+  .sb-name{font-weight:800;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .sb-say{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+  .sb-say.warn{color:#ffd98a}
+  .slot-editor{margin-top:12px;border:1px solid var(--line2);border-radius:12px;padding:12px;background:#0c1e38;
+    box-shadow:0 10px 26px rgba(0,0,0,.35)}
+  .slot-editor-h{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+  .slot-editor-h b{flex:1;font-size:14px}
+  @media (max-width:640px){ .storyboard{grid-template-columns:repeat(auto-fill,minmax(124px,1fr))} }
 
   /* Editor de cartela: campos agrupados */
   .mini2{display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:end;margin-top:4px}
@@ -509,30 +519,37 @@
   <div class="dlg-h">
     <h2 style="flex:0 0 auto">Escaleta</h2>
     <div class="rd-tabs">
-      <button type="button" class="rd-tab sel" data-rd-tab="seq">Secuencia</button>
-      <button type="button" class="rd-tab" data-rd-tab="lib">Contenido programado</button>
+      <button type="button" class="rd-tab sel" data-rd-tab="seq">📺 El guion del día</button>
+      <button type="button" class="rd-tab" data-rd-tab="lib">🔁 Piezas que rotan</button>
     </div>
     <button class="ghost" id="btnRundownClose">✕</button>
   </div>
   <div class="dlg-b">
     <section id="rdTabSeq">
-      <div class="rundown-top">
-        <label>Título<input id="rundownTitle"></label>
-        <label>Día<input id="rundownDate" type="date"></label>
+      <input type="hidden" id="rundownTitle" value="Escaleta">
+      <p class="hint" style="margin:0 0 10px">Este es el <b>guion de la pantalla</b>: estos bloques, en este orden, son lo que se emite en bucle.
+        Toca cualquier bloque para cambiarlo. Cuando te guste, pulsa <b>Crear las cartelas</b> (abajo) y después Publicar
+        — o no hagas nada: el piloto automático lo hace solo cada mañana.</p>
+      <div class="rundown-top" style="grid-template-columns:190px 1fr;align-items:end">
+        <label>Ver / preparar el día<input id="rundownDate" type="date"></label>
+        <div class="status" id="rundownSummary" style="margin:0"></div>
       </div>
-      <div class="status" id="rundownSummary"></div>
-      <div id="slotList" class="slot-list"></div>
+      <div class="hint" style="margin:8px 2px 0">✍️ lo escribes tú &nbsp;·&nbsp; 🔁 cada día sale una pieza distinta &nbsp;·&nbsp; ⚙️ se rellena solo con datos reales &nbsp;·&nbsp; toca una miniatura para editarla</div>
+      <div id="slotList" class="storyboard"></div>
       <div class="slot-tools" style="margin-top:10px">
         <button class="ghost" id="btnRundownAdd">＋ Añadir bloque</button>
-        <button class="ghost" id="btnWorkersRefresh" title="Trae ahora el tiempo, precio de la luz, etc.">↻ Datos automáticos</button>
+        <button class="ghost" id="btnWorkersRefresh" title="Trae ahora mismo el tiempo, el precio de la luz y las gasolineras">⚙️ Actualizar datos reales</button>
       </div>
+      <div id="slotEditor" class="slot-editor" hidden></div>
     </section>
     <section id="rdTabLib" hidden>
       <div class="library-head">
-        <h3>Contenido programado</h3>
+        <h3>Piezas que rotan</h3>
         <button class="ghost" id="btnLibraryAdd">＋ Añadir pieza</button>
       </div>
-      <p class="hint" style="margin:0 0 10px">Piezas que rotan en los bloques «Programado» de la secuencia. Cada pieza puede salir siempre o solo en las fechas que le programes.</p>
+      <p class="hint" style="margin:0 0 10px">Este es el <b>almacén</b> que alimenta los bloques 🔁 del guion: consejos, citas, datos curiosos…
+        Cada día sale una pieza distinta de cada tipo, sola. Una pieza puede salir <b>siempre</b> (entra en la rotación)
+        o <b>solo cuando la programes</b> (fechas, días de la semana). Abajo tienes qué saldrá los próximos 7 días.</p>
       <div class="library-tools">
         <label>Categoría<select id="libraryCategory"></select></label>
         <div class="status" id="librarySummary"></div>
@@ -548,9 +565,9 @@
     </section>
   </div>
   <div class="dlg-f">
-    <button class="ghost" id="btnRundownReset">Reset</button>
-    <button class="ghost" id="btnRundownSave">Guardar todo</button>
-    <button class="primary" id="btnRundownMake">Aplicar a la pantalla ▶</button>
+    <button class="ghost" id="btnRundownReset" title="Vuelve al guion de ejemplo (las piezas del almacén no se tocan)">Restaurar ejemplo</button>
+    <button class="ghost" id="btnRundownSave">💾 Guardar cambios</button>
+    <button class="primary" id="btnRundownMake" title="Convierte el guion en cartelas listas para revisar y publicar">Crear las cartelas →</button>
   </div>
 </dialog>
 

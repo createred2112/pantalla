@@ -668,10 +668,11 @@ $('#btnImport').addEventListener('click', async () => {
 const rundownDlg = $('#rundownDlg');
 let RD_DIRTY = false;   // hay cambios sin guardar en escaleta/contenido
 let LIB_OPEN = -1;      // índice de la pieza expandida en la lista
+let RD_STAMP = Date.now(); // cache-bust de las miniaturas del storyboard
 
 function rdSetDirty(v) {
   RD_DIRTY = v;
-  $('#btnRundownSave').textContent = v ? 'Guardar todo ●' : 'Guardar todo';
+  $('#btnRundownSave').textContent = v ? '💾 Guardar cambios ●' : '💾 Guardar cambios';
 }
 
 function setRundownTab(tab) {
@@ -683,8 +684,9 @@ function setRundownTab(tab) {
 async function openRundown() {
   const today = new Date().toISOString().slice(0, 10);
   RUNDOWN = await api('/rundown?date=' + encodeURIComponent($('#rundownDate').value || today));
-  RUNDOWN_SELECTED = -1; // todo plegado: vista calmada
+  RUNDOWN_SELECTED = -1; // nada seleccionado: solo el storyboard
   LIB_OPEN = -1;
+  RD_STAMP = Date.now();
   rdSetDirty(false);
   setRundownTab('seq');
   renderRundown();
@@ -704,12 +706,15 @@ function renderRundown() {
   $('#rundownDate').value = RUNDOWN.activeDate || new Date().toISOString().slice(0, 10);
   const active = slots.filter((s) => s.enabled !== false).length;
   const missing = ((RUNDOWN.report || []).filter((r) => r.missing)).length;
+  const secs = slots.reduce((n, s) => n + (s.enabled === false ? 0 : (Number(s.duration) || 8)), 0);
   $('#rundownSummary').innerHTML =
-    `<b>${active}</b> bloques activos · <b style="color:${missing ? '#e0a106' : '#bff0d5'}">${missing}</b> por completar · ${slots.reduce((n, s) => n + (s.enabled === false ? 0 : (Number(s.duration) || 8)), 0)}s de vuelta` +
-    (RUNDOWN.dayTheme ? ` · look del día: <b>${esc(RUNDOWN.dayTheme)}</b>` : '');
+    `La pantalla dará una vuelta de <b>${secs}s</b> con <b>${active}</b> bloques` +
+    (missing ? ` · <b style="color:#e0a106">⚠ ${missing} sin contenido</b>` : ' · <b style="color:#bff0d5">todo listo ✓</b>') +
+    (RUNDOWN.dayTheme ? ` · color del día: <b>${esc(RUNDOWN.dayTheme)}</b>` : '');
   $('#slotList').innerHTML = slots.length
-    ? slots.map((s, i) => slotItemHtml(s, i)).join('')
-    : '<div class="empty">Añade un bloque para empezar.</div>';
+    ? slots.map((s, i) => sbCardHtml(s, i)).join('')
+    : '<div class="empty" style="grid-column:1/-1">Añade un bloque para empezar.</div>';
+  renderSlotEditor();
   renderLibraryPanel();
 }
 
@@ -718,24 +723,41 @@ function selectedSlot() {
   return slots[RUNDOWN_SELECTED] || null;
 }
 
-// Una fila por bloque: nº, nombre, qué saldrá ese día y duración.
-// Tocar la fila la expande para editar ahí mismo.
-function slotItemHtml(s, i) {
+// STORYBOARD: cada bloque es una tarjeta con su miniatura REAL (el último
+// render de esa posición), número de emisión y qué dirá ese día.
+function sbCardHtml(s, i) {
   const rep = reportForSlot(s);
   const keys = RUNDOWN.libraryKeys || [];
   const libLabel = (k) => (keys.find((x) => x.key === k) || {}).label || k;
-  const srcTxt = s.source === 'library' ? libLabel(s.libraryKey) : (s.source === 'worker' ? 'automático' : 'manual');
-  const todayTxt = rep.missing ? (rep.note || 'pendiente de contenido') : (rep.title || s.title || '—');
-  const open = i === RUNDOWN_SELECTED;
-  const row = `<button type="button" class="slot-row" data-slot-open="${i}">
-      <span class="slot-num">${String(i + 1).padStart(2, '0')}</span>
-      <span class="slot-name">${esc(s.label)}</span>
-      <span class="slot-today ${rep.missing ? 'warn' : ''}">${rep.missing ? '⚠ ' : ''}${esc(srcTxt)} · ${esc(todayTxt)}</span>
-      <span class="slot-dur">${Number(s.duration) || 8}s${s.video ? ' · MP4' : ''}</span>
-    </button>`;
-  const cls = `slot-item ${s.enabled === false ? 'off' : ''} ${rep.missing ? 'missing' : ''} ${open ? 'open' : ''}`;
-  if (!open) return `<div class="${cls}" data-slot-item="${i}">${row}</div>`;
-  return `<div class="${cls}" data-slot-item="${i}">${row}<div class="slot-edit">${slotEditHtml(s, i)}</div></div>`;
+  const srcIco = s.source === 'library' ? '🔁' : (s.source === 'worker' ? '⚙️' : '✍️');
+  const srcTitle = s.source === 'library' ? `Rota: cada día una pieza de «${libLabel(s.libraryKey)}»`
+    : (s.source === 'worker' ? 'Automático: se rellena solo con datos reales' : 'Escrito por ti');
+  const say = rep.missing ? (rep.note || 'sin contenido todavía') : (rep.title || s.title || '—');
+  const sel = i === RUNDOWN_SELECTED;
+  return `<button type="button" class="sb-card ${sel ? 'sel' : ''} ${s.enabled === false ? 'off' : ''} ${rep.missing ? 'missing' : ''}" data-slot-open="${i}" title="${esc(srcTitle)}">
+    <div class="sb-thumb">${srcIco}
+      <img src="/media/output/rd_${encodeURIComponent(s.id)}.jpg?v=${RD_STAMP}" alt="" loading="lazy" onerror="this.remove()">
+      <span class="sb-num">${String(i + 1).padStart(2, '0')}</span>
+      <span class="sb-dur">${Number(s.duration) || 8}s${s.video ? ' ▶' : ''}</span>
+    </div>
+    <div class="sb-meta">
+      <div class="sb-name">${srcIco} ${esc(s.label)}${s.enabled === false ? ' · APAGADO' : ''}</div>
+      <div class="sb-say ${rep.missing ? 'warn' : ''}">${rep.missing ? '⚠ ' : ''}${esc(say)}</div>
+    </div>
+  </button>`;
+}
+
+// Editor del bloque seleccionado, debajo del storyboard.
+function renderSlotEditor() {
+  const box = $('#slotEditor');
+  const s = selectedSlot();
+  if (!s) { box.hidden = true; box.innerHTML = ''; return; }
+  box.hidden = false;
+  box.innerHTML = `
+    <div class="slot-editor-h">
+      <b>✏️ ${esc(s.label)} — bloque ${String(RUNDOWN_SELECTED + 1).padStart(2, '0')}</b>
+      <button type="button" class="ghost" data-rd-close title="Cerrar el editor">✕</button>
+    </div>` + slotEditHtml(s, RUNDOWN_SELECTED);
 }
 
 function slotEditHtml(s, i) {
@@ -751,12 +773,12 @@ function slotEditHtml(s, i) {
   return `
     <div class="slot-grid">
       <label>Nombre del bloque<input data-rd-current="label" value="${esc(s.label)}"></label>
-      <label>Contenido<select data-rd-current="source">
-        <option value="fixed" ${s.source === 'fixed' ? 'selected' : ''}>Manual (lo escribes aquí)</option>
-        <option value="library" ${isLib ? 'selected' : ''}>Programado (rota por categoría)</option>
-        <option value="worker" ${isWorker ? 'selected' : ''}>Automático (worker)</option>
+      <label>¿De dónde sale el contenido?<select data-rd-current="source">
+        <option value="fixed" ${s.source === 'fixed' ? 'selected' : ''}>✍️ Lo escribo yo aquí</option>
+        <option value="library" ${isLib ? 'selected' : ''}>🔁 Rota: cada día una pieza distinta</option>
+        <option value="worker" ${isWorker ? 'selected' : ''}>⚙️ Automático: se rellena solo</option>
       </select></label>
-      ${isLib ? `<label>Categoría<select data-rd-current="libraryKey">
+      ${isLib ? `<label>Tipo de pieza (del almacén)<select data-rd-current="libraryKey">
         ${keys.map((k) => `<option value="${esc(k.key)}" ${k.key === s.libraryKey ? 'selected' : ''}>${esc(k.label)}</option>`).join('')}
       </select></label>` : ''}
       ${isWorker ? (() => {
@@ -770,9 +792,9 @@ function slotEditHtml(s, i) {
       })() : ''}
       ${!isLib && !isWorker ? tplSelect : ''}
       ${isLib
-        ? `<div class="slot-wide hint" style="align-self:center">Este bloque coge cada día una pieza de la categoría elegida. Las piezas se editan en la pestaña «Contenido programado».</div>`
+        ? `<div class="slot-wide hint" style="align-self:center">Cada día este bloque enseña una pieza distinta de ese tipo. Las piezas se crean y programan en la pestaña «🔁 Piezas que rotan».</div>`
         : (isWorker
-          ? `<div class="slot-wide hint" style="align-self:center">El dato se actualiza solo cada 30 min y antes de cada publicación. La plantilla la elige el propio dato (curva para la luz, lista para gasolineras…). Usa «↻ Datos automáticos» para traerlo ahora.</div>`
+          ? `<div class="slot-wide hint" style="align-self:center">No hay nada que escribir: el dato llega solo (se refresca cada 30 min y antes de publicar) y elige su propia plantilla. «⚙️ Actualizar datos reales» lo trae ahora mismo.</div>`
           : `<label>Título<input data-rd-current="title" value="${esc(s.title || '')}"></label>
       <label>Subtítulo<input data-rd-current="subtitle" value="${esc(s.subtitle || '')}"></label>
       <label class="slot-wide">Texto<textarea data-rd-current="body">${esc(s.body || '')}</textarea></label>`)}
@@ -784,8 +806,8 @@ function slotEditHtml(s, i) {
       ? '⚠️ ' + esc(rep.note || 'Pendiente de contenido')
       : `✅ El ${esc(RUNDOWN.activeDate || 'día elegido')} saldrá: <b>${esc(rep.title || s.title || s.label)}</b>`}</div>
     <div class="slot-tools">
-      <button class="ghost" data-rd-move="-1" ${i === 0 ? 'disabled' : ''}>↑ Subir</button>
-      <button class="ghost" data-rd-move="1" ${i === slots.length - 1 ? 'disabled' : ''}>↓ Bajar</button>
+      <button class="ghost" data-rd-move="-1" ${i === 0 ? 'disabled' : ''}>← Emitir antes</button>
+      <button class="ghost" data-rd-move="1" ${i === slots.length - 1 ? 'disabled' : ''}>Emitir después →</button>
       <span class="spacer"></span>
       <button class="ghost" data-rd-delete-current>🗑 Eliminar bloque</button>
     </div>`;
@@ -961,14 +983,12 @@ function libraryItemHtml(meta, item, i) {
   </div>`;
 }
 
-// Recoge del DOM SOLO el bloque expandido (los demás no tienen campos).
+// Recoge del DOM SOLO el bloque en edición (los demás no tienen campos).
 function collectRundown() {
   const rd = RUNDOWN.rundown || { slots: [] };
   rd.title = $('#rundownTitle').value.trim() || 'Escaleta';
   const slot = selectedSlot();
-  const wrap = slot && $('#slotList')
-    ? $('#slotList').querySelector(`[data-slot-item="${RUNDOWN_SELECTED}"] .slot-edit`)
-    : null;
+  const wrap = slot && !$('#slotEditor').hidden ? $('#slotEditor') : null;
   if (slot && wrap) {
     wrap.querySelectorAll('[data-rd-current]').forEach((el) => {
       const key = el.dataset.rdCurrent;
@@ -1158,12 +1178,31 @@ $('#rundownDate').addEventListener('change', async () => {
   rdSetDirty(false);
   renderRundown();
 });
+// Storyboard: tocar una miniatura selecciona el bloque y abre su editor.
 $('#slotList').addEventListener('click', (e) => {
   if (!RUNDOWN) return;
+  const card = e.target.closest('[data-slot-open]');
+  if (!card) return;
+  collectRundown();
+  const idx = Number(card.dataset.slotOpen);
+  RUNDOWN_SELECTED = idx === RUNDOWN_SELECTED ? -1 : idx;
+  renderRundown();
+  const ed = $('#slotEditor');
+  if (ed && !ed.hidden) ed.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+});
+// Editor del bloque: mover, eliminar, cerrar, editar campos.
+$('#slotEditor').addEventListener('click', (e) => {
+  if (!RUNDOWN) return;
   const slots = RUNDOWN.rundown.slots || [];
+  if (e.target.closest('[data-rd-close]')) {
+    collectRundown();
+    RUNDOWN_SELECTED = -1;
+    renderRundown();
+    return;
+  }
   const del = e.target.closest('[data-rd-delete-current]');
   if (del) {
-    if (!confirm('¿Eliminar este bloque de la secuencia?')) return;
+    if (!confirm('¿Eliminar este bloque del guion?')) return;
     slots.splice(RUNDOWN_SELECTED, 1);
     RUNDOWN_SELECTED = -1;
     rdSetDirty(true);
@@ -1182,16 +1221,9 @@ $('#slotList').addEventListener('click', (e) => {
     renderRundown();
     return;
   }
-  const row = e.target.closest('[data-slot-open]');
-  if (row) {
-    collectRundown();
-    const idx = Number(row.dataset.slotOpen);
-    RUNDOWN_SELECTED = idx === RUNDOWN_SELECTED ? -1 : idx;
-    renderRundown();
-  }
 });
-$('#slotList').addEventListener('input', () => { if (RUNDOWN) { collectRundown(); rdSetDirty(true); } });
-$('#slotList').addEventListener('change', () => { if (RUNDOWN) { collectRundown(); rdSetDirty(true); renderRundown(); } });
+$('#slotEditor').addEventListener('input', () => { if (RUNDOWN) { collectRundown(); rdSetDirty(true); } });
+$('#slotEditor').addEventListener('change', () => { if (RUNDOWN) { collectRundown(); rdSetDirty(true); renderRundown(); } });
 $('#rundownTitle').addEventListener('input', () => { if (RUNDOWN) rdSetDirty(true); });
 $('#libraryCategory').addEventListener('change', () => {
   collectLibraryCategory();
