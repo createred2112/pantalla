@@ -48,7 +48,11 @@ async function run(day, c, opts = {}) {
   const ok = Boolean(r.ok !== false && (!pub || pub.ok));
   // Solo la ejecución PROGRAMADA marca el día como hecho: la preparación
   // manual no debe impedir que el piloto corra a su hora.
-  if (opts.scheduled) status.set('autopilot', { ok, day, cards: r.count, published: Boolean(pub && pub.ok) });
+  if (opts.scheduled) {
+    const prev = state();
+    const attempts = ok ? 0 : ((prev && prev.day === day ? Number(prev.attempts || 0) : 0) + 1);
+    status.set('autopilot', { ok, day, cards: r.count, published: Boolean(pub && pub.ok), attempts });
+  }
   log[ok ? 'info' : 'warn']('autopilot',
     `${opts.scheduled ? 'Piloto automático' : 'Preparación'} ${ok ? 'OK' : 'con fallos'}: ${r.count} cartela(s)` +
     (pub ? (pub.ok ? ' · publicado en pantalla' : ' · FALLO al publicar (mira el log)') : ' · pendiente de revisión y publicación manual'));
@@ -61,15 +65,22 @@ async function tick() {
   const now = new Date();
   const day = localDay(now);
   const last = state();
-  if (last && last.day === day) return; // hoy ya se ejecutó
+  if (last && last.day === day) {
+    if (last.ok !== false) return; // hoy ya se ejecutó bien
+    // Falló (p. ej. FTP caído): reintenta cada 30 min, máximo 3 intentos.
+    if (Number(last.attempts || 1) >= 3) return;
+    if (Date.now() - Date.parse(last.ts || 0) < 30 * 60000) return;
+  }
   const [hh, mm] = String(c.time).split(':').map(Number);
   if (now.getHours() * 60 + now.getMinutes() < hh * 60 + mm) return; // aún no es la hora
   _running = true;
   try {
     await run(day, c, { publish: c.publish !== false, scheduled: true });
   } catch (e) {
-    status.set('autopilot', { ok: false, day, error: e.message });
-    log.error('autopilot', 'Fallo del piloto automático: ' + e.message);
+    const prev = state();
+    const attempts = (prev && prev.day === day ? Number(prev.attempts || 0) : 0) + 1;
+    status.set('autopilot', { ok: false, day, error: e.message, attempts });
+    log.error('autopilot', `Fallo del piloto automático (intento ${attempts}/3): ` + e.message);
   } finally {
     _running = false;
   }

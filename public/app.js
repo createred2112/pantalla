@@ -327,7 +327,7 @@ function render() {
         <button class="iconbtn" data-edit="${c.id}" title="Editar contenido">✎</button>
         ${c.type === 'generated' ? `<button class="iconbtn ${!rendered ? 'attn' : ''}" data-render="${c.id}" title="${rendered ? 'Regenerar archivo (no suele hacer falta)' : 'Generar el archivo'}">⟳</button>` : ''}
         ${rendered && rendered.type === 'video' ? `<button class="iconbtn" data-view-video="${c.id}" title="Ver vídeo generado">▶</button>` : ''}
-        ${c.type === 'generated' ? `<button class="iconbtn" data-design="${c.id}" title="Editor de diseño">🎨</button>` : ''}
+        ${c.type === 'generated' && c.template !== 'luz' && c.template !== 'gasolina' ? `<button class="iconbtn" data-design="${c.id}" title="Editor de diseño">🎨</button>` : ''}
         <button class="iconbtn danger" data-del="${c.id}" title="Eliminar">🗑</button>
       </div>`;
     el.appendChild(div);

@@ -121,39 +121,57 @@ async function fuel() {
 }
 
 const PROVIDERS = {
-  weather: { label: 'El tiempo (Open-Meteo)', fn: weather },
-  powerPrice: { label: 'Precio de la luz (REE)', fn: powerPrice },
-  fuel: { label: 'Gasolineras Vitoria (MITECO)', fn: fuel },
+  // ttlMs: cada cuánto merece la pena re-consultar la fuente.
+  // maxAgeMs: cuándo un dato guardado deja de valer para publicarse.
+  weather: { label: 'El tiempo (Open-Meteo)', fn: weather, ttlMs: 25 * 60000, maxAgeMs: 3 * 3600000 },
+  powerPrice: { label: 'Precio de la luz (REE)', fn: powerPrice, ttlMs: 25 * 60000, maxAgeMs: 3 * 3600000 },
+  // Los precios de gasolina cambian una vez al día y la respuesta es enorme:
+  // no hay que machacar la API cada 30 min.
+  fuel: { label: 'Gasolineras Vitoria (MITECO)', fn: fuel, ttlMs: 6 * 3600000, maxAgeMs: 26 * 3600000 },
   // poolCapacity: sin fuente pública estable; se rellena a mano o por archivo
   // en data/worker-inbox. Añadir proveedor aquí cuando haya API.
 };
+
+function maxAgeOf(key) {
+  return (PROVIDERS[key] && PROVIDERS[key].maxAgeMs) || MAX_AGE_MS;
+}
 
 // Dato cacheado y vigente para una clave (lectura síncrona).
 function get(key) {
   const all = loadAll();
   const rec = all[key];
   if (!rec || !rec.data) return null;
-  if (Date.now() - Date.parse(rec.at) > MAX_AGE_MS) return null;
+  if (Date.now() - Date.parse(rec.at) > maxAgeOf(key)) return null;
   return rec;
 }
 
-// Refresca todos los proveedores conocidos. Nunca lanza: registra fallos.
-async function refreshAll() {
+// Refresca los proveedores que lo necesiten (TTL por fuente); force los trae
+// todos. Nunca lanza: registra fallos y conserva el dato anterior.
+async function refreshAll(opts = {}) {
   const all = loadAll();
   const results = {};
+  let fetched = 0;
   for (const [key, p] of Object.entries(PROVIDERS)) {
+    const rec = all[key];
+    const age = rec && rec.at ? Date.now() - Date.parse(rec.at) : Infinity;
+    if (!opts.force && age < (p.ttlMs || 30 * 60000)) {
+      results[key] = { ok: true, skipped: true };
+      continue;
+    }
     try {
       const data = await p.fn();
       all[key] = { data, at: new Date().toISOString(), ok: true };
       results[key] = { ok: true };
+      fetched++;
     } catch (e) {
       results[key] = { ok: false, error: e.message };
       log.warn('workers', `Worker ${key} falló: ${e.message} (se mantiene el dato anterior si existe)`);
     }
   }
-  saveAll(all);
-  const okCount = Object.values(results).filter((r) => r.ok).length;
-  log.info('workers', `Datos automáticos: ${okCount}/${Object.keys(PROVIDERS).length} actualizados`);
+  if (fetched) saveAll(all);
+  if (fetched || Object.values(results).some((r) => !r.ok)) {
+    log.info('workers', `Datos automáticos: ${fetched} actualizado(s), ${Object.values(results).filter((r) => r.skipped).length} aún vigente(s)`);
+  }
   return { results, state: state() };
 }
 
@@ -162,7 +180,7 @@ function state() {
   const all = loadAll();
   return Object.keys(PROVIDERS).map((key) => {
     const rec = all[key] || null;
-    const fresh = Boolean(rec && rec.at && Date.now() - Date.parse(rec.at) <= MAX_AGE_MS);
+    const fresh = Boolean(rec && rec.at && Date.now() - Date.parse(rec.at) <= maxAgeOf(key));
     return {
       key,
       label: PROVIDERS[key].label,

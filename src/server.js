@@ -4,7 +4,7 @@ const express = require('express');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
-const { cfg, paths, env, ensureDirs } = require('./config');
+const { cfg, paths, env, ensureDirs, ROOT, abs } = require('./config');
 const sharp = require('sharp');
 const store = require('./store');
 const log = require('./util/logger');
@@ -436,7 +436,10 @@ app.get('/api/preview/:id', async (req, res) => {
       const { buffer, ext } = await renderToBuffer(card);
       res.type(ext === 'png' ? 'image/png' : 'image/jpeg').send(buffer);
     } else if (card.file) {
-      res.sendFile(path.isAbsolute(card.file) ? card.file : path.join(paths.publish, '..', card.file));
+      // Solo archivos DENTRO del proyecto: nada de rutas absolutas arbitrarias.
+      const fp = path.resolve(abs(card.file));
+      if (!fp.startsWith(ROOT + path.sep)) return res.status(400).json({ error: 'ruta fuera del proyecto' });
+      res.sendFile(fp);
     } else {
       res.status(404).end();
     }
@@ -541,7 +544,8 @@ app.post('/api/autopilot/run', async (req, res) => {
 app.get('/api/workers', (req, res) => res.json({ workers: workers.state() }));
 
 app.post('/api/workers/refresh', async (req, res) => {
-  const r = await workers.refreshAll();
+  // El botón del panel es una orden explícita: trae TODO, ignorando TTLs.
+  const r = await workers.refreshAll({ force: true });
   res.json(r);
 });
 
