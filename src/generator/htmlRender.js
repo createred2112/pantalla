@@ -124,7 +124,7 @@ function logoUri(p) {
 async function elHtml(el, ctx) {
   const { W, H } = ctx;
   const scale = Number(cfg.brand.textScale) || 1;
-  const attrs = `class="el el-${el.type || 'item'}" data-kind="${el.type || 'item'}"`;
+  const attrs = `class="el el-${el.type || 'item'}" data-kind="${el.type || 'item'}"${el.anim ? ` data-anim="${el.anim}"` : ''}`;
   const box = `position:absolute;left:${el.x}px;top:${el.y}px;width:${el.w}px;height:${el.h}px;overflow:hidden;`;
 
   if (el.type === 'rect' || el.type === 'band') {

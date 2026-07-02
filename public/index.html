@@ -187,6 +187,8 @@
   .tool-txt small{display:block;color:var(--muted);font-size:11px;margin-top:2px;font-weight:400}
   .tool.featured{border-color:rgba(226,35,26,.5);background:linear-gradient(135deg,rgba(226,35,26,.18),var(--card) 60%)}
   .tool.featured:hover{border-color:var(--accent)}
+  .tool.danger{border-color:rgba(226,35,26,.75);background:linear-gradient(135deg,rgba(226,35,26,.3),var(--card) 55%)}
+  .tool.danger:hover{border-color:var(--accent2);background:linear-gradient(135deg,rgba(226,35,26,.42),var(--card) 55%)}
   .tool.sq{flex:0 0 52px;justify-content:center;font-size:19px;padding:0}
 
   .list-head{display:flex;align-items:baseline;gap:10px;margin:20px 2px 10px}
@@ -298,6 +300,10 @@
     <button class="tool featured" id="btnRundown">
       <span class="ico">🗓</span>
       <span class="tool-txt"><b>Escaleta</b><small>Orden del día y contenido programado</small></span>
+    </button>
+    <button class="tool danger" id="btnBreaking">
+      <span class="ico">🚨</span>
+      <span class="tool-txt"><b>Última hora</b><small>URL → alerta en pantalla</small></span>
     </button>
     <button class="tool" id="btnImport">
       <span class="ico">📥</span>
@@ -499,6 +505,21 @@
   <div class="dlg-b">
     <div id="statusBox" class="status"></div>
     <div id="log"></div>
+  </div>
+</dialog>
+
+<!-- 🚨 Última hora -->
+<dialog id="breakingDlg">
+  <div class="dlg-h"><h2>🚨 Última hora</h2><button class="ghost" onclick="breakingDlg.close()">✕</button></div>
+  <div class="dlg-b">
+    <label style="margin-top:0">Pega la URL de la noticia (o escribe el titular directamente)</label>
+    <input id="bkInput" placeholder="https://gasteizberri.com/…  o el titular a pelo" autocomplete="off">
+    <div class="hint" style="margin-top:8px">Se crea como <b>ALERTA roja</b>, en <b>primera posición</b> del bucle, ya renderizada.
+      Tú solo revisas y confirmas la publicación. De la calle a la pantalla en 30 segundos.</div>
+  </div>
+  <div class="dlg-f">
+    <button class="ghost" onclick="breakingDlg.close()">Cancelar</button>
+    <button class="primary" id="bkGo">Crear y revisar →</button>
   </div>
 </dialog>
 

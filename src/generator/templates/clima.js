@@ -5,28 +5,35 @@ function keyOf(text) {
   const t = String(text || '').toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '');
   if (/torment|rayo/.test(t)) return 'tormenta';
   if (/niev|nevad/.test(t)) return 'nieve';
-  if (/lluv|chubas|aguac/.test(t)) return 'lluvia';
+  if (/lluv|llovizn|chubas|aguac/.test(t)) return 'lluvia';
   if (/niebl|brum|calima/.test(t)) return 'niebla';
   if (/vient|rach/.test(t)) return 'viento';
   if (/cubiert|nubl|nubos/.test(t)) return 'nube';
   return 'sol';
 }
-// Iconos de línea monocromos en viewBox 100x100.
+// Iconos de línea profesionales (geometría Feather Icons, MIT) en 24x24,
+// escalados a 100x100. Formas equilibradas y probadas, trazo redondeado.
 function iconSvg(key, c) {
-  const sw = 7;
-  const cloud = (cx, cy, s) => `<path d="M ${cx - s * 0.55} ${cy + s * 0.3} a ${s * 0.3} ${s * 0.3} 0 0 1 ${s * 0.02} ${-s * 0.58} a ${s * 0.34} ${s * 0.34} 0 0 1 ${s * 0.62} ${-s * 0.04} a ${s * 0.26} ${s * 0.26} 0 0 1 ${s * 0.5} ${s * 0.18} a ${s * 0.24} ${s * 0.24} 0 0 1 ${-s * 0.12} ${s * 0.46} Z" fill="none" stroke="${c}" stroke-width="${sw}" stroke-linejoin="round"/>`;
-  let inner = '';
-  if (key === 'sol') {
-    let rays = '';
-    for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4; rays += `<line x1="${50 + Math.cos(a) * 30}" y1="${48 + Math.sin(a) * 30}" x2="${50 + Math.cos(a) * 44}" y2="${48 + Math.sin(a) * 44}" stroke="${c}" stroke-width="${sw}" stroke-linecap="round"/>`; }
-    inner = `<circle cx="50" cy="48" r="20" fill="none" stroke="${c}" stroke-width="${sw}"/>${rays}`;
-  } else if (key === 'nube') { inner = cloud(50, 45, 40); }
-  else if (key === 'lluvia') { inner = cloud(50, 38, 40) + [-1, 0, 1].map((i) => `<line x1="${50 + i * 14}" y1="72" x2="${50 + i * 14 - 4}" y2="88" stroke="${c}" stroke-width="${sw}" stroke-linecap="round"/>`).join(''); }
-  else if (key === 'nieve') { inner = cloud(50, 38, 40) + [-1, 0, 1].map((i) => `<circle cx="${50 + i * 14}" cy="80" r="4" fill="${c}"/>`).join(''); }
-  else if (key === 'tormenta') { inner = cloud(50, 38, 40) + `<polygon points="50,70 60,70 52,84 60,84 44,100 49,78 42,78" fill="${c}"/>`; }
-  else if (key === 'niebla') { inner = [0, 1, 2, 3].map((i) => `<rect x="${18 + (i % 2) * 8}" y="${30 + i * 14}" width="${64 - (i % 2) * 18}" height="${sw}" rx="3" fill="${c}"/>`).join(''); }
-  else if (key === 'viento') { inner = [-15, 5, 25].map((yy, i) => `<path d="M 16 ${50 + yy} h ${56 - i * 8} a 10 10 0 1 0 -8 10" fill="none" stroke="${c}" stroke-width="${sw}" stroke-linecap="round"/>`).join(''); }
-  return `<svg viewBox="0 0 100 100" width="100%" height="100%">${inner}</svg>`;
+  const SHAPES = {
+    sol: '<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>' +
+      '<line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>' +
+      '<line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>' +
+      '<line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>',
+    nube: '<path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/>',
+    lluvia: '<path d="M20 16.58A5 5 0 0 0 18 7h-1.26A8 8 0 1 0 4 15.25"/>' +
+      '<line x1="16" y1="13" x2="16" y2="21"/><line x1="8" y1="13" x2="8" y2="21"/><line x1="12" y1="15" x2="12" y2="23"/>',
+    nieve: '<path d="M20 17.58A5 5 0 0 0 18 8h-1.26A8 8 0 1 0 4 16.25"/>' +
+      '<line x1="8" y1="16" x2="8.01" y2="16"/><line x1="8" y1="20" x2="8.01" y2="20"/>' +
+      '<line x1="12" y1="18" x2="12.01" y2="18"/><line x1="12" y1="22" x2="12.01" y2="22"/>' +
+      '<line x1="16" y1="16" x2="16.01" y2="16"/><line x1="16" y1="20" x2="16.01" y2="20"/>',
+    tormenta: '<path d="M19 16.9A5 5 0 0 0 18 7h-1.26a8 8 0 1 0-11.62 9"/>' +
+      '<polyline points="13 11 9 17 15 17 11 23"/>',
+    viento: '<path d="M9.59 4.59A2 2 0 1 1 11 8H2"/><path d="M12.59 19.41A2 2 0 1 0 14 16H2"/><path d="M17.73 7.73A2.5 2.5 0 1 1 19.5 12H2"/>',
+    niebla: '<line x1="3" y1="8" x2="21" y2="8"/><line x1="5" y1="12" x2="19" y2="12"/><line x1="3" y1="16" x2="21" y2="16"/><line x1="7" y1="20" x2="17" y2="20"/>',
+  };
+  const shape = SHAPES[key] || SHAPES.nube;
+  return `<svg viewBox="0 0 100 100" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">` +
+    `<g transform="translate(2 2) scale(4)" fill="none" stroke="${c}" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${shape}</g></svg>`;
 }
 
 module.exports = {
@@ -39,23 +46,42 @@ module.exports = {
     const { W, H, theme } = ctx;
     const pad = Math.round(W * 0.05);
     const els = [];
-    // Icono a la izquierda.
-    const icoS = Math.round(H * 0.34);
-    els.push({ type: 'svg', x: Math.round(W * 0.1), y: Math.round((H - icoS) / 2), w: icoS, h: icoS, svg: iconSvg(keyOf(card.subtitle), theme.accent) });
 
-    // Columna derecha (alineada a la derecha), bloque centrado verticalmente.
-    const cx = Math.round(W * 0.45), cw = W - cx - pad;
-    const kH = card.date ? Math.round(H * 0.1) : 0;
-    const tH = Math.round(H * 0.34);
-    const cH = card.subtitle ? Math.round(H * 0.11) : 0;
-    const bH = card.body ? Math.round(H * 0.06) : 0;
-    const g = Math.round(H * 0.005);
-    const total = kH + tH + cH + bH + g * 3;
-    let y = Math.round((H - total) / 2);
-    if (card.date) { els.push({ type: 'text', x: cx, y, w: cw, h: kH, text: card.date.toUpperCase(), font: 'display', weight: 800, color: theme.text, align: 'right', valign: 'bottom', autofit: { min: Math.round(H * 0.05), max: Math.round(H * 0.1), lines: 1 } }); y += kH + g; }
-    els.push({ type: 'text', x: cx, y, w: cw, h: tH, text: (card.title || '').toUpperCase(), font: 'display', weight: 800, color: theme.text, align: 'right', valign: 'center', autofit: { min: Math.round(H * 0.16), max: Math.round(H * 0.34), lines: 1 } }); y += tH + g;
-    if (card.subtitle) { els.push({ type: 'text', x: cx, y, w: cw, h: cH, text: card.subtitle.toUpperCase(), font: 'display', weight: 800, color: theme.text, align: 'right', valign: 'top', autofit: { min: Math.round(H * 0.05), max: Math.round(H * 0.11), lines: 1 } }); y += cH + g; }
-    if (card.body) { els.push({ type: 'text', x: cx, y, w: cw, h: bH, text: card.body, font: 'text', weight: 700, color: theme.textMuted, align: 'right', valign: 'top', size: Math.round(H * 0.048) }); }
+    // Chip con el lugar/momento arriba a la izquierda.
+    if (card.date) {
+      els.push({ type: 'chip', x: pad, y: Math.round(H * 0.065), size: Math.round(H * 0.042), bg: theme.accent, color: theme.accentText, text: card.date, letterSpacing: 2 });
+    }
+
+    // TEMPERATURA gigante a la izquierda + ICONO al mismo peso a la derecha:
+    // dos protagonistas equilibrados, no una columna con un adorno.
+    const zoneY = Math.round(H * 0.165);
+    const zoneH = Math.round(H * 0.475);
+    els.push({
+      type: 'text', x: pad, y: zoneY, w: Math.round(W * 0.5), h: zoneH,
+      text: (card.title || '').toUpperCase(), font: 'display', weight: 800, color: theme.text,
+      align: 'left', valign: 'center', lineHeight: 1, letterSpacingEm: -0.02,
+      autofit: { min: Math.round(H * 0.22), max: Math.round(H * 0.44), lines: 1 },
+    });
+    const icoS = Math.min(Math.round(H * 0.5), Math.round(W * 0.32));
+    els.push({
+      type: 'svg', anim: 'float',
+      x: W - pad - icoS - Math.round(W * 0.03), y: Math.round(zoneY + (zoneH - icoS) / 2),
+      w: icoS, h: icoS, svg: iconSvg(keyOf(card.subtitle), theme.accent),
+    });
+
+    // Banda de acento a sangre (firma de la casa) con la condición y máx/mín.
+    const bandTxt = [card.subtitle, card.body].filter(Boolean).join('  ·  ');
+    if (bandTxt) {
+      const bandY = Math.round(H * 0.67);
+      const bandH = Math.round(H * 0.14);
+      els.push({ type: 'rect', x: 0, y: bandY, w: W, h: bandH, color: theme.accent });
+      els.push({
+        type: 'text', x: pad, y: bandY, w: W - pad * 2, h: bandH,
+        text: bandTxt.toUpperCase(), font: 'display', weight: 800, color: theme.accentText,
+        align: 'center', valign: 'center', lineHeight: 1, letterSpacingEm: 0.02,
+        autofit: { min: Math.round(H * 0.04), max: Math.round(H * 0.072), lines: 1 },
+      });
+    }
 
     return { background: { type: 'solid', color: theme.bg }, elements: els };
   },

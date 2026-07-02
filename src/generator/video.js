@@ -127,6 +127,15 @@ function setupAnim(durMs, motion) {
     ], { duration: 420, delay, easing: easeExpo });
   });
 
+  // Vida continua: los elementos marcados con data-anim="float" (p. ej. el
+  // icono del tiempo) flotan suavemente mientras la cartela está en reposo.
+  els.filter((el) => el.dataset.anim === 'float').forEach((el) => {
+    add(el, [
+      { transform: 'translateY(-1.2%)' },
+      { transform: 'translateY(1.2%)' },
+    ], { duration: 2800, delay: T0 + 500, iterations: Math.max(1, Math.ceil(durMs / 2800)), direction: 'alternate', easing: 'ease-in-out' });
+  });
+
   // ===== 4) CORTINA DE CIERRE: entra desde la izquierda cubriendo la cartela.
   // La siguiente abre cubierta en acento -> el bucle encadena sin costuras.
   const CLOSE_MS = 460;

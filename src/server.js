@@ -374,7 +374,7 @@ const SAMPLES_META = path.join(SAMPLES_DIR, 'meta.json');
 function samplesHash() {
   const crypto = require('crypto');
   return crypto.createHash('sha1').update(JSON.stringify({
-    v: 5, // subir al cambiar el diseño de las plantillas en código
+    v: 7, // subir al cambiar el diseño de las plantillas en código
     brand: cfg.brand, palette: cfg.palette, screen: cfg.screen,
     tpls: templates.list().map((t) => t.id), data: SAMPLE_DATA,
   })).digest('hex');
@@ -483,6 +483,35 @@ app.post('/api/preview-video', async (req, res) => {
     res.json({ ok: true, url: `/media/output/${path.basename(out.file)}?v=${Date.now()}`, duration: card.duration });
   } catch (e) {
     log.error('preview-video', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// 🚨 ÚLTIMA HORA: de una URL (o un titular escrito) a alerta roja en primera
+// posición del bucle, ya renderizada. Publicar queda en manos del humano.
+app.post('/api/breaking', async (req, res) => {
+  try {
+    const { url, title, body } = req.body || {};
+    let data = { title: String(title || '').trim(), body: String(body || '').trim(), photo: null };
+    if (url) {
+      const d = await require('./extract').extract(url);
+      data = { title: d.title || data.title, body: d.body || '', photo: d.image || null };
+    }
+    if (!data.title) return res.status(400).json({ error: 'falta el titular' });
+    const card = store.add({
+      type: 'generated', template: 'alerta', theme: 'rojo',
+      title: data.title, subtitle: 'ÚLTIMA HORA', body: data.body.slice(0, 140),
+      date: 'AHORA', photo: data.photo, duration: 9, enabled: true, source: 'manual',
+    });
+    // A primera posición del bucle.
+    const rest = store.list().filter((c) => c.id !== card.id).sort((a, b) => (a.order || 0) - (b.order || 0)).map((c) => c.id);
+    store.reorder([card.id, ...rest]);
+    try { await require('./pipeline/generate').renderOne(card, { force: true }); } catch (e) { log.warn('breaking', 'render: ' + e.message); }
+    try { await require('./generator/htmlRender').close(); } catch {}
+    log.info('breaking', `🚨 ÚLTIMA HORA en primera posición: ${data.title}`);
+    res.json({ ok: true, card });
+  } catch (e) {
+    log.error('breaking', e.message);
     res.status(500).json({ error: e.message });
   }
 });

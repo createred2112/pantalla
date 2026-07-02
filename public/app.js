@@ -664,6 +664,35 @@ $('#btnImport').addEventListener('click', async () => {
   toast(`Worker: ${r.added.length} nuevo(s) de ${r.scanned}`); load();
 });
 
+// --- 🚨 Última hora: URL o titular → alerta primera del bucle → revisar → publicar ---
+const breakingDlg = $('#breakingDlg');
+$('#btnBreaking').addEventListener('click', () => {
+  $('#bkInput').value = '';
+  breakingDlg.showModal();
+  setTimeout(() => $('#bkInput').focus(), 60);
+});
+$('#bkInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); $('#bkGo').click(); } });
+$('#bkGo').addEventListener('click', async () => {
+  const v = $('#bkInput').value.trim();
+  if (!v) { toast('Pega una URL o escribe el titular'); return; }
+  const b = $('#bkGo');
+  b.disabled = true;
+  b.textContent = '⏳ Creando la alerta…';
+  try {
+    const body = /^https?:\/\//i.test(v) ? { url: v } : { title: v };
+    await api('/breaking', { method: 'POST', body: JSON.stringify(body) });
+    breakingDlg.close();
+    toast('🚨 ÚLTIMA HORA en primera posición. Revisa el plan y confirma.');
+    await load();
+    preparePublish();
+  } catch (e) {
+    toast('Error: ' + e.message);
+  } finally {
+    b.disabled = false;
+    b.textContent = 'Crear y revisar →';
+  }
+});
+
 // --- Escaleta editorial ---
 const rundownDlg = $('#rundownDlg');
 let RD_DIRTY = false;   // hay cambios sin guardar en escaleta/contenido
