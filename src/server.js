@@ -336,6 +336,70 @@ app.post('/api/font', fontUpload.single('font'), (req, res) => {
   res.json({ ok: true, file: req.file.filename, family: req.query.family });
 });
 
+// --- Muestras de plantillas (galería) ---
+// Se generan UNA vez y quedan en output/samples/. Solo caducan si cambia el
+// diseño global (marca, paleta, pantalla) o la lista de plantillas.
+const SAMPLE_DATA = {
+  titular: { title: 'Vitoria, capital verde de Europa', subtitle: 'Ciudad', date: 'Hoy' },
+  noticia: { title: 'El tranvía llega al centro', subtitle: 'Movilidad', body: 'La nueva línea conecta el centro con los barrios del sur.', date: '24 jun' },
+  dato: { title: '1.240', subtitle: 'Personas en las piscinas', body: 'Actualizado cada 15 min', date: '13:00' },
+  alerta: { title: 'Corte de tráfico en la Avenida', subtitle: 'Tráfico', body: 'Desvíos por la calle Dato', date: 'Hoy' },
+  evento: { title: 'Kaldearte: Ballet Aéreo', subtitle: 'Espectáculo', body: 'Plaza de la Virgen Blanca', date: 'Sáb 28 · 21:30' },
+  cita: { title: 'Volar sobre la ciudad cambia tu mirada', subtitle: 'Iñigo Naya' },
+  clima: { title: '24ºC', subtitle: 'Soleado', body: 'Máx 28º · Mín 14º', date: 'Hoy' },
+  foto: { title: 'Atardecer sobre la Catedral', subtitle: 'Postal', date: '22:00' },
+  agenda: { title: 'Agenda', body: '19:30 | Los Chunguitos Live | Jimmy Jazz\n20:00 | La Tremenda Pasarela | Teatro Félix Petite' },
+  mensaje: { title: 'Vitoria en verde.' },
+};
+const SAMPLES_DIR = path.join(paths.output, 'samples');
+const SAMPLES_META = path.join(SAMPLES_DIR, 'meta.json');
+
+function samplesHash() {
+  const crypto = require('crypto');
+  return crypto.createHash('sha1').update(JSON.stringify({
+    v: 1, brand: cfg.brand, palette: cfg.palette, screen: cfg.screen,
+    tpls: templates.list().map((t) => t.id), data: SAMPLE_DATA,
+  })).digest('hex');
+}
+
+function samplesState() {
+  let meta = null;
+  try { meta = JSON.parse(fs.readFileSync(SAMPLES_META, 'utf8')); } catch {}
+  const fresh = Boolean(meta && meta.hash === samplesHash());
+  const items = templates.list().map((t) => {
+    const file = path.join(SAMPLES_DIR, `${t.id}.jpg`);
+    const exists = fs.existsSync(file);
+    const v = exists ? Math.round(fs.statSync(file).mtimeMs) : 0;
+    return { id: t.id, label: t.label, url: exists ? `/media/output/samples/${t.id}.jpg?v=${v}` : null, fresh: exists && fresh };
+  });
+  return { items, fresh: fresh && items.every((i) => i.url), generatedAt: meta ? meta.at : null };
+}
+
+// Estado de las muestras: la galería pinta AL INSTANTE desde disco.
+app.get('/api/template-samples', (req, res) => res.json(samplesState()));
+
+// (Re)generar las muestras: única acción que renderiza, y solo bajo demanda.
+app.post('/api/template-samples', async (req, res) => {
+  try {
+    renderGuard.assertCanUseChrome('render');
+    fs.mkdirSync(SAMPLES_DIR, { recursive: true });
+    for (const t of templates.list()) {
+      const card = store.normalize({ id: `sample_${t.id}`, template: t.id, ...(SAMPLE_DATA[t.id] || { title: 'Ejemplo · ' + t.label }) });
+      const { buffer } = await renderToBuffer(card);
+      const small = await sharp(buffer).resize(720).jpeg({ quality: 82 }).toBuffer();
+      fs.writeFileSync(path.join(SAMPLES_DIR, `${t.id}.jpg`), small);
+    }
+    try { await require('./generator/htmlRender').close(); } catch {}
+    require('./util/atomicWrite').writeJsonAtomic(SAMPLES_META, { hash: samplesHash(), at: new Date().toISOString() });
+    log.info('samples', `Muestras de plantillas regeneradas (${templates.list().length})`);
+    res.json({ ok: true, ...samplesState() });
+  } catch (e) {
+    try { await require('./generator/htmlRender').close(); } catch {}
+    log.error('samples', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // Previsualización de una card generada. Si existe un render FRESCO en disco
 // se sirve tal cual (cero Chromium); solo se renderiza en vivo si no hay
 // archivo válido (cartela nueva o modificada).

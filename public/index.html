@@ -233,6 +233,29 @@
   @media (prefers-reduced-motion:reduce){
     *{transition:none!important;animation:none!important}
   }
+
+  /* Escaleta: lista vertical de bloques con edición inline */
+  .slot-list{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+  .slot-item{border:1px solid var(--line);border-radius:12px;background:#0a1a30;padding:8px 10px}
+  .slot-item.off{opacity:.55}
+  .slot-item.missing{border-color:rgba(232,172,22,.6)}
+  .slot-item.open{border-color:var(--line2);background:#0c1e38;box-shadow:0 8px 22px rgba(0,0,0,.3)}
+  .slot-row{display:flex;width:100%;gap:10px;align-items:center;background:none;border:0;color:var(--txt);
+    padding:4px 2px;text-align:left;cursor:pointer;font:inherit}
+  .slot-num{font-size:11px;color:var(--muted);min-width:30px;font-weight:900;letter-spacing:1px}
+  .slot-name{font-weight:800;font-size:13px;flex:0 1 auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:38%}
+  .slot-today{font-size:12px;color:var(--muted);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .slot-today.warn{color:#ffd98a}
+  .slot-dur{font-size:11px;color:var(--muted);flex:none}
+  .slot-edit{border-top:1px solid var(--line);margin-top:8px;padding-top:6px}
+
+  /* Editor de cartela: campos agrupados */
+  .mini2{display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:end;margin-top:4px}
+  .chk{display:flex;align-items:center;gap:8px;color:var(--txt);font-size:13px;padding:11px 0 12px}
+  .chk input{width:auto;margin:0}
+  details.adv{margin-top:12px;border:1px dashed var(--line);border-radius:10px;padding:10px 12px}
+  details.adv summary{cursor:pointer;color:var(--muted);font-size:13px}
+  details.adv[open] summary{color:var(--txt);margin-bottom:2px}
 </style>
 </head>
 <body>
@@ -321,19 +344,23 @@
         <input id="edFile" placeholder="data/worker-inbox/archivo.jpg">
       </div>
 
-      <label>Duración en pantalla (segundos)</label>
-      <input id="edDuration" type="number" min="1" value="10">
-      <label><input type="checkbox" id="edEnabled" checked style="width:auto;margin-right:8px">Activa</label>
-      <label><input type="checkbox" id="edVideo" style="width:auto;margin-right:8px">Animar de verdad (MP4 con entrada, barridos y movimiento)</label>
-      <div id="videoBumpers" style="display:none;margin-top:10px;padding:10px;background:#0a1a30;border:1px dashed var(--line);border-radius:10px">
-        <label style="margin-top:0">Cortinilla de entrada (MP4)</label>
-        <input type="file" id="edVideoIntroFile" accept="video/mp4,video/*">
-        <input id="edVideoIntro" placeholder="data/uploads/entrada.mp4">
-        <label>Cortinilla de salida (MP4)</label>
-        <input type="file" id="edVideoOutroFile" accept="video/mp4,video/*">
-        <input id="edVideoOutro" placeholder="data/uploads/salida.mp4">
-        <div class="hint" style="margin-top:5px">Solo se usan cuando la cartela está animada. Se adaptan a 1920×1080 y se unen al MP4 final.</div>
+      <div class="mini2">
+        <label>Duración en pantalla (segundos)<input id="edDuration" type="number" min="1" value="10"></label>
+        <label class="chk"><input type="checkbox" id="edEnabled" checked>Activa (se emite)</label>
       </div>
+      <details class="adv" id="advVideo">
+        <summary>Animación (MP4) — opcional</summary>
+        <label class="chk" style="margin-top:10px"><input type="checkbox" id="edVideo">Generar como vídeo animado (entrada suave y movimiento sutil)</label>
+        <div id="videoBumpers" style="display:none;margin-top:10px;padding:10px;background:#0a1a30;border:1px dashed var(--line);border-radius:10px">
+          <label style="margin-top:0">Cortinilla de entrada (MP4)</label>
+          <input type="file" id="edVideoIntroFile" accept="video/mp4,video/*">
+          <input id="edVideoIntro" placeholder="data/uploads/entrada.mp4">
+          <label>Cortinilla de salida (MP4)</label>
+          <input type="file" id="edVideoOutroFile" accept="video/mp4,video/*">
+          <input id="edVideoOutro" placeholder="data/uploads/salida.mp4">
+          <div class="hint" style="margin-top:5px">Solo se usan cuando la cartela está animada. Se adaptan a la pantalla y se unen al MP4 final.</div>
+        </div>
+      </details>
 
       <img class="preview" id="edPreview" alt="previsualización" style="display:none">
       <video class="preview" id="edVideoPreview" controls muted playsinline style="display:none"></video>
@@ -472,11 +499,10 @@
         <label>Día<input id="rundownDate" type="date"></label>
       </div>
       <div class="status" id="rundownSummary"></div>
-      <div class="timeline" id="rundownTimeline"></div>
+      <div id="slotList" class="slot-list"></div>
       <div class="slot-tools" style="margin-top:10px">
         <button class="ghost" id="btnRundownAdd">＋ Añadir bloque</button>
       </div>
-      <div id="slotPanel" class="slot-panel"></div>
     </section>
     <section id="rdTabLib" hidden>
       <div class="library-head">

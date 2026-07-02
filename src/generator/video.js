@@ -14,18 +14,14 @@ const renderGuard = require('../util/renderGuard');
 
 // Se inyecta en la página: crea una coreografía completa (en pausa) y expone
 // __setT(ms). No usa azar: el MP4 se renderiza igual en cada ejecución.
+// Estilo: editorial y sobrio. Entradas escalonadas limpias (fade + leve
+// subida), titular con revelado horizontal, Ken Burns muy sutil en la foto y
+// fundido de salida. Nada de barridos, destellos, blur ni rebotes.
 function setupAnim(durMs, motion) {
-  const W = window.innerWidth;
-  const H = window.innerHeight;
-  const accent = motion.accent || '#D6FF00';
-  const text = motion.text || '#FFFFFF';
-  const template = document.body.dataset.template || '';
-  const easeOut = 'cubic-bezier(.16,.86,.28,1)';
-  const easeHard = 'cubic-bezier(.13,.92,.18,1)';
+  const easeOut = 'cubic-bezier(.22,.61,.36,1)';
   const animations = [];
 
   document.documentElement.style.background = '#000';
-  document.body.style.transformOrigin = '50% 50%';
 
   function add(el, frames, opts) {
     const a = el.animate(frames, Object.assign({ fill: 'both' }, opts));
@@ -34,48 +30,15 @@ function setupAnim(durMs, motion) {
     return a;
   }
 
-  function overlay(cls, css) {
-    const el = document.createElement('div');
-    el.className = cls;
-    el.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:999;' + css;
-    document.body.appendChild(el);
-    return el;
-  }
-
-  const sweep = overlay('motion-sweep', `background:${accent};mix-blend-mode:screen;opacity:.22;transform:translateX(-130%) skewX(-14deg);`);
-  add(sweep, [
-    { transform: 'translateX(-130%) skewX(-14deg)', opacity: 0 },
-    { transform: 'translateX(-40%) skewX(-14deg)', opacity: .28, offset: .25 },
-    { transform: 'translateX(130%) skewX(-14deg)', opacity: 0 },
-  ], { duration: 1050, delay: 120, easing: easeHard });
-
-  const flash = overlay('motion-flash', `background:${text};opacity:0;`);
-  add(flash, [
-    { opacity: 0 },
-    { opacity: .16, offset: .2 },
-    { opacity: 0 },
-  ], { duration: 340, delay: 120, easing: 'ease-out' });
-
-  const shade = overlay('motion-shade', 'background:radial-gradient(circle at 20% 10%, rgba(255,255,255,.18), transparent 28%), linear-gradient(115deg, transparent 0%, rgba(255,255,255,.10) 45%, transparent 72%);opacity:0;');
-  add(shade, [
-    { opacity: 0, transform: 'translateX(-8%)' },
-    { opacity: .5, transform: 'translateX(3%)', offset: .35 },
-    { opacity: .16, transform: 'translateX(8%)' },
-  ], { duration: durMs, easing: 'ease-in-out' });
-
+  // Fondo: Ken Burns lento y contenido SOLO si hay foto. Los fondos planos se
+  // quedan quietos: el color es parte del diseño, no hace falta moverlo.
   const bg = document.querySelector('#bgimg');
   if (bg) {
-    bg.style.transformOrigin = template === 'foto' ? '45% 45%' : '50% 50%';
+    bg.style.transformOrigin = '50% 45%';
     add(bg, [
-      { transform: 'scale(1.025) translate3d(-1.2%, .4%, 0)', filter: 'brightness(.92)' },
-      { transform: 'scale(1.13) translate3d(1.8%, -1.4%, 0)', filter: 'brightness(.98)' },
-    ], { duration: durMs, easing: 'ease-in-out' });
-  } else {
-    add(document.body, [
-      { filter: 'brightness(.92) saturate(1.05)' },
-      { filter: 'brightness(1.05) saturate(1.16)', offset: .18 },
-      { filter: 'brightness(1) saturate(1.08)' },
-    ], { duration: Math.min(durMs, 2600), easing: 'ease-out' });
+      { transform: 'scale(1.0)' },
+      { transform: 'scale(1.055)' },
+    ], { duration: durMs, easing: 'linear' });
   }
 
   const els = [].slice.call(document.querySelectorAll('.el'));
@@ -86,76 +49,46 @@ function setupAnim(durMs, motion) {
     return !best || area > best.area ? { el, area } : best;
   }, null);
 
-  els.forEach((el, i) => {
+  let order = 0;
+  els.forEach((el) => {
     const kind = el.dataset.kind || 'item';
-    const rect = el.getBoundingClientRect();
     const isHero = hero && hero.el === el;
-    const fromLeft = rect.left < W * .52;
-    const delay = isHero ? 380 : 170 + i * 95;
-    el.style.willChange = 'transform, opacity, clip-path, filter';
-    el.style.transformOrigin = fromLeft ? '0% 50%' : '100% 50%';
+    const delay = 160 + order * 110;
+    order++;
+    el.style.willChange = 'transform, opacity, clip-path';
 
+    // Bandas y rectángulos: crecen desde su borde izquierdo, por delante del texto.
     if (kind === 'rect' || kind === 'band') {
+      el.style.transformOrigin = '0% 50%';
       add(el, [
-        { opacity: 0, transform: fromLeft ? 'scaleX(0)' : 'scaleY(0)' },
-        { opacity: 1, transform: 'scaleX(1) scaleY(1)' },
-      ], { duration: 620, delay: Math.max(0, delay - 160), easing: easeOut });
+        { opacity: 0, transform: 'scaleX(.001)' },
+        { opacity: 1, transform: 'scaleX(1)' },
+      ], { duration: 500, delay: Math.max(60, delay - 140), easing: easeOut });
       return;
     }
 
-    if (kind === 'chip') {
-      add(el, [
-        { opacity: 0, transform: `translate3d(${fromLeft ? -90 : 90}px,0,0) scale(.84)`, filter: 'blur(6px)' },
-        { opacity: 1, transform: 'translate3d(0,0,0) scale(1.08)', filter: 'blur(0)', offset: .72 },
-        { opacity: 1, transform: 'translate3d(0,0,0) scale(1)', filter: 'blur(0)' },
-      ], { duration: 700, delay, easing: easeHard });
-      add(el, [
-        { transform: 'translate3d(0,0,0) scale(1)' },
-        { transform: 'translate3d(0,0,0) scale(1.045)', offset: .5 },
-        { transform: 'translate3d(0,0,0) scale(1)' },
-      ], { duration: 1300, delay: delay + 950, iterations: Math.max(1, Math.floor(durMs / 1500)), easing: 'ease-in-out' });
-      return;
-    }
-
+    // Titular protagonista: revelado horizontal limpio.
     if (kind === 'text' && isHero) {
       add(el, [
-        { opacity: 0, clipPath: 'inset(0 100% 0 0)', transform: 'translate3d(-70px,0,0) scale(.98)', filter: 'blur(8px)' },
-        { opacity: 1, clipPath: 'inset(0 0 0 0)', transform: 'translate3d(10px,0,0) scale(1.015)', filter: 'blur(0)', offset: .76 },
-        { opacity: 1, clipPath: 'inset(0 0 0 0)', transform: 'translate3d(0,0,0) scale(1)', filter: 'blur(0)' },
-      ], { duration: 980, delay, easing: easeHard });
-      add(el, [
-        { transform: 'translate3d(0,0,0) scale(1)' },
-        { transform: 'translate3d(8px,-3px,0) scale(1.012)', offset: .5 },
-        { transform: 'translate3d(0,0,0) scale(1)' },
-      ], { duration: Math.max(2400, durMs - delay - 500), delay: delay + 980, easing: 'ease-in-out' });
+        { opacity: 0, clipPath: 'inset(0 100% 0 0)', transform: 'translate3d(0,14px,0)' },
+        { opacity: 1, clipPath: 'inset(0 -2% 0 0)', transform: 'translate3d(0,0,0)' },
+      ], { duration: 700, delay, easing: easeOut });
       return;
     }
 
-    if (kind === 'text') {
-      add(el, [
-        { opacity: 0, transform: `translate3d(${fromLeft ? -55 : 55}px,26px,0)`, filter: 'blur(5px)' },
-        { opacity: 1, transform: 'translate3d(0,0,0)', filter: 'blur(0)' },
-      ], { duration: 760, delay, easing: easeOut });
-      add(el, [
-        { transform: 'translate3d(0,0,0)' },
-        { transform: 'translate3d(0,-4px,0)', offset: .5 },
-        { transform: 'translate3d(0,0,0)' },
-      ], { duration: 2600, delay: delay + 900, easing: 'ease-in-out' });
-      return;
-    }
-
+    // Todo lo demás (textos, chips, logo): fade + subida leve, escalonado.
     add(el, [
-      { opacity: 0, transform: 'translate3d(0,34px,0) scale(.96)', filter: 'blur(4px)' },
-      { opacity: 1, transform: 'translate3d(0,0,0) scale(1)', filter: 'blur(0)' },
-    ], { duration: 740, delay, easing: easeOut });
+      { opacity: 0, transform: 'translate3d(0,18px,0)' },
+      { opacity: 1, transform: 'translate3d(0,0,0)' },
+    ], { duration: 540, delay, easing: easeOut });
   });
 
-  const exitStart = Math.max(1200, durMs - 650);
+  // Salida: fundido corto para encadenar con la siguiente cartela sin golpe.
+  const exitStart = Math.max(1000, durMs - 450);
   add(document.body, [
-    { opacity: 1, transform: 'scale(1)', filter: 'brightness(1)' },
-    { opacity: 1, transform: 'scale(1.012)', filter: 'brightness(1.08)', offset: .55 },
-    { opacity: 0, transform: 'scale(1.025)', filter: 'brightness(.85)' },
-  ], { duration: 650, delay: exitStart, easing: 'ease-in' });
+    { opacity: 1 },
+    { opacity: 0 },
+  ], { duration: 450, delay: exitStart, easing: 'ease-in' });
 
   window.__setT = function (ms) {
     animations.forEach((a) => {

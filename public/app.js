@@ -363,6 +363,7 @@ function openEditor(card) {
   $('#edEnabled').checked = card?.enabled !== false;
   $('#edVideo').checked = card?.video === true;
   if (SAFETY.safeMode) $('#edVideo').checked = false;
+  const adv = $('#advVideo'); if (adv) adv.open = $('#edVideo').checked;
   $('#edVideoIntro').value = card?.videoIntro || '';
   $('#edVideoOutro').value = card?.videoOutro || '';
   $('#edPreview').style.display = 'none';
@@ -618,7 +619,7 @@ function setRundownTab(tab) {
 async function openRundown() {
   const today = new Date().toISOString().slice(0, 10);
   RUNDOWN = await api('/rundown?date=' + encodeURIComponent($('#rundownDate').value || today));
-  RUNDOWN_SELECTED = 0;
+  RUNDOWN_SELECTED = -1; // todo plegado: vista calmada
   LIB_OPEN = -1;
   rdSetDirty(false);
   setRundownTab('seq');
@@ -634,27 +635,16 @@ function renderRundown() {
   if (!RUNDOWN) return;
   const rd = RUNDOWN.rundown || { slots: [] };
   const slots = rd.slots || [];
-  if (RUNDOWN_SELECTED >= slots.length) RUNDOWN_SELECTED = Math.max(0, slots.length - 1);
+  if (RUNDOWN_SELECTED >= slots.length) RUNDOWN_SELECTED = -1;
   $('#rundownTitle').value = rd.title || 'Escaleta';
   $('#rundownDate').value = RUNDOWN.activeDate || new Date().toISOString().slice(0, 10);
   const active = slots.filter((s) => s.enabled !== false).length;
   const missing = ((RUNDOWN.report || []).filter((r) => r.missing)).length;
   $('#rundownSummary').innerHTML =
     `<b>${active}</b> bloques activos · <b style="color:${missing ? '#e0a106' : '#bff0d5'}">${missing}</b> por completar · ${slots.reduce((n, s) => n + (s.enabled === false ? 0 : (Number(s.duration) || 8)), 0)}s de vuelta`;
-  const libLabel = (k) => ((RUNDOWN.libraryKeys || []).find((x) => x.key === k) || {}).label || k;
-  $('#rundownTimeline').innerHTML = slots.map((s, i) => {
-    const rep = reportForSlot(s);
-    const source = s.source === 'library' ? `programado · ${esc(libLabel(s.libraryKey))}` :
-      (s.source === 'worker' ? `automático · ${esc(s.workerKey)}` : 'manual');
-    return `
-      <button class="tl-card ${i === RUNDOWN_SELECTED ? 'sel' : ''} ${s.enabled === false ? 'off' : ''} ${rep.missing ? 'missing' : ''}" data-rd-select="${i}">
-        <div class="tl-num">${String(i + 1).padStart(2, '0')} · ${Number(s.duration) || 8}s</div>
-        <div class="tl-title">${esc(s.label)}</div>
-        <div class="tl-meta">${source}<br>${esc(rep.title || s.title || 'sin título')}${s.video ? '<br>MP4 animado' : ''}</div>
-        ${rep.note ? `<div class="tl-warn">${esc(rep.note)}</div>` : ''}
-      </button>`;
-  }).join('');
-  renderSlotPanel();
+  $('#slotList').innerHTML = slots.length
+    ? slots.map((s, i) => slotItemHtml(s, i)).join('')
+    : '<div class="empty">Añade un bloque para empezar.</div>';
   renderLibraryPanel();
 }
 
@@ -663,21 +653,37 @@ function selectedSlot() {
   return slots[RUNDOWN_SELECTED] || null;
 }
 
-function renderSlotPanel() {
-  const s = selectedSlot();
-  if (!s) {
-    $('#slotPanel').innerHTML = '<div class="empty">Añade un bloque para empezar.</div>';
-    return;
-  }
+// Una fila por bloque: nº, nombre, qué saldrá ese día y duración.
+// Tocar la fila la expande para editar ahí mismo.
+function slotItemHtml(s, i) {
   const rep = reportForSlot(s);
   const keys = RUNDOWN.libraryKeys || [];
+  const libLabel = (k) => (keys.find((x) => x.key === k) || {}).label || k;
+  const srcTxt = s.source === 'library' ? libLabel(s.libraryKey) : (s.source === 'worker' ? 'automático' : 'manual');
+  const todayTxt = rep.missing ? (rep.note || 'pendiente de contenido') : (rep.title || s.title || '—');
+  const open = i === RUNDOWN_SELECTED;
+  const row = `<button type="button" class="slot-row" data-slot-open="${i}">
+      <span class="slot-num">${String(i + 1).padStart(2, '0')}</span>
+      <span class="slot-name">${esc(s.label)}</span>
+      <span class="slot-today ${rep.missing ? 'warn' : ''}">${rep.missing ? '⚠ ' : ''}${esc(srcTxt)} · ${esc(todayTxt)}</span>
+      <span class="slot-dur">${Number(s.duration) || 8}s${s.video ? ' · MP4' : ''}</span>
+    </button>`;
+  const cls = `slot-item ${s.enabled === false ? 'off' : ''} ${rep.missing ? 'missing' : ''} ${open ? 'open' : ''}`;
+  if (!open) return `<div class="${cls}" data-slot-item="${i}">${row}</div>`;
+  return `<div class="${cls}" data-slot-item="${i}">${row}<div class="slot-edit">${slotEditHtml(s, i)}</div></div>`;
+}
+
+function slotEditHtml(s, i) {
+  const rep = reportForSlot(s);
+  const keys = RUNDOWN.libraryKeys || [];
+  const slots = (RUNDOWN.rundown && RUNDOWN.rundown.slots) || [];
   const isLib = s.source === 'library';
   const isWorker = s.source === 'worker';
   const tplSelect = `<label>Plantilla<select data-rd-current="template">
       <option value="">Auto</option>
       ${TEMPLATES.map((t) => `<option value="${esc(t.id)}" ${t.id === s.template ? 'selected' : ''}>${esc(t.label)}</option>`).join('')}
     </select></label>`;
-  $('#slotPanel').innerHTML = `
+  return `
     <div class="slot-grid">
       <label>Nombre del bloque<input data-rd-current="label" value="${esc(s.label)}"></label>
       <label>Contenido<select data-rd-current="source">
@@ -703,8 +709,8 @@ function renderSlotPanel() {
       ? '⚠️ ' + esc(rep.note || 'Pendiente de contenido')
       : `✅ El ${esc(RUNDOWN.activeDate || 'día elegido')} saldrá: <b>${esc(rep.title || s.title || s.label)}</b>`}</div>
     <div class="slot-tools">
-      <button class="ghost" data-rd-move="-1" ${RUNDOWN_SELECTED === 0 ? 'disabled' : ''}>← Mover</button>
-      <button class="ghost" data-rd-move="1" ${RUNDOWN_SELECTED === ((RUNDOWN.rundown.slots || []).length - 1) ? 'disabled' : ''}>Mover →</button>
+      <button class="ghost" data-rd-move="-1" ${i === 0 ? 'disabled' : ''}>↑ Subir</button>
+      <button class="ghost" data-rd-move="1" ${i === slots.length - 1 ? 'disabled' : ''}>↓ Bajar</button>
       <span class="spacer"></span>
       <button class="ghost" data-rd-delete-current>🗑 Eliminar bloque</button>
     </div>`;
@@ -880,19 +886,23 @@ function libraryItemHtml(meta, item, i) {
   </div>`;
 }
 
+// Recoge del DOM SOLO el bloque expandido (los demás no tienen campos).
 function collectRundown() {
   const rd = RUNDOWN.rundown || { slots: [] };
   rd.title = $('#rundownTitle').value.trim() || 'Escaleta';
   const slot = selectedSlot();
-  $('#slotPanel').querySelectorAll('[data-rd-current]').forEach((el) => {
-    if (!slot) return;
-    const key = el.dataset.rdCurrent;
-    slot[key] = key === 'duration' ? Number(el.value) || 8 : el.value;
-  });
-  $('#slotPanel').querySelectorAll('[data-rd-toggle]').forEach((el) => {
-    if (!slot) return;
-    slot[el.dataset.rdToggle] = el.checked;
-  });
+  const wrap = slot && $('#slotList')
+    ? $('#slotList').querySelector(`[data-slot-item="${RUNDOWN_SELECTED}"] .slot-edit`)
+    : null;
+  if (slot && wrap) {
+    wrap.querySelectorAll('[data-rd-current]').forEach((el) => {
+      const key = el.dataset.rdCurrent;
+      slot[key] = key === 'duration' ? Number(el.value) || 8 : el.value;
+    });
+    wrap.querySelectorAll('[data-rd-toggle]').forEach((el) => {
+      slot[el.dataset.rdToggle] = el.checked;
+    });
+  }
   return rd;
 }
 
@@ -1058,37 +1068,40 @@ $('#rundownDate').addEventListener('change', async () => {
   rdSetDirty(false);
   renderRundown();
 });
-$('#rundownTimeline').addEventListener('click', (e) => {
-  const b = e.target.closest('[data-rd-select]'); if (!b || !RUNDOWN) return;
-  collectRundown();
-  RUNDOWN_SELECTED = Number(b.dataset.rdSelect);
-  renderRundown();
-});
-$('#slotPanel').addEventListener('click', (e) => {
-  const b = e.target.closest('button'); if (!b || !RUNDOWN) return;
+$('#slotList').addEventListener('click', (e) => {
+  if (!RUNDOWN) return;
   const slots = RUNDOWN.rundown.slots || [];
-  if (b.dataset.rdDeleteCurrent != null) {
+  const del = e.target.closest('[data-rd-delete-current]');
+  if (del) {
     if (!confirm('¿Eliminar este bloque de la secuencia?')) return;
-    collectRundown();
     slots.splice(RUNDOWN_SELECTED, 1);
-    RUNDOWN_SELECTED = Math.max(0, RUNDOWN_SELECTED - 1);
+    RUNDOWN_SELECTED = -1;
     rdSetDirty(true);
     renderRundown();
     return;
   }
-  if (b.dataset.rdMove == null) return;
-  const i = RUNDOWN_SELECTED;
-  const dir = Number(b.dataset.rdMove);
-  const j = i + dir;
-  if (i < 0 || j < 0 || j >= slots.length) return;
-  collectRundown();
-  [slots[i], slots[j]] = [slots[j], slots[i]];
-  RUNDOWN_SELECTED = j;
-  rdSetDirty(true);
-  renderRundown();
+  const mv = e.target.closest('[data-rd-move]');
+  if (mv) {
+    const i = RUNDOWN_SELECTED;
+    const j = i + Number(mv.dataset.rdMove);
+    if (i < 0 || j < 0 || j >= slots.length) return;
+    collectRundown();
+    [slots[i], slots[j]] = [slots[j], slots[i]];
+    RUNDOWN_SELECTED = j;
+    rdSetDirty(true);
+    renderRundown();
+    return;
+  }
+  const row = e.target.closest('[data-slot-open]');
+  if (row) {
+    collectRundown();
+    const idx = Number(row.dataset.slotOpen);
+    RUNDOWN_SELECTED = idx === RUNDOWN_SELECTED ? -1 : idx;
+    renderRundown();
+  }
 });
-$('#slotPanel').addEventListener('input', () => { if (RUNDOWN) { collectRundown(); rdSetDirty(true); } });
-$('#slotPanel').addEventListener('change', () => { if (RUNDOWN) { collectRundown(); rdSetDirty(true); renderRundown(); } });
+$('#slotList').addEventListener('input', () => { if (RUNDOWN) { collectRundown(); rdSetDirty(true); } });
+$('#slotList').addEventListener('change', () => { if (RUNDOWN) { collectRundown(); rdSetDirty(true); renderRundown(); } });
 $('#rundownTitle').addEventListener('input', () => { if (RUNDOWN) rdSetDirty(true); });
 $('#libraryCategory').addEventListener('change', () => {
   collectLibraryCategory();
