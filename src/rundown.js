@@ -246,7 +246,7 @@ function slotPayload(slot, library, date) {
     return item ? { ...item } : {
       title: s.label,
       subtitle: 'Pendiente',
-      body: `Añade entradas en data/content-library.json > ${s.libraryKey}`,
+      body: `Añade piezas en Escaleta → Contenido programado (${s.libraryKey})`,
       template: 'noticia',
       theme: 'rojo',
       missing: true,

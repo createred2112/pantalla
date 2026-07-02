@@ -94,11 +94,30 @@
   .library-tools{display:grid;grid-template-columns:220px 1fr;gap:10px;align-items:end}
   .bulk-box{background:#081729;border:1px dashed var(--line);border-radius:10px;padding:10px;margin:10px 0}
   .bulk-box textarea{min-height:92px}
-  .library-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px}
-  .library-item{border:1px solid var(--line);border-radius:10px;padding:10px;background:#081729}
+  .library-list{display:flex;flex-direction:column;gap:8px;margin-top:10px}
+  .library-item{border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:#081729}
   .library-item.off{opacity:.55}
   .library-item .mini{display:grid;grid-template-columns:1fr 1fr;gap:6px}
   .library-item textarea{min-height:54px}
+  .lib-row{display:flex;width:100%;gap:8px;align-items:center;background:transparent;border:0;color:var(--txt);padding:4px 2px;text-align:left;cursor:pointer;font:inherit}
+  .lib-dot{width:9px;height:9px;border-radius:50%;background:#5a6f93;flex:none}
+  .lib-dot.on{background:var(--ok)}
+  .lib-title{font-weight:700;font-size:13px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .lib-when{font-size:11px;color:var(--muted);flex:none;max-width:45%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .lib-edit{border-top:1px solid var(--line);margin-top:8px;padding-top:4px}
+  .rd-tabs{display:flex;gap:6px;flex:1;justify-content:center;min-width:0}
+  .rd-tab{background:transparent;border:1px solid var(--line);color:var(--muted);padding:8px 14px;border-radius:999px;font-size:13px;white-space:nowrap}
+  .rd-tab.sel{background:var(--line);color:#fff}
+  #rundownDlg .dlg-h{flex-wrap:wrap;gap:8px}
+  .planner{display:flex;flex-direction:column;gap:6px;margin:10px 0 4px}
+  .planner-day{display:flex;gap:8px;align-items:baseline;background:#081729;border:1px solid var(--line);border-radius:10px;padding:8px 10px;flex-wrap:wrap}
+  .planner-day>b{font-size:12px;min-width:88px;text-transform:capitalize}
+  .planner-day.today{border-color:var(--accent)}
+  .planner-items{display:flex;gap:6px;flex-wrap:wrap;flex:1;min-width:0}
+  .pl-chip{font-size:11px;background:#0a1a30;border:1px solid var(--line);border-radius:999px;padding:3px 9px;color:var(--muted);max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .pl-chip b{color:var(--txt);font-weight:600}
+  .pl-chip.warn{border-color:var(--warn);color:#ffd98a}
+  .bulk-box summary{cursor:pointer;color:var(--muted);font-size:13px}
   .weekdays{display:flex;gap:4px;flex-wrap:wrap;margin-top:4px}
   .weekdays label{margin:0;color:var(--txt);font-size:11px;background:#0a1a30;border:1px solid var(--line);border-radius:8px;padding:5px 7px}
   .weekdays input{width:auto;margin:0 4px 0 0}
@@ -335,38 +354,51 @@
 
 <!-- Escaleta -->
 <dialog id="rundownDlg">
-  <div class="dlg-h"><h2>Escaleta</h2><button class="ghost" id="btnRundownClose">✕</button></div>
-  <div class="dlg-b">
-    <div class="rundown-top">
-      <label>Título<input id="rundownTitle"></label>
-      <label>Día<input id="rundownDate" type="date"></label>
+  <div class="dlg-h">
+    <h2 style="flex:0 0 auto">Escaleta</h2>
+    <div class="rd-tabs">
+      <button type="button" class="rd-tab sel" data-rd-tab="seq">Secuencia</button>
+      <button type="button" class="rd-tab" data-rd-tab="lib">Contenido programado</button>
     </div>
-    <div class="status" id="rundownSummary"></div>
-    <div class="timeline" id="rundownTimeline"></div>
-    <div id="slotPanel" class="slot-panel"></div>
-    <div class="library-panel">
-      <div class="library-head">
-        <h3>Nevera editorial</h3>
-        <button class="ghost" id="btnLibraryAdd">Añadir pieza</button>
-        <button class="ghost" id="btnLibrarySave">Guardar nevera</button>
+    <button class="ghost" id="btnRundownClose">✕</button>
+  </div>
+  <div class="dlg-b">
+    <section id="rdTabSeq">
+      <div class="rundown-top">
+        <label>Título<input id="rundownTitle"></label>
+        <label>Día<input id="rundownDate" type="date"></label>
       </div>
+      <div class="status" id="rundownSummary"></div>
+      <div class="timeline" id="rundownTimeline"></div>
+      <div class="slot-tools" style="margin-top:10px">
+        <button class="ghost" id="btnRundownAdd">＋ Añadir bloque</button>
+      </div>
+      <div id="slotPanel" class="slot-panel"></div>
+    </section>
+    <section id="rdTabLib" hidden>
+      <div class="library-head">
+        <h3>Contenido programado</h3>
+        <button class="ghost" id="btnLibraryAdd">＋ Añadir pieza</button>
+      </div>
+      <p class="hint" style="margin:0 0 10px">Piezas que rotan en los bloques «Programado» de la secuencia. Cada pieza puede salir siempre o solo en las fechas que le programes.</p>
       <div class="library-tools">
         <label>Categoría<select id="libraryCategory"></select></label>
         <div class="status" id="librarySummary"></div>
       </div>
-      <div class="bulk-box">
-        <label>Carga masiva</label>
-        <textarea id="bulkImport" placeholder="Una pieza por línea: Título | firma/sección | texto | desde | hasta | días | fechas&#10;Ejemplo: Cambia tus contraseñas | Consejo informático | Usa frases largas | 2026-07-01 | 2026-08-31 | LMXJV |"></textarea>
-        <button class="ghost" id="btnBulkImport">Importar lote en esta categoría</button>
-      </div>
+      <div id="libraryPlanner"></div>
       <div id="libraryList" class="library-list"></div>
-    </div>
+      <details class="bulk-box">
+        <summary>Carga masiva (avanzado)</summary>
+        <label>Una pieza por línea: Título | firma/sección | texto | desde | hasta | días | fechas</label>
+        <textarea id="bulkImport" placeholder="Ejemplo: Cambia tus contraseñas | Consejo informático | Usa frases largas | 2026-07-01 | 2026-08-31 | LMXJV |"></textarea>
+        <button class="ghost" id="btnBulkImport">Importar lote en esta categoría</button>
+      </details>
+    </section>
   </div>
   <div class="dlg-f">
-    <button class="ghost" id="btnRundownAdd">Añadir bloque</button>
     <button class="ghost" id="btnRundownReset">Reset</button>
-    <button class="ghost" id="btnRundownSave">Guardar</button>
-    <button class="primary" id="btnRundownMake">Generar cartelas</button>
+    <button class="ghost" id="btnRundownSave">Guardar todo</button>
+    <button class="primary" id="btnRundownMake">Aplicar a la pantalla ▶</button>
   </div>
 </dialog>
 

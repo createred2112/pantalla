@@ -587,11 +587,27 @@ $('#btnImport').addEventListener('click', async () => {
 
 // --- Escaleta editorial ---
 const rundownDlg = $('#rundownDlg');
+let RD_DIRTY = false;   // hay cambios sin guardar en escaleta/contenido
+let LIB_OPEN = -1;      // índice de la pieza expandida en la lista
+
+function rdSetDirty(v) {
+  RD_DIRTY = v;
+  $('#btnRundownSave').textContent = v ? 'Guardar todo ●' : 'Guardar todo';
+}
+
+function setRundownTab(tab) {
+  $('#rdTabSeq').hidden = tab !== 'seq';
+  $('#rdTabLib').hidden = tab !== 'lib';
+  document.querySelectorAll('[data-rd-tab]').forEach((b) => b.classList.toggle('sel', b.dataset.rdTab === tab));
+}
 
 async function openRundown() {
   const today = new Date().toISOString().slice(0, 10);
   RUNDOWN = await api('/rundown?date=' + encodeURIComponent($('#rundownDate').value || today));
   RUNDOWN_SELECTED = 0;
+  LIB_OPEN = -1;
+  rdSetDirty(false);
+  setRundownTab('seq');
   renderRundown();
   rundownDlg.showModal();
 }
@@ -611,10 +627,11 @@ function renderRundown() {
   const missing = ((RUNDOWN.report || []).filter((r) => r.missing)).length;
   $('#rundownSummary').innerHTML =
     `<b>${active}</b> bloques activos · <b style="color:${missing ? '#e0a106' : '#bff0d5'}">${missing}</b> por completar · ${slots.reduce((n, s) => n + (s.enabled === false ? 0 : (Number(s.duration) || 8)), 0)}s de vuelta`;
+  const libLabel = (k) => ((RUNDOWN.libraryKeys || []).find((x) => x.key === k) || {}).label || k;
   $('#rundownTimeline').innerHTML = slots.map((s, i) => {
     const rep = reportForSlot(s);
-    const source = s.source === 'library' ? `biblioteca · ${esc(s.libraryKey)}` :
-      (s.source === 'worker' ? `worker · ${esc(s.workerKey)}` : 'fijo');
+    const source = s.source === 'library' ? `programado · ${esc(libLabel(s.libraryKey))}` :
+      (s.source === 'worker' ? `automático · ${esc(s.workerKey)}` : 'manual');
     return `
       <button class="tl-card ${i === RUNDOWN_SELECTED ? 'sel' : ''} ${s.enabled === false ? 'off' : ''} ${rep.missing ? 'missing' : ''}" data-rd-select="${i}">
         <div class="tl-num">${String(i + 1).padStart(2, '0')} · ${Number(s.duration) || 8}s</div>
@@ -639,29 +656,43 @@ function renderSlotPanel() {
     return;
   }
   const rep = reportForSlot(s);
+  const keys = RUNDOWN.libraryKeys || [];
+  const isLib = s.source === 'library';
+  const isWorker = s.source === 'worker';
+  const tplSelect = `<label>Plantilla<select data-rd-current="template">
+      <option value="">Auto</option>
+      ${TEMPLATES.map((t) => `<option value="${esc(t.id)}" ${t.id === s.template ? 'selected' : ''}>${esc(t.label)}</option>`).join('')}
+    </select></label>`;
   $('#slotPanel').innerHTML = `
     <div class="slot-grid">
-      <label>Nombre<input data-rd-current="label" value="${esc(s.label)}"></label>
-      <label>Origen<select data-rd-current="source">
-        <option value="fixed" ${s.source === 'fixed' ? 'selected' : ''}>Manual</option>
-        <option value="library" ${s.source === 'library' ? 'selected' : ''}>Nevera editorial</option>
-        <option value="worker" ${s.source === 'worker' ? 'selected' : ''}>Worker</option>
+      <label>Nombre del bloque<input data-rd-current="label" value="${esc(s.label)}"></label>
+      <label>Contenido<select data-rd-current="source">
+        <option value="fixed" ${s.source === 'fixed' ? 'selected' : ''}>Manual (lo escribes aquí)</option>
+        <option value="library" ${isLib ? 'selected' : ''}>Programado (rota por categoría)</option>
+        <option value="worker" ${isWorker ? 'selected' : ''}>Automático (worker)</option>
       </select></label>
-      <label>Plantilla<input data-rd-current="template" value="${esc(s.template || '')}" placeholder="Auto"></label>
-      <label>Categoría nevera<input data-rd-current="libraryKey" value="${esc(s.libraryKey || '')}" placeholder="datosUtiles"></label>
-      <label>Clave worker<input data-rd-current="workerKey" value="${esc(s.workerKey || '')}" placeholder="weather"></label>
-      <label>Título<input data-rd-current="title" value="${esc(s.title || '')}"></label>
+      ${isLib ? `<label>Categoría<select data-rd-current="libraryKey">
+        ${keys.map((k) => `<option value="${esc(k.key)}" ${k.key === s.libraryKey ? 'selected' : ''}>${esc(k.label)}</option>`).join('')}
+      </select></label>` : ''}
+      ${isWorker ? `<label>Clave del dato automático<input data-rd-current="workerKey" value="${esc(s.workerKey || '')}" placeholder="weather"></label>` : ''}
+      ${!isLib ? tplSelect : ''}
+      ${isLib
+        ? `<div class="slot-wide hint" style="align-self:center">Este bloque coge cada día una pieza de la categoría elegida. Las piezas se editan en la pestaña «Contenido programado».</div>`
+        : `<label>Título<input data-rd-current="title" value="${esc(s.title || '')}"></label>
       <label>Subtítulo<input data-rd-current="subtitle" value="${esc(s.subtitle || '')}"></label>
-      <label class="slot-wide">Texto<textarea data-rd-current="body">${esc(s.body || '')}</textarea></label>
-      <label>Duración<input type="number" min="1" data-rd-current="duration" value="${Number(s.duration) || 8}"></label>
+      <label class="slot-wide">Texto<textarea data-rd-current="body">${esc(s.body || '')}</textarea></label>`}
+      <label>Duración (segundos)<input type="number" min="1" data-rd-current="duration" value="${Number(s.duration) || 8}"></label>
       <label><input type="checkbox" data-rd-toggle="enabled" ${s.enabled !== false ? 'checked' : ''} style="width:auto;margin-right:8px"> Activa</label>
-      <label><input type="checkbox" data-rd-toggle="video" ${s.video ? 'checked' : ''} style="width:auto;margin-right:8px"> Animada</label>
+      <label><input type="checkbox" data-rd-toggle="video" ${s.video ? 'checked' : ''} style="width:auto;margin-right:8px"> Animada (MP4)</label>
     </div>
-    <div class="status">${rep.note ? esc(rep.note) : 'Bloque listo para generar.'}</div>
+    <div class="status">${rep.missing
+      ? '⚠️ ' + esc(rep.note || 'Pendiente de contenido')
+      : `✅ El ${esc(RUNDOWN.activeDate || 'día elegido')} saldrá: <b>${esc(rep.title || s.title || s.label)}</b>`}</div>
     <div class="slot-tools">
-      <button class="ghost" data-rd-move="-1" ${RUNDOWN_SELECTED === 0 ? 'disabled' : ''}>Mover izquierda</button>
-      <button class="ghost" data-rd-move="1" ${RUNDOWN_SELECTED === ((RUNDOWN.rundown.slots || []).length - 1) ? 'disabled' : ''}>Mover derecha</button>
-      <button class="ghost" data-rd-delete-current>Eliminar bloque</button>
+      <button class="ghost" data-rd-move="-1" ${RUNDOWN_SELECTED === 0 ? 'disabled' : ''}>← Mover</button>
+      <button class="ghost" data-rd-move="1" ${RUNDOWN_SELECTED === ((RUNDOWN.rundown.slots || []).length - 1) ? 'disabled' : ''}>Mover →</button>
+      <span class="spacer"></span>
+      <button class="ghost" data-rd-delete-current>🗑 Eliminar bloque</button>
     </div>`;
 }
 
@@ -691,6 +722,77 @@ function clientItemApplies(item, date) {
   return true;
 }
 
+// ¿La pieza tiene alguna programación de fechas?
+function isScheduled(item) {
+  return Boolean((item.dates && item.dates.length) || (item.weekdays && item.weekdays.length) || item.start || item.end);
+}
+
+const WEEKDAY_SHORT = ['', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb', 'dom'];
+
+function fmtShortDate(d) {
+  try { return new Date(d + 'T12:00:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }); }
+  catch { return d; }
+}
+
+// Resumen legible de cuándo sale una pieza: "siempre", "1 jul – 31 ago · lun mié", "solo 15 jul"...
+function scheduleSummary(item) {
+  if (item.enabled === false) return 'desactivada';
+  if (item.dates && item.dates.length) return 'solo ' + item.dates.map(fmtShortDate).join(', ');
+  const parts = [];
+  if (item.start && item.end) parts.push(`${fmtShortDate(item.start)} – ${fmtShortDate(item.end)}`);
+  else if (item.start) parts.push(`desde ${fmtShortDate(item.start)}`);
+  else if (item.end) parts.push(`hasta ${fmtShortDate(item.end)}`);
+  const wd = (item.weekdays || []).map(Number).filter(Boolean);
+  if (wd.length && wd.length < 7) parts.push(wd.map((n) => WEEKDAY_SHORT[n]).join(' '));
+  return parts.join(' · ') || 'siempre';
+}
+
+function addDays(dateStr, n) {
+  const dt = new Date(dateStr + 'T12:00:00');
+  dt.setDate(dt.getDate() + n);
+  return dt.toISOString().slice(0, 10);
+}
+
+// Réplica exacta de la elección diaria del servidor (hash fecha+bloque).
+function clientPickDaily(items, key, date) {
+  if (!Array.isArray(items) || !items.length) return null;
+  let h = 0;
+  for (const ch of `${date}:${key}`) h = ((h << 5) - h + ch.charCodeAt(0)) | 0;
+  return items[Math.abs(h) % items.length];
+}
+
+// Réplica de libraryItems del servidor: pack del día + fechas exactas o programadas.
+function clientLibraryItems(lib, key, date) {
+  const daily = (lib.days && lib.days[date] && Array.isArray(lib.days[date][key])) ? lib.days[date][key] : [];
+  const pool = Array.isArray(lib[key]) ? lib[key] : [];
+  const exact = pool.filter((it) => it.enabled !== false && Array.isArray(it.dates) && it.dates.includes(date));
+  const scheduled = exact.length ? exact : pool.filter((it) => clientItemApplies(it, date));
+  return [...daily, ...scheduled];
+}
+
+// Planificador: qué pieza saldrá en cada bloque programado los próximos 7 días.
+function renderPlanner() {
+  const box = $('#libraryPlanner');
+  if (!box || !RUNDOWN) return;
+  const slots = ((RUNDOWN.rundown || {}).slots || []).filter((s) => s.enabled !== false && s.source === 'library');
+  if (!slots.length) { box.innerHTML = ''; return; }
+  const start = RUNDOWN.activeDate || new Date().toISOString().slice(0, 10);
+  const lib = RUNDOWN.library || {};
+  let html = '<label style="margin-top:12px">Qué saldrá los próximos días</label><div class="planner">';
+  for (let d = 0; d < 7; d++) {
+    const date = addDays(start, d);
+    const dayLabel = new Date(date + 'T12:00:00').toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' });
+    const chips = slots.map((s) => {
+      const item = clientPickDaily(clientLibraryItems(lib, s.libraryKey, date), s.id, date);
+      return item
+        ? `<span class="pl-chip" title="${esc(item.title || '')}"><b>${esc(s.label)}</b> · ${esc(item.title || item.body || '')}</span>`
+        : `<span class="pl-chip warn"><b>${esc(s.label)}</b> · sin contenido</span>`;
+    }).join('');
+    html += `<div class="planner-day ${d === 0 ? 'today' : ''}"><b>${esc(dayLabel)}</b><div class="planner-items">${chips}</div></div>`;
+  }
+  box.innerHTML = html + '</div>';
+}
+
 function renderLibraryPanel() {
   const keys = RUNDOWN.libraryKeys || [];
   if (!keys.some((x) => x.key === LIBRARY_CATEGORY) && keys[0]) LIBRARY_CATEGORY = keys[0].key;
@@ -699,11 +801,11 @@ function renderLibraryPanel() {
   const items = (RUNDOWN.library && Array.isArray(RUNDOWN.library[meta.key])) ? RUNDOWN.library[meta.key] : [];
   const activeDate = RUNDOWN.activeDate || new Date().toISOString().slice(0, 10);
   const eligible = items.filter((item) => clientItemApplies(item, activeDate)).length;
-  const totalAll = keys.reduce((n, k) => n + (((RUNDOWN.library || {})[k.key] || []).length), 0);
   $('#librarySummary').innerHTML =
-    `<b>${items.length}</b> en esta categoría · <b>${eligible}</b> entran el ${esc(activeDate)} · <b>${totalAll}</b> piezas totales en nevera`;
+    `<b>${items.length}</b> pieza(s) en esta categoría · <b style="color:${eligible ? '#bff0d5' : '#ffd98a'}">${eligible}</b> pueden salir el ${esc(fmtShortDate(activeDate))}`;
+  renderPlanner();
   $('#libraryList').innerHTML = items.length ? items.map((item, i) => libraryItemHtml(meta, item, i)).join('') :
-    '<div class="empty">Carga un lote o añade una pieza. Esta categoría todavía está vacía.</div>';
+    '<div class="empty">Esta categoría está vacía. Añade una pieza o importa un lote.</div>';
 }
 
 function weekdayBox(item, n, label) {
@@ -712,26 +814,55 @@ function weekdayBox(item, n, label) {
 }
 
 function libraryItemHtml(meta, item, i) {
+  const head = `<button type="button" class="lib-row" data-lib-open="${i}">
+      <span class="lib-dot ${item.enabled !== false ? 'on' : ''}"></span>
+      <span class="lib-title">${esc(item.title || item.body || '(sin título)')}</span>
+      <span class="lib-when">${esc(scheduleSummary(item))}</span>
+    </button>`;
+  if (i !== LIB_OPEN) {
+    return `<div class="library-item ${item.enabled === false ? 'off' : ''}" data-lib-item="${i}">${head}</div>`;
+  }
+  const sched = isScheduled(item);
   return `<div class="library-item ${item.enabled === false ? 'off' : ''}" data-lib-item="${i}">
-    <div class="mini">
-      <label><input type="checkbox" data-lib-field="enabled" ${item.enabled !== false ? 'checked' : ''} style="width:auto;margin-right:8px"> Activa</label>
-      <label>Título<input data-lib-field="title" value="${esc(item.title || '')}"></label>
+    ${head}
+    <div class="lib-edit">
+      <div class="mini">
+        <label>Título<input data-lib-field="title" value="${esc(item.title || '')}"></label>
+        <label>Firma/sección<input data-lib-field="subtitle" value="${esc(item.subtitle || '')}"></label>
+      </div>
+      <label>Texto<textarea data-lib-field="body">${esc(item.body || '')}</textarea></label>
+      <label>¿Cuándo sale?
+        <select data-lib-mode>
+          <option value="always" ${!sched ? 'selected' : ''}>Siempre (rota con las demás piezas)</option>
+          <option value="scheduled" ${sched ? 'selected' : ''}>Solo cuando lo programe</option>
+        </select>
+      </label>
+      <div class="lib-sched" ${sched ? '' : 'hidden'}>
+        <div class="mini">
+          <label>Desde<input type="date" data-lib-field="start" value="${esc(item.start || '')}"></label>
+          <label>Hasta<input type="date" data-lib-field="end" value="${esc(item.end || '')}"></label>
+        </div>
+        <label>Días de la semana (vacío = todos)</label>
+        <div class="weekdays">${weekdayBox(item, 1, 'L')}${weekdayBox(item, 2, 'M')}${weekdayBox(item, 3, 'X')}${weekdayBox(item, 4, 'J')}${weekdayBox(item, 5, 'V')}${weekdayBox(item, 6, 'S')}${weekdayBox(item, 7, 'D')}</div>
+        <label>Solo fechas concretas<input data-lib-field="dates" value="${esc((item.dates || []).join(', '))}" placeholder="2026-07-15, 2026-08-04"></label>
+        <div class="hint">Si pones fechas concretas, la pieza sale SOLO esos días y desplaza a las piezas de rotación normal.</div>
+      </div>
+      <div class="mini">
+        <label>Plantilla<select data-lib-field="template">
+          ${TEMPLATES.map((t) => `<option value="${esc(t.id)}" ${t.id === (item.template || meta.template) ? 'selected' : ''}>${esc(t.label)}</option>`).join('')}
+        </select></label>
+        <label>Tema de color<select data-lib-field="theme">
+          <option value="" ${!(item.theme || meta.theme) ? 'selected' : ''}>Auto</option>
+          ${Object.keys(PALETTE).map((k) => `<option value="${esc(k)}" ${k === (item.theme || meta.theme) ? 'selected' : ''}>${esc(k)}</option>`).join('')}
+        </select></label>
+      </div>
+      <label>Notas internas<input data-lib-field="notes" value="${esc(item.notes || '')}"></label>
+      <div class="slot-tools">
+        <label style="margin:0"><input type="checkbox" data-lib-field="enabled" ${item.enabled !== false ? 'checked' : ''} style="width:auto;margin-right:6px">Activa</label>
+        <span class="spacer"></span>
+        <button type="button" class="ghost" data-lib-del>🗑 Quitar pieza</button>
+      </div>
     </div>
-    <label>Firma/sección<input data-lib-field="subtitle" value="${esc(item.subtitle || '')}"></label>
-    <label>Texto<textarea data-lib-field="body">${esc(item.body || '')}</textarea></label>
-    <div class="mini">
-      <label>Desde<input type="date" data-lib-field="start" value="${esc(item.start || '')}"></label>
-      <label>Hasta<input type="date" data-lib-field="end" value="${esc(item.end || '')}"></label>
-    </div>
-    <label>Días de semana</label>
-    <div class="weekdays">${weekdayBox(item, 1, 'L')}${weekdayBox(item, 2, 'M')}${weekdayBox(item, 3, 'X')}${weekdayBox(item, 4, 'J')}${weekdayBox(item, 5, 'V')}${weekdayBox(item, 6, 'S')}${weekdayBox(item, 7, 'D')}</div>
-    <label>Fechas concretas<input data-lib-field="dates" value="${esc((item.dates || []).join(', '))}" placeholder="2026-07-15, 2026-08-04"></label>
-    <div class="mini">
-      <label>Plantilla<input data-lib-field="template" value="${esc(item.template || meta.template || '')}"></label>
-      <label>Tema<input data-lib-field="theme" value="${esc(item.theme || meta.theme || '')}"></label>
-    </div>
-    <label>Notas internas<input data-lib-field="notes" value="${esc(item.notes || '')}"></label>
-    <button class="ghost" data-lib-del>Quitar</button>
   </div>`;
 }
 
@@ -751,20 +882,23 @@ function collectRundown() {
   return rd;
 }
 
+// Recoge SOLO la pieza expandida del DOM al modelo (las demás no tienen campos).
 function collectLibraryCategory() {
-  if (!RUNDOWN || !RUNDOWN.library) return;
+  if (!RUNDOWN || !RUNDOWN.library || LIB_OPEN < 0) return;
   const meta = currentLibraryMeta();
-  RUNDOWN.library[meta.key] = [...$('#libraryList').querySelectorAll('.library-item')].map((item) => {
-      const obj = {};
-      item.querySelectorAll('[data-lib-field]').forEach((field) => {
-        const key = field.dataset.libField;
-        if (field.type === 'checkbox') obj[key] = field.checked;
-        else if (key === 'dates') obj[key] = field.value.split(/[,\s]+/).map((x) => x.trim()).filter(Boolean);
-        else obj[key] = field.value;
-      });
-      obj.weekdays = [...item.querySelectorAll('[data-lib-weekday]:checked')].map((field) => Number(field.dataset.libWeekday));
-      return obj;
-    }).filter((item) => item.title || item.body);
+  const arr = RUNDOWN.library[meta.key];
+  const wrap = $('#libraryList') && $('#libraryList').querySelector(`[data-lib-item="${LIB_OPEN}"] .lib-edit`);
+  if (!wrap || !Array.isArray(arr) || !arr[LIB_OPEN]) return;
+  const obj = arr[LIB_OPEN];
+  wrap.querySelectorAll('[data-lib-field]').forEach((field) => {
+    const key = field.dataset.libField;
+    if (field.type === 'checkbox') obj[key] = field.checked;
+    else if (key === 'dates') obj[key] = field.value.split(/[,\s]+/).map((x) => x.trim()).filter(Boolean);
+    else obj[key] = field.value;
+  });
+  obj.weekdays = [...wrap.querySelectorAll('[data-lib-weekday]:checked')].map((field) => Number(field.dataset.libWeekday));
+  const mode = wrap.querySelector('[data-lib-mode]');
+  if (mode && mode.value === 'always') { obj.start = ''; obj.end = ''; obj.dates = []; obj.weekdays = []; }
 }
 
 function parseWeekdays(text) {
@@ -800,21 +934,28 @@ function parseBulkItems(text, meta) {
   }).filter((item) => item.title || item.body);
 }
 
-async function saveRundown() {
+// Guarda TODO de una vez: secuencia + contenido programado.
+async function saveAllRundown(opts = {}) {
   const date = $('#rundownDate').value || new Date().toISOString().slice(0, 10);
-  RUNDOWN = await api('/rundown?date=' + encodeURIComponent(date), { method: 'PUT', body: JSON.stringify(collectRundown()) });
+  collectRundown();
+  collectLibraryCategory();
+  const rd = RUNDOWN.rundown;
+  const lib = RUNDOWN.library;
+  await api('/rundown?date=' + encodeURIComponent(date), { method: 'PUT', body: JSON.stringify(rd) });
+  RUNDOWN = await api('/rundown/library?date=' + encodeURIComponent(date), { method: 'PUT', body: JSON.stringify(lib) });
+  rdSetDirty(false);
   renderRundown();
-  toast('Escaleta guardada');
+  if (!opts.silent) toast('Escaleta y contenido guardados');
 }
 
 async function makeRundown() {
-  await saveRundown();
   const btn = $('#btnRundownMake');
   btn.disabled = true;
   try {
+    await saveAllRundown({ silent: true });
     const date = $('#rundownDate').value || new Date().toISOString().slice(0, 10);
     const r = await api('/rundown/materialize', { method: 'POST', body: JSON.stringify({ date }) });
-    toast(`Escaleta generada: ${r.count} cartela(s)`);
+    toast(`Escaleta aplicada: ${r.count} cartela(s). Revisa y pulsa Publicar.`);
     rundownDlg.close();
     load();
   } finally {
@@ -822,35 +963,43 @@ async function makeRundown() {
   }
 }
 
+function confirmDiscard() {
+  return !RD_DIRTY || confirm('Hay cambios sin guardar en la escaleta. ¿Salir sin guardarlos?');
+}
+
 $('#btnRundown').addEventListener('click', openRundown);
-$('#btnRundownClose').addEventListener('click', () => rundownDlg.close());
-$('#btnRundownSave').addEventListener('click', saveRundown);
+$('#btnRundownClose').addEventListener('click', () => { if (confirmDiscard()) { rdSetDirty(false); rundownDlg.close(); } });
+rundownDlg.addEventListener('cancel', (e) => { if (!confirmDiscard()) e.preventDefault(); else rdSetDirty(false); });
+$('#btnRundownSave').addEventListener('click', () => saveAllRundown());
 $('#btnRundownMake').addEventListener('click', makeRundown);
-$('#btnLibrarySave').addEventListener('click', async () => {
-  const date = $('#rundownDate').value || new Date().toISOString().slice(0, 10);
+document.querySelectorAll('[data-rd-tab]').forEach((b) => b.addEventListener('click', () => {
+  if (!RUNDOWN) return;
   collectRundown();
   collectLibraryCategory();
-  RUNDOWN = await api('/rundown/library?date=' + encodeURIComponent(date), { method: 'PUT', body: JSON.stringify(RUNDOWN.library) });
-  renderRundown();
-  toast('Nevera editorial guardada');
-});
+  setRundownTab(b.dataset.rdTab);
+  if (b.dataset.rdTab === 'lib') renderLibraryPanel();
+}));
 $('#btnLibraryAdd').addEventListener('click', () => {
   if (!RUNDOWN) return;
   collectLibraryCategory();
   const meta = currentLibraryMeta();
   if (!Array.isArray(RUNDOWN.library[meta.key])) RUNDOWN.library[meta.key] = [];
   RUNDOWN.library[meta.key].push(blankLibraryItem(meta));
+  LIB_OPEN = RUNDOWN.library[meta.key].length - 1;
+  rdSetDirty(true);
   renderLibraryPanel();
 });
 $('#btnBulkImport').addEventListener('click', () => {
   if (!RUNDOWN) return;
   collectLibraryCategory();
   const meta = currentLibraryMeta();
-  const items = parseBulkItems($('#bulkImport').value, meta);
+  let items = [];
+  try { items = parseBulkItems($('#bulkImport').value, meta); } catch { toast('Formato no válido'); return; }
   if (!items.length) { toast('No he encontrado piezas para importar'); return; }
   if (!Array.isArray(RUNDOWN.library[meta.key])) RUNDOWN.library[meta.key] = [];
   RUNDOWN.library[meta.key].push(...items);
   $('#bulkImport').value = '';
+  rdSetDirty(true);
   renderLibraryPanel();
   toast(`Importadas ${items.length} pieza(s)`);
 });
@@ -871,18 +1020,28 @@ $('#btnRundownAdd').addEventListener('click', () => {
     video: false,
   });
   RUNDOWN_SELECTED = RUNDOWN.rundown.slots.length - 1;
+  rdSetDirty(true);
   renderRundown();
 });
 $('#btnRundownReset').addEventListener('click', async () => {
-  if (!confirm('¿Restaurar la protoescaleta inicial?')) return;
+  if (!confirm('¿Restaurar la escaleta inicial? Se pierden los cambios de la secuencia (el contenido programado se conserva).')) return;
   RUNDOWN = await api('/rundown/reset', { method: 'POST' });
+  RUNDOWN_SELECTED = 0;
+  LIB_OPEN = -1;
+  rdSetDirty(false);
   renderRundown();
   toast('Escaleta restaurada');
 });
 $('#rundownDate').addEventListener('change', async () => {
   if (!RUNDOWN) return;
-  collectRundown();
+  if (RD_DIRTY) {
+    if (confirm('Tienes cambios sin guardar. ¿Guardarlos antes de cambiar de día?')) {
+      await saveAllRundown({ silent: true });
+    }
+  }
   RUNDOWN = await api('/rundown?date=' + encodeURIComponent($('#rundownDate').value));
+  LIB_OPEN = -1;
+  rdSetDirty(false);
   renderRundown();
 });
 $('#rundownTimeline').addEventListener('click', (e) => {
@@ -895,9 +1054,11 @@ $('#slotPanel').addEventListener('click', (e) => {
   const b = e.target.closest('button'); if (!b || !RUNDOWN) return;
   const slots = RUNDOWN.rundown.slots || [];
   if (b.dataset.rdDeleteCurrent != null) {
+    if (!confirm('¿Eliminar este bloque de la secuencia?')) return;
     collectRundown();
     slots.splice(RUNDOWN_SELECTED, 1);
     RUNDOWN_SELECTED = Math.max(0, RUNDOWN_SELECTED - 1);
+    rdSetDirty(true);
     renderRundown();
     return;
   }
@@ -909,26 +1070,49 @@ $('#slotPanel').addEventListener('click', (e) => {
   collectRundown();
   [slots[i], slots[j]] = [slots[j], slots[i]];
   RUNDOWN_SELECTED = j;
+  rdSetDirty(true);
   renderRundown();
 });
-$('#slotPanel').addEventListener('input', () => { if (RUNDOWN) collectRundown(); });
-$('#slotPanel').addEventListener('change', () => { if (RUNDOWN) { collectRundown(); renderRundown(); } });
+$('#slotPanel').addEventListener('input', () => { if (RUNDOWN) { collectRundown(); rdSetDirty(true); } });
+$('#slotPanel').addEventListener('change', () => { if (RUNDOWN) { collectRundown(); rdSetDirty(true); renderRundown(); } });
+$('#rundownTitle').addEventListener('input', () => { if (RUNDOWN) rdSetDirty(true); });
 $('#libraryCategory').addEventListener('change', () => {
   collectLibraryCategory();
   LIBRARY_CATEGORY = $('#libraryCategory').value;
+  LIB_OPEN = -1;
   renderLibraryPanel();
 });
-$('#libraryList').addEventListener('input', () => { if (RUNDOWN) collectLibraryCategory(); });
-$('#libraryList').addEventListener('change', () => { if (RUNDOWN) { collectLibraryCategory(); renderLibraryPanel(); } });
-$('#libraryList').addEventListener('click', (e) => {
-  const del = e.target.closest('[data-lib-del]');
-  if (!RUNDOWN || !del) return;
+$('#libraryList').addEventListener('input', () => { if (RUNDOWN) { collectLibraryCategory(); rdSetDirty(true); } });
+$('#libraryList').addEventListener('change', (e) => {
+  if (!RUNDOWN) return;
+  // El selector "¿Cuándo sale?" muestra/oculta los campos de programación al momento.
+  if (e.target && e.target.matches('[data-lib-mode]')) {
+    const box = e.target.closest('.lib-edit').querySelector('.lib-sched');
+    if (box) box.hidden = e.target.value !== 'scheduled';
+  }
   collectLibraryCategory();
-  const meta = currentLibraryMeta();
-  const item = del.closest('.library-item');
-  const idx = [...$('#libraryList').querySelectorAll('.library-item')].indexOf(item);
-  if (RUNDOWN.library[meta.key]) RUNDOWN.library[meta.key].splice(idx, 1);
+  rdSetDirty(true);
   renderLibraryPanel();
+});
+$('#libraryList').addEventListener('click', (e) => {
+  if (!RUNDOWN) return;
+  const del = e.target.closest('[data-lib-del]');
+  if (del) {
+    if (!confirm('¿Quitar esta pieza definitivamente?')) return;
+    const meta = currentLibraryMeta();
+    if (RUNDOWN.library[meta.key]) RUNDOWN.library[meta.key].splice(LIB_OPEN, 1);
+    LIB_OPEN = -1;
+    rdSetDirty(true);
+    renderLibraryPanel();
+    return;
+  }
+  const row = e.target.closest('[data-lib-open]');
+  if (row) {
+    collectLibraryCategory();
+    const idx = Number(row.dataset.libOpen);
+    LIB_OPEN = idx === LIB_OPEN ? -1 : idx;
+    renderLibraryPanel();
+  }
 });
 
 const publishDlg = $('#publishDlg');
