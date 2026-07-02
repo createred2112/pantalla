@@ -1,51 +1,55 @@
 'use strict';
-// DATO — cifra gigante + etiqueta + contexto. Bloque centrado. Motor HTML.
+// DATO — la pieza insignia del sistema: CIFRA a media pantalla + BANDA de
+// acento a todo el ancho con la etiqueta dentro. Lectura en 2 segundos incluso
+// a baja resolución: primero el número, luego la banda de color dice qué es.
+// Si el título es una frase (no una cifra), envuelve en hasta 3 líneas grandes.
 module.exports = {
   id: 'dato',
   label: 'Dato / Cifra (número gigante)',
-  hint: { title: 'La cifra (p. ej. 72%, 1.240, 28º)', subtitle: 'Qué mide (1 línea)', body: 'Contexto (1 línea, opcional)', date: 'Actualizado (opcional)' },
+  hint: { title: 'La cifra (p. ej. 72%, 1.240, 28º)', subtitle: 'Qué mide (va en la banda)', body: 'Contexto (pie, opcional)', date: 'Actualizado (pie, opcional)' },
   defaultTheme: 'lima',
   logoPos: 'bl',
   build(card, ctx) {
     const { W, H, theme } = ctx;
-    const pad = Math.round(W * 0.06);
+    const pad = Math.round(W * 0.05);
     const w = W - pad * 2;
-    const dateZone = card.date ? Math.round(H * 0.10) : Math.round(H * 0.04);
-    const areaTop = Math.round(H * 0.13);
-    const areaBottom = H - dateZone;
-    const gap = Math.round(H * 0.022);
-    const numH = Math.round(H * 0.4);
-    const ruleH = Math.max(5, Math.round(H * 0.008));
-    const labelH = Math.round(H * 0.12);
-    const bodyH = card.body ? Math.round(H * 0.06) : 0;
-    const blockH = numH + gap + ruleH + gap + labelH + (card.body ? gap * 0.6 + bodyH : 0);
-    let y = Math.round(areaTop + (areaBottom - areaTop - blockH) / 2);
-
     const els = [];
-    // Una CIFRA corta va a una línea gigante; una FRASE se parte en hasta 3
-    // líneas grandes (nunca se corta el texto).
-    const isFigure = String(card.title || '').replace(/\s+/g, '').length <= 9;
+    const title = String(card.title || '');
+    const isFigure = title.replace(/\s+/g, '').length <= 9;
+
+    // La cifra (o frase) domina el lienzo superior.
     els.push({
-      type: 'text', x: pad, y, w, h: numH, text: (card.title || '').toUpperCase(),
-      font: 'display', weight: 800, color: theme.text, align: 'center', valign: 'center',
-      lineHeight: isFigure ? 1 : 0.98, letterSpacingEm: -0.01,
+      type: 'text', x: pad, y: Math.round(H * 0.05), w, h: Math.round(H * 0.58),
+      text: title.toUpperCase(), font: 'display', weight: 800, color: theme.text,
+      align: 'center', valign: 'center', lineHeight: isFigure ? 1 : 0.96, letterSpacingEm: -0.01,
       autofit: isFigure
-        ? { min: Math.round(H * 0.12), max: Math.round(H * 0.4), lines: 1 }
-        : { min: Math.round(H * 0.07), max: Math.round(H * 0.15), lines: 3 },
+        ? { min: Math.round(H * 0.16), max: Math.round(H * 0.5), lines: 1 }
+        : { min: Math.round(H * 0.07), max: Math.round(H * 0.16), lines: 3 },
     });
-    y += numH + gap;
-    const ruleW = Math.round(W * 0.12);
-    els.push({ type: 'rect', x: Math.round((W - ruleW) / 2), y, w: ruleW, h: ruleH, color: theme.accent, radius: 3 });
-    y += ruleH + gap;
-    els.push({ type: 'text', x: pad, y, w, h: labelH, text: (card.subtitle || '').toUpperCase(), font: 'text', weight: 700, color: theme.accent, align: 'center', valign: 'top', lineHeight: 1.1, autofit: { min: Math.round(H * 0.04), max: Math.round(H * 0.072), lines: 2 } });
-    if (card.body) {
-      y += labelH + gap * 0.6;
-      els.push({ type: 'text', x: pad, y, w, h: bodyH, text: card.body, font: 'text', weight: 600, color: theme.textMuted, align: 'center', valign: 'top', size: Math.round(H * 0.046) });
+
+    // Banda de acento a sangre: la etiqueta vive dentro. Firma visual de la casa.
+    if (card.subtitle) {
+      const bandY = Math.round(H * 0.67);
+      const bandH = Math.round(H * 0.14);
+      els.push({ type: 'rect', x: 0, y: bandY, w: W, h: bandH, color: theme.accent });
+      els.push({
+        type: 'text', x: pad, y: bandY, w, h: bandH,
+        text: card.subtitle.toUpperCase(), font: 'display', weight: 800, color: theme.accentText,
+        align: 'center', valign: 'center', lineHeight: 1, letterSpacingEm: 0.02,
+        autofit: { min: Math.round(H * 0.04), max: Math.round(H * 0.075), lines: 1 },
+      });
     }
-    if (card.date) {
-      // Abajo a la DERECHA: el logo vive abajo-izquierda y no deben pisarse.
-      els.push({ type: 'text', x: Math.round(W * 0.5), y: H - Math.round(H * 0.075), w: Math.round(W * 0.5) - pad, h: Math.round(H * 0.05), text: card.date.toUpperCase(), font: 'text', weight: 700, color: theme.textMuted, align: 'right', valign: 'center', size: Math.round(H * 0.034) });
+
+    // Pie: contexto + actualización, abajo a la derecha (el logo va a la izquierda).
+    const foot = [card.body, card.date].filter(Boolean).join('  ·  ');
+    if (foot) {
+      els.push({
+        type: 'text', x: Math.round(W * 0.3), y: Math.round(H * 0.875), w: Math.round(W * 0.7) - pad, h: Math.round(H * 0.07),
+        text: foot.toUpperCase(), font: 'text', weight: 800, color: theme.text,
+        align: 'right', valign: 'center', size: Math.round(H * 0.036),
+      });
     }
+
     return { background: { type: 'solid', color: theme.bg }, elements: els };
   },
 };

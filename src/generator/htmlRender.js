@@ -185,6 +185,9 @@ async function logoHtml(ctx, tpl) {
 }
 
 // Script de auto-ajuste: agranda cada [data-fit] hasta llenar su caja.
+// RED DE SEGURIDAD: si ni al tamaño mínimo cabe (texto kilométrico), recorta
+// con elipsis en el límite de palabra. En pantalla NUNCA se ve texto cortado
+// a mitad ni desbordado.
 const AUTOFIT = `
 (function(){
   document.querySelectorAll('[data-fit]').forEach(function(el){
@@ -192,6 +195,15 @@ const AUTOFIT = `
     while(lo<=hi){ var mid=(lo+hi)>>1; el.style.fontSize=mid+'px';
       if(el.scrollWidth<=el.parentElement.clientWidth && el.scrollHeight<=el.parentElement.clientHeight){best=mid;lo=mid+1;} else {hi=mid-1;} }
     el.style.fontSize=best+'px';
+    if(el.scrollWidth>el.parentElement.clientWidth+1 || el.scrollHeight>el.parentElement.clientHeight+1){
+      var lh=parseFloat(getComputedStyle(el).lineHeight)||best*1.05;
+      var lines=Math.max(1,Math.floor(el.parentElement.clientHeight/lh));
+      el.style.whiteSpace='normal';
+      el.style.display='-webkit-box';
+      el.style.webkitBoxOrient='vertical';
+      el.style.webkitLineClamp=String(lines);
+      el.style.overflow='hidden';
+    }
   });
 })();`;
 
