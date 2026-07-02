@@ -592,6 +592,52 @@ $('#list').addEventListener('click', async (e) => {
   }
 });
 
+// --- Piloto automático ---
+let PILOT = null;
+
+function fmtLastRun(last) {
+  if (!last) return 'todavía no se ha ejecutado';
+  const when = last.ts ? new Date(last.ts).toLocaleString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : last.day;
+  if (last.ok === false) return `última: ${when} · ⚠ falló (mira Estado)`;
+  return `última: ${when} · ${last.cards || 0} cartelas${last.published ? ' publicadas ✓' : ''}`;
+}
+
+function renderPilot() {
+  if (!PILOT) return;
+  const bar = $('#pilotBar');
+  bar.style.display = 'flex';
+  bar.classList.toggle('on', PILOT.enabled);
+  $('#pilotIco').textContent = PILOT.enabled ? '🛫' : '🛬';
+  $('#pilotTitle').textContent = PILOT.enabled ? 'Piloto automático · ACTIVO' : 'Piloto automático · apagado';
+  const workersTxt = (PILOT.workers || []).filter((w) => w.fresh).map((w) => w.preview).filter(Boolean).join(' · ');
+  $('#pilotInfo').textContent = PILOT.enabled
+    ? `Escaleta y publicación solas cada día a las ${PILOT.time} · ${fmtLastRun(PILOT.last)}${workersTxt ? ' · Datos: ' + workersTxt : ''}`
+    : `Actívalo y la pantalla se actualizará sola cada mañana, sin tocar nada${workersTxt ? ' · Datos listos: ' + workersTxt : ''}`;
+  $('#pilotTime').value = PILOT.time || '08:00';
+  $('#pilotToggle').textContent = PILOT.enabled ? 'Apagar' : 'Activar';
+  $('#pilotToggle').classList.toggle('primary', !PILOT.enabled);
+}
+
+async function loadPilot() {
+  try { PILOT = await api('/autopilot'); renderPilot(); } catch {}
+}
+
+async function savePilot(patch) {
+  PILOT = await api('/autopilot', { method: 'PUT', body: JSON.stringify({ enabled: PILOT.enabled, time: $('#pilotTime').value || '08:00', publish: true, ...patch }) });
+  renderPilot();
+}
+
+$('#pilotToggle').addEventListener('click', async () => {
+  if (!PILOT) return;
+  await savePilot({ enabled: !PILOT.enabled });
+  toast(PILOT.enabled ? `Piloto activo: cada día a las ${PILOT.time}` : 'Piloto apagado');
+});
+$('#pilotTime').addEventListener('change', async () => {
+  if (!PILOT) return;
+  await savePilot({});
+  toast('Hora del piloto: ' + PILOT.time);
+});
+
 // --- Barra de acciones ---
 $('#btnAdd').addEventListener('click', () => openEditor(null));
 $('#btnRefresh').addEventListener('click', load);
@@ -641,7 +687,8 @@ function renderRundown() {
   const active = slots.filter((s) => s.enabled !== false).length;
   const missing = ((RUNDOWN.report || []).filter((r) => r.missing)).length;
   $('#rundownSummary').innerHTML =
-    `<b>${active}</b> bloques activos · <b style="color:${missing ? '#e0a106' : '#bff0d5'}">${missing}</b> por completar · ${slots.reduce((n, s) => n + (s.enabled === false ? 0 : (Number(s.duration) || 8)), 0)}s de vuelta`;
+    `<b>${active}</b> bloques activos · <b style="color:${missing ? '#e0a106' : '#bff0d5'}">${missing}</b> por completar · ${slots.reduce((n, s) => n + (s.enabled === false ? 0 : (Number(s.duration) || 8)), 0)}s de vuelta` +
+    (RUNDOWN.dayTheme ? ` · look del día: <b>${esc(RUNDOWN.dayTheme)}</b>` : '');
   $('#slotList').innerHTML = slots.length
     ? slots.map((s, i) => slotItemHtml(s, i)).join('')
     : '<div class="empty">Añade un bloque para empezar.</div>';
@@ -992,6 +1039,21 @@ function confirmDiscard() {
 }
 
 $('#btnRundown').addEventListener('click', openRundown);
+$('#btnWorkersRefresh').addEventListener('click', async (e) => {
+  const b = e.target; b.disabled = true;
+  toast('Actualizando datos automáticos…');
+  try {
+    await api('/workers/refresh', { method: 'POST' });
+    // Recarga la escaleta para ver los datos reales en los bloques.
+    const date = $('#rundownDate').value || new Date().toISOString().slice(0, 10);
+    if (RD_DIRTY) collectRundown(), collectLibraryCategory();
+    const fresh = await api('/rundown?date=' + encodeURIComponent(date));
+    if (!RD_DIRTY) { RUNDOWN = fresh; } else { RUNDOWN.report = fresh.report; RUNDOWN.dayTheme = fresh.dayTheme; }
+    renderRundown();
+    toast('Datos automáticos actualizados');
+  } catch (err) { toast('Error: ' + err.message); }
+  finally { b.disabled = false; }
+});
 $('#btnRundownClose').addEventListener('click', () => { if (confirmDiscard()) { rdSetDirty(false); rundownDlg.close(); } });
 rundownDlg.addEventListener('cancel', (e) => { if (!confirmDiscard()) e.preventDefault(); else rdSetDirty(false); });
 $('#btnRundownSave').addEventListener('click', () => saveAllRundown());
@@ -1246,3 +1308,4 @@ async function loadStatus(full) {
 }
 
 loadConfig().then(load);
+loadPilot();

@@ -256,6 +256,18 @@
   details.adv{margin-top:12px;border:1px dashed var(--line);border-radius:10px;padding:10px 12px}
   details.adv summary{cursor:pointer;color:var(--muted);font-size:13px}
   details.adv[open] summary{color:var(--txt);margin-bottom:2px}
+
+  /* Piloto automático: la pantalla se alimenta sola */
+  .pilot{display:flex;align-items:center;gap:11px;background:var(--card);border:1px solid var(--line);
+    border-radius:var(--r);padding:11px 14px;margin-bottom:4px;box-shadow:var(--shadow)}
+  .pilot.on{border-color:rgba(43,182,115,.55);background:linear-gradient(135deg,rgba(43,182,115,.14),var(--card) 60%)}
+  .pilot-ico{font-size:22px;line-height:1}
+  .pilot-txt{flex:1;min-width:0}
+  .pilot-txt b{display:block;font-size:14px}
+  .pilot-txt small{display:block;color:var(--muted);font-size:11.5px;margin-top:2px;line-height:1.35}
+  .pilot input[type=time]{width:auto;padding:8px 9px;font-size:13px}
+  .pilot button{flex:none}
+  @media (max-width:640px){ .pilot{flex-wrap:wrap} .pilot-txt{flex-basis:calc(100% - 70px)} }
 </style>
 </head>
 <body>
@@ -282,6 +294,15 @@
       <span class="tool-txt"><b>Importar</b><small>Archivos del worker</small></span>
     </button>
     <button class="tool sq" id="btnRefresh" title="Refrescar la lista">↻</button>
+  </div>
+  <div class="pilot" id="pilotBar" style="display:none">
+    <span class="pilot-ico" id="pilotIco">🛫</span>
+    <div class="pilot-txt">
+      <b id="pilotTitle">Piloto automático</b>
+      <small id="pilotInfo">cargando…</small>
+    </div>
+    <input type="time" id="pilotTime" value="08:00" title="Hora de publicación diaria">
+    <button class="ghost" id="pilotToggle">Activar</button>
   </div>
   <div class="list-head">
     <h2>Secuencia en pantalla</h2>
@@ -502,6 +523,7 @@
       <div id="slotList" class="slot-list"></div>
       <div class="slot-tools" style="margin-top:10px">
         <button class="ghost" id="btnRundownAdd">＋ Añadir bloque</button>
+        <button class="ghost" id="btnWorkersRefresh" title="Trae ahora el tiempo, precio de la luz, etc.">↻ Datos automáticos</button>
       </div>
     </section>
     <section id="rdTabLib" hidden>

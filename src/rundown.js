@@ -123,6 +123,13 @@ function dayNumber(date) {
   return jsDay === 0 ? 7 : jsDay;
 }
 
+// LOOK DEL DÍA: tema rotativo por día de la semana (L..D) para los bloques y
+// piezas sin tema fijo ("Auto"). La pantalla cambia de paleta sola cada día.
+const DAY_THEMES = ['azul', 'lima', 'carbon', 'rojo', 'azul', 'lima', 'carbon'];
+function dayTheme(date) {
+  return DAY_THEMES[(dayNumber(date || todayKey()) - 1) % DAY_THEMES.length];
+}
+
 function itemApplies(item, date) {
   const d = String(date || todayKey()).slice(0, 10);
   if (item.enabled === false) return false;
@@ -175,7 +182,7 @@ function read(options = {}) {
   const library = normalizeLibrary(readJson(LIBRARY_FILE, DEFAULT_LIBRARY));
   const date = options.date || todayKey();
   if (!Array.isArray(rundown.slots)) rundown.slots = [];
-  return { rundown, library, libraryKeys: LIBRARY_KEYS, activeDate: date, daily: dailyPack(library, date), report: report(rundown, library, date) };
+  return { rundown, library, libraryKeys: LIBRARY_KEYS, activeDate: date, dayTheme: dayTheme(date), daily: dailyPack(library, date), report: report(rundown, library, date) };
 }
 
 function save(rundown, options = {}) {
@@ -253,10 +260,23 @@ function slotPayload(slot, library, date) {
     };
   }
   if (s.source === 'worker') {
+    // Dato automático REAL desde la caché de workers internos (si está vigente).
+    const rec = require('./workers').get(s.workerKey);
+    if (rec && rec.data) {
+      return {
+        title: rec.data.title,
+        subtitle: rec.data.subtitle || s.subtitle || '',
+        body: rec.data.body || '',
+        date: rec.data.date || '',
+        template: s.template || 'dato',
+        theme: s.theme || '',
+        missing: false,
+      };
+    }
     return {
       title: s.title || s.label,
-      subtitle: s.subtitle || 'Pendiente de worker',
-      body: s.body || `Conectar worker: ${s.workerKey}`,
+      subtitle: s.subtitle || 'Dato automático pendiente',
+      body: s.body || `Sin datos recientes de "${s.workerKey}"`,
       template: s.template || 'noticia',
       theme: s.theme || 'azul',
       missing: true,
@@ -274,7 +294,8 @@ function toCard(slot, library, order, date) {
     enabled: s.enabled,
     type: 'generated',
     template: p.template || s.template || 'noticia',
-    theme: p.theme || s.theme || null,
+    // Sin tema fijo → look del día (paleta rotativa determinista).
+    theme: p.theme || s.theme || dayTheme(date),
     title: p.title || s.title || s.label,
     subtitle: p.subtitle || s.subtitle || '',
     body: p.body || s.body || '',
@@ -320,4 +341,4 @@ function materialize(options = {}) {
   return { ok: true, count: generated.length, cards: generated, report: rep };
 }
 
-module.exports = { read, save, saveLibrary, saveDay, reset, materialize, RUNDOWN_FILE, LIBRARY_FILE };
+module.exports = { read, save, saveLibrary, saveDay, reset, materialize, dayTheme, RUNDOWN_FILE, LIBRARY_FILE };
