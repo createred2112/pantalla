@@ -27,8 +27,8 @@ const DEFAULT_LIBRARY = {
     { title: 'Hoy también pasó algo que merece memoria.', subtitle: 'Efeméride', body: 'Añade aquí efemérides locales o históricas.', template: 'noticia', theme: 'carbon' },
   ],
   consejosInformaticos: [
-    { title: 'Actualiza antes de apagar', subtitle: 'Consejo informático', body: 'Un sistema actualizado evita sustos y pérdidas de tiempo.', template: 'noticia', theme: 'azul' },
-    { title: 'Activa la verificación en dos pasos', subtitle: 'Consejo informático', body: 'Es la barrera más sencilla contra robos de cuentas.', template: 'noticia', theme: 'lima' },
+    { title: 'Actualiza antes de apagar', subtitle: 'Consejo · por Fast2Computer', body: 'Un sistema actualizado evita sustos y pérdidas de tiempo.', template: 'noticia', theme: 'azul' },
+    { title: 'Activa la verificación en dos pasos', subtitle: 'Consejo · por Fast2Computer', body: 'Es la barrera más sencilla contra robos de cuentas.', template: 'noticia', theme: 'lima' },
   ],
   comentariosSemana: [
     { title: 'La conversación también es ciudad.', subtitle: 'Comentario de la semana', body: 'Selecciona aquí un comentario destacado de GasteizBerri.', template: 'cita', theme: 'carbon' },
@@ -61,6 +61,9 @@ const DEFAULT_RUNDOWN = {
     library('efemeride_hoy', 'Efeméride hoy', 'efemerides'),
     fixed('agenda', 'Agenda', 'agenda', 'blanco', 'Agenda', '', '19:30 | Actividad pendiente | Lugar\n20:00 | Añade eventos | Vitoria-Gasteiz', 10, false),
     library('consejo_informatico', 'Consejo informático', 'consejosInformaticos'),
+    fixed('cortesia', 'Cortesía Fast2Computer', 'noticia', 'carbon',
+      'Fast2Computer', 'Esta pantalla es posible gracias a',
+      'Tu tienda de informática en Vitoria-Gasteiz · fast2computer.com', 6, false),
     library('comentario_semana', 'Comentario de la semana', 'comentariosSemana'),
     fixed('cierre', 'Cierre', 'mensaje', 'carbon', 'Seguimos en GasteizBerri', 'gasteizberri.com', '', 5, true),
   ],
