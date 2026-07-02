@@ -1,6 +1,6 @@
 {
   "name": "pantalla",
-  "version": "0.35.0",
+  "version": "0.36.0",
   "description": "Motor de cartelería digital para LA PANTALLA (gasteizberri): genera JPGs con texto/foto variables, importa JPGs de otro worker, ordena y renombra la secuencia, y sube por FTP sobreescribiendo. Incluye panel móvil de admin, logs y status.",
   "type": "commonjs",
   "main": "src/server.js",

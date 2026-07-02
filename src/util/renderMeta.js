@@ -61,7 +61,7 @@ function renderHash(card) {
     data: card.data || null,
     photo: fileSig(card.photo),
     video: card.video === true,
-    motion: card.video ? 2 : null, // versión de la coreografía de animación
+    motion: card.video ? 3 : null, // versión de la coreografía de animación
     videoIntro: card.video ? fileSig(card.videoIntro) : null,
     videoOutro: card.video ? fileSig(card.videoOutro) : null,
     duration: card.video ? (Number(card.duration) || 0) : null, // el MP4 depende de la duración

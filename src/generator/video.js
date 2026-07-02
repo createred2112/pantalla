@@ -14,11 +14,14 @@ const renderGuard = require('../util/renderGuard');
 
 // Se inyecta en la página: crea una coreografía completa (en pausa) y expone
 // __setT(ms). No usa azar: el MP4 se renderiza igual en cada ejecución.
-// Estilo: editorial y sobrio. Entradas escalonadas limpias (fade + leve
-// subida), titular con revelado horizontal, Ken Burns muy sutil en la foto y
-// fundido de salida. Nada de barridos, destellos, blur ni rebotes.
+// Estilo BROADCAST (informativos): cortina de color que descubre la cartela,
+// textos revelados por una barra de acento que los recorre, todo entra en la
+// misma dirección con easing duro y seco, y cierre con cortina para encadenar.
 function setupAnim(durMs, motion) {
-  const easeOut = 'cubic-bezier(.22,.61,.36,1)';
+  const W = window.innerWidth;
+  const accent = motion.accent || '#D6FF00';
+  const easeExpo = 'cubic-bezier(.16,1,.3,1)';  // sale disparado, aterriza clavado
+  const easeSnap = 'cubic-bezier(.7,0,.2,1)';   // planos: duro y seco
   const animations = [];
 
   document.documentElement.style.background = '#000';
@@ -30,8 +33,24 @@ function setupAnim(durMs, motion) {
     return a;
   }
 
-  // Fondo: Ken Burns lento y contenido SOLO si hay foto. Los fondos planos se
-  // quedan quietos: el color es parte del diseño, no hace falta moverlo.
+  function overlay(css) {
+    const el = document.createElement('div');
+    el.style.cssText = 'position:absolute;pointer-events:none;' + css;
+    document.body.appendChild(el);
+    return el;
+  }
+
+  // ===== 1) CORTINA DE APERTURA: plano de acento que sale hacia la derecha
+  // descubriendo la cartela. Firma de la casa; hace el encadenado entre
+  // cartelas animadas totalmente continuo (todas abren y cierran en acento).
+  const OPEN_MS = 600;
+  const plane = overlay(`inset:0;background:${accent};z-index:999;`);
+  add(plane, [
+    { transform: 'translateX(0)' },
+    { transform: 'translateX(102%)' },
+  ], { duration: OPEN_MS, delay: 60, easing: easeSnap });
+
+  // ===== 2) Fondo foto: Ken Burns lento (los fondos planos, quietos).
   const bg = document.querySelector('#bgimg');
   if (bg) {
     bg.style.transformOrigin = '50% 45%';
@@ -41,6 +60,27 @@ function setupAnim(durMs, motion) {
     ], { duration: durMs, easing: 'linear' });
   }
 
+  // Revelado con BARRA VIAJERA: el texto se descubre de izquierda a derecha
+  // mientras una barra de acento recorre su borde (el gesto de los rótulos
+  // de informativo). La barra se mide sobre el layout ya autoajustado.
+  function barReveal(el, delay, dur) {
+    add(el, [
+      { clipPath: 'inset(-4% 100% -4% -1%)' },
+      { clipPath: 'inset(-4% -2% -4% -1%)' },
+    ], { duration: dur, delay, easing: easeExpo });
+    const r = el.getBoundingClientRect();
+    if (r.width < 8 || r.height < 8) return;
+    const bw = Math.max(6, Math.round(W * 0.006));
+    const bar = overlay(`left:${Math.round(r.left - bw)}px;top:${Math.round(r.top - r.height * 0.04)}px;` +
+      `width:${bw}px;height:${Math.round(r.height * 1.08)}px;background:${accent};z-index:998;opacity:0;`);
+    add(bar, [
+      { transform: 'translateX(0)', opacity: 1 },
+      { transform: `translateX(${Math.round(r.width + bw * 2)}px)`, opacity: 1, offset: .88 },
+      { transform: `translateX(${Math.round(r.width + bw * 2)}px)`, opacity: 0 },
+    ], { duration: dur + 140, delay, easing: easeExpo });
+  }
+
+  // ===== 3) Contenido: TODO entra de izquierda a derecha, escalonado y seco.
   const els = [].slice.call(document.querySelectorAll('.el'));
   const textEls = els.filter((el) => el.dataset.kind === 'text');
   const hero = textEls.reduce((best, el) => {
@@ -49,46 +89,52 @@ function setupAnim(durMs, motion) {
     return !best || area > best.area ? { el, area } : best;
   }, null);
 
+  const T0 = OPEN_MS - 140; // el contenido pisa el final de la cortina
   let order = 0;
   els.forEach((el) => {
     const kind = el.dataset.kind || 'item';
     const isHero = hero && hero.el === el;
-    const delay = 160 + order * 110;
+    const delay = T0 + order * 90;
     order++;
     el.style.willChange = 'transform, opacity, clip-path';
 
-    // Bandas y rectángulos: crecen desde su borde izquierdo, por delante del texto.
+    // Bandas/planos de color: entran deslizando desde la izquierda.
     if (kind === 'rect' || kind === 'band') {
-      el.style.transformOrigin = '0% 50%';
       add(el, [
-        { opacity: 0, transform: 'scaleX(.001)' },
-        { opacity: 1, transform: 'scaleX(1)' },
-      ], { duration: 500, delay: Math.max(60, delay - 140), easing: easeOut });
+        { transform: 'translateX(-103%)' },
+        { transform: 'translateX(0)' },
+      ], { duration: 520, delay: Math.max(T0 - 80, delay - 120), easing: easeExpo });
       return;
     }
 
-    // Titular protagonista: revelado horizontal limpio.
-    if (kind === 'text' && isHero) {
-      add(el, [
-        { opacity: 0, clipPath: 'inset(0 100% 0 0)', transform: 'translate3d(0,14px,0)' },
-        { opacity: 1, clipPath: 'inset(0 -2% 0 0)', transform: 'translate3d(0,0,0)' },
-      ], { duration: 700, delay, easing: easeOut });
+    // Chips y titular: revelado con barra viajera (el hero, más lento y regio).
+    if (kind === 'chip' || (kind === 'text' && isHero)) {
+      barReveal(el, delay, isHero ? 680 : 480);
       return;
     }
 
-    // Todo lo demás (textos, chips, logo): fade + subida leve, escalonado.
+    // Resto (textos secundarios, logo, svg): revelado seco sin barra.
+    if (kind === 'text' || kind === 'svg') {
+      add(el, [
+        { clipPath: 'inset(-4% 100% -4% -1%)' },
+        { clipPath: 'inset(-4% -2% -4% -1%)' },
+      ], { duration: 460, delay, easing: easeExpo });
+      return;
+    }
     add(el, [
-      { opacity: 0, transform: 'translate3d(0,18px,0)' },
-      { opacity: 1, transform: 'translate3d(0,0,0)' },
-    ], { duration: 540, delay, easing: easeOut });
+      { opacity: 0, transform: 'translateX(-24px)' },
+      { opacity: 1, transform: 'translateX(0)' },
+    ], { duration: 420, delay, easing: easeExpo });
   });
 
-  // Salida: fundido corto para encadenar con la siguiente cartela sin golpe.
-  const exitStart = Math.max(1000, durMs - 450);
-  add(document.body, [
-    { opacity: 1 },
-    { opacity: 0 },
-  ], { duration: 450, delay: exitStart, easing: 'ease-in' });
+  // ===== 4) CORTINA DE CIERRE: entra desde la izquierda cubriendo la cartela.
+  // La siguiente abre cubierta en acento -> el bucle encadena sin costuras.
+  const CLOSE_MS = 460;
+  const closePlane = overlay(`inset:0;background:${accent};z-index:1000;transform:translateX(-102%);`);
+  add(closePlane, [
+    { transform: 'translateX(-102%)' },
+    { transform: 'translateX(0)' },
+  ], { duration: CLOSE_MS, delay: Math.max(OPEN_MS + 400, durMs - CLOSE_MS), easing: easeSnap });
 
   window.__setT = function (ms) {
     animations.forEach((a) => {
