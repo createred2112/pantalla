@@ -106,33 +106,41 @@ function fontFamilies() {
   } catch { return ['Anton', 'Oswald', 'Archivo']; }
 }
 
+const renderMeta = require('./util/renderMeta');
+
 function renderedCandidates(card) {
   if (!card || card.type !== 'generated') return null;
   const exts = card.video ? ['mp4', 'jpg', 'jpeg', 'png', 'webp'] : ['jpg', 'jpeg', 'png', 'webp', 'mp4'];
-  const updatedMs = card.updatedAt ? Date.parse(card.updatedAt) : 0;
   const candidates = [];
+  // Frescura por HASH de contenido: un archivo es válido si se generó con el
+  // contenido actual de la cartela. (Fallback por fecha para renders antiguos
+  // sin metadatos, de antes de esta versión.)
+  const meta = renderMeta.get(card.id);
+  const freshName = (() => {
+    const f = renderMeta.isFresh(card);
+    return f ? f.name : null;
+  })();
+  const updatedMs = card.updatedAt ? Date.parse(card.updatedAt) : 0;
+  const legacyFresh = (st) => Boolean(!updatedMs || st.mtimeMs + 1000 >= updatedMs);
   const posterFile = path.join(paths.output, `${card.id}.jpg`);
   let poster = null;
   if (fs.existsSync(posterFile)) {
     const st = fs.statSync(posterFile);
-    if (!updatedMs || st.mtimeMs + 1000 >= updatedMs) {
-      poster = {
-        url: `/media/output/${encodeURIComponent(card.id)}.jpg?v=${Math.round(st.mtimeMs)}`,
-        mtimeMs: st.mtimeMs,
-      };
-    }
+    poster = { url: `/media/output/${encodeURIComponent(card.id)}.jpg?v=${Math.round(st.mtimeMs)}`, mtimeMs: st.mtimeMs };
   }
   for (const ext of exts) {
-    const file = path.join(paths.output, `${card.id}.${ext}`);
+    const name = `${card.id}.${ext}`;
+    const file = path.join(paths.output, name);
     if (!fs.existsSync(file)) continue;
     const st = fs.statSync(file);
+    const fresh = meta ? name === freshName : legacyFresh(st);
     candidates.push({
-      file: `${card.id}.${ext}`,
+      file: name,
       url: `/media/output/${encodeURIComponent(card.id)}.${ext}?v=${Math.round(st.mtimeMs)}`,
       ext,
       type: ext === 'mp4' ? 'video' : 'image',
       posterUrl: ext === 'mp4' && poster ? poster.url : null,
-      stale: Boolean(updatedMs && st.mtimeMs + 1000 < updatedMs),
+      stale: !fresh,
       mtimeMs: st.mtimeMs,
       mtime: st.mtime.toISOString(),
     });
@@ -267,7 +275,17 @@ app.put('/api/cards/:id', (req, res) => {
 });
 
 app.delete('/api/cards/:id', (req, res) => {
-  res.json({ ok: store.remove(req.params.id) });
+  const ok = store.remove(req.params.id);
+  if (ok) {
+    // Limpieza: renders huérfanos de la cartela borrada.
+    try {
+      for (const f of fs.readdirSync(paths.output)) {
+        if (f.startsWith(req.params.id + '.')) fs.rmSync(path.join(paths.output, f), { force: true });
+      }
+      renderMeta.remove(req.params.id);
+    } catch {}
+  }
+  res.json({ ok });
 });
 
 app.post('/api/cards/:id/render', async (req, res) => {
@@ -275,10 +293,11 @@ app.post('/api/cards/:id/render', async (req, res) => {
   if (!card) return res.status(404).json({ error: 'no existe' });
   if (card.type !== 'generated') return res.status(400).json({ error: 'solo cartelas generadas' });
   try {
-    const file = await require('./pipeline/generate').renderOne(card);
+    // El botón ⟳ es la orden EXPLÍCITA del usuario: regenera siempre.
+    const r = await require('./pipeline/generate').renderOne(card, { force: true });
     try { await require('./generator/htmlRender').close(); } catch {}
-    log.info('generate', `Render manual ${card.id} -> ${file}`);
-    res.json({ ok: true, file, rendered: renderedInfo(card) });
+    log.info('generate', `Render manual ${card.id} -> ${r.file}`);
+    res.json({ ok: true, file: r.file, rendered: renderedInfo(card) });
   } catch (e) {
     try { await require('./generator/htmlRender').close(); } catch {}
     log.error('generate', `FALLO render manual ${card.id}: ${e.message}`);
@@ -317,12 +336,21 @@ app.post('/api/font', fontUpload.single('font'), (req, res) => {
   res.json({ ok: true, file: req.file.filename, family: req.query.family });
 });
 
-// Previsualización en vivo de una card generada (no escribe en disco salvo render en memoria).
+// Previsualización de una card generada. Si existe un render FRESCO en disco
+// se sirve tal cual (cero Chromium); solo se renderiza en vivo si no hay
+// archivo válido (cartela nueva o modificada).
 app.get('/api/preview/:id', async (req, res) => {
   const card = store.list().find((c) => c.id === req.params.id);
   if (!card) return res.status(404).end();
   try {
     if (card.type === 'generated') {
+      const fresh = renderMeta.isFresh(card);
+      if (fresh && !fresh.name.endsWith('.mp4')) return res.sendFile(fresh.file);
+      if (fresh && fresh.name.endsWith('.mp4')) {
+        // Para vídeo, la vista rápida es su póster JPG si existe.
+        const poster = path.join(paths.output, `${card.id}.jpg`);
+        if (fs.existsSync(poster)) return res.sendFile(poster);
+      }
       const { buffer, ext } = await renderToBuffer(card);
       res.type(ext === 'png' ? 'image/png' : 'image/jpeg').send(buffer);
     } else if (card.file) {

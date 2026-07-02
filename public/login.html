@@ -5,12 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Acceso · LA PANTALLA</title>
 <style>
-  :root{--bg:#0b1f3a;--card:#13294b;--line:#244170;--accent:#e2231a;--txt:#eaf0fb;--muted:#9fb2d4}
+  :root{--bg:#0a1526;--bg2:#0d1e38;--card:#122544;--line:#26436e;--accent:#e2231a;--txt:#eef3fc;--muted:#9db3d8}
   *{box-sizing:border-box}
   body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
-    font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:var(--txt);padding:20px}
-  .box{width:min(94vw,380px);background:var(--card);border:1px solid var(--line);border-radius:18px;padding:26px}
-  h1{font-size:18px;margin:0 0 2px;letter-spacing:.5px}
+    font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif;
+    background:radial-gradient(900px 500px at 50% 0%,var(--bg2),var(--bg));color:var(--txt);padding:20px}
+  .box{width:min(94vw,380px);background:var(--card);border:1px solid var(--line);border-radius:18px;padding:26px;
+    box-shadow:0 24px 60px rgba(0,0,0,.5)}
+  h1{font-size:19px;margin:0 0 2px;letter-spacing:1.5px;font-weight:900}
   p.sub{color:var(--muted);font-size:13px;margin:0 0 20px}
   label{display:block;font-size:12px;color:var(--muted);margin:14px 0 5px}
   input{width:100%;background:#0a1a30;border:1px solid var(--line);color:var(--txt);border-radius:10px;padding:13px;font:inherit}
