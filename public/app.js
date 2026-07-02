@@ -638,23 +638,21 @@ $('#pilotTime').addEventListener('change', async () => {
   toast('Hora del piloto: ' + PILOT.time);
 });
 $('#pilotRun').addEventListener('click', async (e) => {
-  if (!confirm('Ejecutar el ciclo completo AHORA: traer datos automáticos, generar la escaleta de hoy y PUBLICAR a la pantalla. ¿Seguimos?')) return;
   const b = e.target;
   b.disabled = true;
-  b.textContent = '⏳ Publicando…';
-  $('#dot').style.background = '#e0a106';
+  b.textContent = '⏳ Preparando…';
   try {
-    const r = await api('/autopilot/run', { method: 'POST' });
-    $('#dot').style.background = r.published ? '#2bb673' : '#e0a106';
-    toast(`Hecho: ${r.cards} cartela(s)${r.published ? ' publicadas en pantalla ✓' : ' (no se publicó, mira Estado)'}`);
+    // Prepara el día (datos + escaleta + render) SIN publicar: se revisa abajo
+    // y se publica con el botón de siempre, que enseña el plan antes de subir.
+    const r = await api('/autopilot/run', { method: 'POST', body: JSON.stringify({ publish: false }) });
+    toast(`Escaleta de hoy lista: ${r.cards} cartela(s). Revisa abajo y pulsa Publicar.`);
     load();
     loadPilot();
   } catch (err) {
-    $('#dot').style.background = '#e2231a';
     toast('Error: ' + err.message);
   } finally {
     b.disabled = false;
-    b.textContent = '▶ Ahora';
+    b.textContent = '⚡ Preparar hoy';
   }
 });
 

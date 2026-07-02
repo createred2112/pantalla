@@ -32,21 +32,27 @@ function localDay(d = new Date()) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-async function run(day, c) {
-  log.info('autopilot', `Piloto automático: generando la escaleta del ${day}`);
+async function run(day, c, opts = {}) {
+  const publishNow = opts.publish === true;
+  log.info('autopilot', `${opts.scheduled ? 'Piloto automático' : 'Preparación manual'}: escaleta del ${day}${publishNow ? '' : ' (sin publicar: revisar antes)'}`);
   // Datos frescos de los workers ANTES de materializar (tiempo, luz...).
   try { await require('./workers').refreshAll(); } catch {}
   const r = require('./rundown').materialize({ date: day });
   let pub = null;
-  if (c.publish !== false) {
+  if (publishNow) {
     pub = await require('./pipeline/publish').publish({ dryRun: false, skipImport: false });
+  } else {
+    // Solo renderiza (con caché): deja las cartelas listas para REVISAR.
+    try { await require('./pipeline/generate').generate(); } catch (e) { log.warn('autopilot', 'Fallo al renderizar: ' + e.message); }
   }
   const ok = Boolean(r.ok !== false && (!pub || pub.ok));
-  status.set('autopilot', { ok, day, cards: r.count, published: Boolean(pub && pub.ok) });
+  // Solo la ejecución PROGRAMADA marca el día como hecho: la preparación
+  // manual no debe impedir que el piloto corra a su hora.
+  if (opts.scheduled) status.set('autopilot', { ok, day, cards: r.count, published: Boolean(pub && pub.ok) });
   log[ok ? 'info' : 'warn']('autopilot',
-    `Piloto automático ${ok ? 'OK' : 'con fallos'}: ${r.count} cartela(s)` +
-    (pub ? (pub.ok ? ' · publicado en pantalla' : ' · FALLO al publicar (mira el log)') : ' · sin publicar (desactivado)'));
-  return { ok, day, cards: r.count, published: Boolean(pub && pub.ok) };
+    `${opts.scheduled ? 'Piloto automático' : 'Preparación'} ${ok ? 'OK' : 'con fallos'}: ${r.count} cartela(s)` +
+    (pub ? (pub.ok ? ' · publicado en pantalla' : ' · FALLO al publicar (mira el log)') : ' · pendiente de revisión y publicación manual'));
+  return { ok, day, cards: r.count, published: Boolean(pub && pub.ok), prepared: !publishNow };
 }
 
 async function tick() {
@@ -60,7 +66,7 @@ async function tick() {
   if (now.getHours() * 60 + now.getMinutes() < hh * 60 + mm) return; // aún no es la hora
   _running = true;
   try {
-    await run(day, c);
+    await run(day, c, { publish: c.publish !== false, scheduled: true });
   } catch (e) {
     status.set('autopilot', { ok: false, day, error: e.message });
     log.error('autopilot', 'Fallo del piloto automático: ' + e.message);
@@ -69,11 +75,12 @@ async function tick() {
   }
 }
 
-// Ejecución manual inmediata (botón "Probar ahora" del panel).
-async function runNow() {
+// Ejecución manual inmediata desde el panel. Por defecto PREPARA (datos +
+// escaleta + render) sin publicar: la publicación pasa por revisión humana.
+async function runNow(opts = {}) {
   if (_running) throw new Error('el piloto ya está ejecutándose');
   _running = true;
-  try { return await run(localDay(), conf()); }
+  try { return await run(localDay(), conf(), { publish: opts.publish === true }); }
   finally { _running = false; }
 }
 

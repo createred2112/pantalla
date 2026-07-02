@@ -510,10 +510,11 @@ app.put('/api/autopilot', (req, res) => {
   res.json({ ...c, last: autopilot.state(), workers: workers.state() });
 });
 
-// Ejecutar el ciclo completo AHORA (demo / prueba): workers + escaleta + publicar.
+// Preparar el día AHORA: workers + escaleta + render. NO publica por defecto
+// (la publicación pasa por revisión humana con el botón Publicar de siempre).
 app.post('/api/autopilot/run', async (req, res) => {
   try {
-    const r = await autopilot.runNow();
+    const r = await autopilot.runNow({ publish: Boolean(req.body && req.body.publish === true) });
     res.json({ ok: true, ...r });
   } catch (e) {
     res.status(500).json({ error: e.message });
