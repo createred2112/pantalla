@@ -88,9 +88,7 @@ function readJson(file, fallback) {
 }
 
 function writeJson(file, data) {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, JSON.stringify(data, null, 2));
-  return data;
+  return require('./util/atomicWrite').writeJsonAtomic(file, data);
 }
 
 function todayKey() {

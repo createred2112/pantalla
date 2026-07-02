@@ -4,7 +4,51 @@
 // cualquier web. Descarga la imagen destacada a data/uploads.
 const fs = require('fs');
 const path = require('path');
+const dns = require('dns').promises;
+const net = require('net');
 const { paths } = require('./config');
+
+// --- Protección SSRF: solo URLs http(s) que resuelvan a IPs públicas ---
+function isPrivateIp(ip) {
+  if (net.isIPv6(ip)) {
+    const low = ip.toLowerCase();
+    if (low === '::1' || low === '::') return true;
+    if (low.startsWith('fe80:') || low.startsWith('fc') || low.startsWith('fd')) return true;
+    // IPv4 mapeada (::ffff:x.x.x.x)
+    const m = low.match(/::ffff:(\d+\.\d+\.\d+\.\d+)$/);
+    return m ? isPrivateIp(m[1]) : false;
+  }
+  const p = ip.split('.').map(Number);
+  if (p.length !== 4 || p.some((n) => Number.isNaN(n))) return true;
+  return (
+    p[0] === 0 || p[0] === 10 || p[0] === 127 ||
+    (p[0] === 100 && p[1] >= 64 && p[1] <= 127) ||     // CGNAT
+    (p[0] === 169 && p[1] === 254) ||                   // link-local / metadata cloud
+    (p[0] === 172 && p[1] >= 16 && p[1] <= 31) ||
+    (p[0] === 192 && p[1] === 168) ||
+    p[0] >= 224                                         // multicast/reservado
+  );
+}
+
+async function assertPublicUrl(u) {
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') {
+    throw new Error('Solo se admiten URLs http(s)');
+  }
+  const host = u.hostname.replace(/^\[|\]$/g, '');
+  if (net.isIP(host)) {
+    if (isPrivateIp(host)) throw new Error('URL no permitida (dirección interna)');
+    return;
+  }
+  if (host === 'localhost' || host.endsWith('.local') || host.endsWith('.internal')) {
+    throw new Error('URL no permitida (dirección interna)');
+  }
+  let addrs;
+  try { addrs = await dns.lookup(host, { all: true }); }
+  catch { throw new Error('No se pudo resolver el dominio'); }
+  if (addrs.some((a) => isPrivateIp(a.address))) {
+    throw new Error('URL no permitida (resuelve a una dirección interna)');
+  }
+}
 
 function strip(s) {
   return String(s || '')
@@ -19,7 +63,20 @@ async function fetchT(url, opts = {}) {
   const c = new AbortController();
   const t = setTimeout(() => c.abort(), 9000);
   try {
-    return await fetch(url, { signal: c.signal, redirect: 'follow', headers: { 'user-agent': 'Mozilla/5.0 (PantallaBot; gasteizberri)' }, ...opts });
+    // Redirecciones a mano: cada salto se valida contra IPs internas.
+    let current = String(url);
+    for (let hop = 0; hop < 5; hop++) {
+      const u = new URL(current);
+      await assertPublicUrl(u);
+      const r = await fetch(u, { signal: c.signal, redirect: 'manual', headers: { 'user-agent': 'Mozilla/5.0 (PantallaBot; gasteizberri)' }, ...opts });
+      const loc = r.headers.get('location');
+      if (r.status >= 300 && r.status < 400 && loc) {
+        current = new URL(loc, u).href;
+        continue;
+      }
+      return r;
+    }
+    throw new Error('Demasiadas redirecciones');
   } finally { clearTimeout(t); }
 }
 
@@ -90,6 +147,7 @@ function jsonLd(html) {
 async function extract(url) {
   let u;
   try { u = new URL(url); } catch { throw new Error('URL no válida'); }
+  await assertPublicUrl(u);
 
   // 1) WordPress REST API por slug.
   const slug = u.pathname.split('/').filter(Boolean).pop();

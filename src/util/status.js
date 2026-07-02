@@ -15,9 +15,7 @@ function read() {
 }
 
 function write(state) {
-  fs.mkdirSync(paths.logs, { recursive: true });
-  fs.writeFileSync(STATUS_FILE, JSON.stringify(state, null, 2));
-  return state;
+  return require('./atomicWrite').writeJsonAtomic(STATUS_FILE, state);
 }
 
 // Marca el resultado de una etapa (generate | sequence | upload | import).

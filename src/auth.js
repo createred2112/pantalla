@@ -35,8 +35,7 @@ function loadAdmins() {
   }
 }
 function saveAdmins(admins) {
-  fs.mkdirSync(path.dirname(ADMINS_FILE), { recursive: true });
-  fs.writeFileSync(ADMINS_FILE, JSON.stringify({ admins }, null, 2), { mode: 0o600 });
+  require('./util/atomicWrite').writeJsonAtomic(ADMINS_FILE, { admins }, { mode: 0o600 });
 }
 
 function hashPassword(password, salt = crypto.randomBytes(16).toString('hex')) {
@@ -142,8 +141,9 @@ function noteSuccess(ip) { attempts.delete(ip); }
 // Usuario autenticado de una petición (cookie de sesión o token de máquina).
 function userOf(req) {
   // Token de máquina (para automatizaciones: cron, worker, etc.)
+  // Solo por cabecera: en la URL acabaría en logs del proxy e historiales.
   if (env.panelToken) {
-    const t = req.headers['x-panel-token'] || req.query.token;
+    const t = req.headers['x-panel-token'];
     if (t && safeEqual(String(t), env.panelToken)) return { user: 'token', machine: true };
   }
   const cookies = parseCookies(req);

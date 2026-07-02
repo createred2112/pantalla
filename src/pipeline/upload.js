@@ -42,9 +42,10 @@ async function upload({ dryRun, files: plannedFiles } = {}) {
       user: ftpCfg.user,
       password: ftpCfg.password,
       secure: ftpCfg.secure,
-      // Acepta certificados TLS auto-firmados / con nombre no coincidente (FTPS
-      // de paneles como CloudPanel). El canal sigue cifrado.
-      secureOptions: { rejectUnauthorized: false },
+      // Por defecto se verifica el certificado TLS. Para servidores con
+      // certificado auto-firmado (algunos paneles), activar ftp.allowInvalidCert
+      // en la config o FTP_ALLOW_INVALID_CERT=true en .env.
+      secureOptions: { rejectUnauthorized: !ftpCfg.allowInvalidCert },
     });
     log.info('upload', `Conectado a ${ftpCfg.host}:${ftpCfg.port} (secure=${ftpCfg.secure})`);
 
@@ -97,7 +98,7 @@ async function testFtpConnection() {
       user: ftpCfg.user,
       password: ftpCfg.password,
       secure: ftpCfg.secure,
-      secureOptions: { rejectUnauthorized: false },
+      secureOptions: { rejectUnauthorized: !ftpCfg.allowInvalidCert },
     });
     steps.push('Conexión OK');
 

@@ -14,8 +14,7 @@ function get(id) { return load()[id] || null; }
 function set(id, layout) {
   const d = load();
   if (layout && Array.isArray(layout.elements)) d[id] = layout; else delete d[id];
-  fs.mkdirSync(path.dirname(FILE), { recursive: true });
-  fs.writeFileSync(FILE, JSON.stringify(d, null, 2));
+  require('./util/atomicWrite').writeJsonAtomic(FILE, d);
   return d;
 }
 module.exports = { load, get, set };

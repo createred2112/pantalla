@@ -3,6 +3,7 @@
 // Cada card es una pantalla de la secuencia.
 const fs = require('fs');
 const { paths, cfg } = require('./config');
+const { writeJsonAtomic } = require('./util/atomicWrite');
 
 function id() {
   return 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
@@ -19,9 +20,7 @@ function load() {
 }
 
 function save(data) {
-  fs.mkdirSync(require('path').dirname(paths.data), { recursive: true });
-  fs.writeFileSync(paths.data, JSON.stringify(data, null, 2));
-  return data;
+  return writeJsonAtomic(paths.data, data);
 }
 
 function list() {

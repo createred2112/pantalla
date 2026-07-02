@@ -84,6 +84,9 @@ function ftpConfig() {
     secure: usesConfig ? String(f.secure || false) === 'true' : (process.env.FTP_SECURE != null ? String(process.env.FTP_SECURE) === 'true' : String(f.secure || false) === 'true'),
     remoteDir: f.remoteDir || '/',
     clearRemoteFirst: f.clearRemoteFirst === true,
+    // Aceptar certificados TLS inválidos (auto-firmados) SOLO si se pide
+    // explícitamente; por defecto se verifica el certificado del servidor.
+    allowInvalidCert: f.allowInvalidCert === true || String(process.env.FTP_ALLOW_INVALID_CERT || '') === 'true',
     source: {
       host: f.host ? 'config' : 'env',
       user: f.user ? 'config' : 'env',
@@ -108,7 +111,7 @@ function deepMerge(target, src) {
 // que los renders los usen ya) y reescribe el JSON en disco.
 function saveConfig(partial) {
   deepMerge(cfg, partial);
-  fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2));
+  require('./util/atomicWrite').writeJsonAtomic(CONFIG_PATH, cfg);
   return cfg;
 }
 
