@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>PANTALLA · gasteizberri</title>
+<link rel="stylesheet" href="/api/fontcss">
 <style>
   :root{
     --bg:#0a1526; --bg2:#0d1e38; --card:#122544; --line:#26436e; --line2:#345a91;
@@ -164,25 +165,104 @@
   @media (max-width:380px){
     header>a.ghost,header>button.ghost{flex-basis:calc(50% - 8px)}
   }
+
+  /* ===== Capa de rediseño v0.29 (sobrescribe lo anterior) ===== */
+  :root{--bg:#091220;--bg2:#0e2036;--card:#12233f;--line:#264169;--line2:#33568c}
+  h1{font-family:'Anton','Oswald',system-ui,sans-serif;font-weight:400;font-size:19px;letter-spacing:3px;text-transform:uppercase}
+  header{gap:8px;padding:10px 14px;flex-wrap:nowrap}
+  header h1{flex:0 0 auto}
+  #who{font-size:12px;color:var(--muted)}
+  .navbtn{display:inline-flex;align-items:center;gap:7px;padding:9px 12px;border-radius:10px;font-size:13px;
+    text-decoration:none;color:var(--muted);background:transparent;border:1px solid var(--line);white-space:nowrap}
+  .navbtn:hover{color:var(--txt);background:rgba(38,65,105,.35)}
+  .navbtn .ico{font-size:14px;line-height:1}
+
+  /* Herramientas: la Escaleta manda */
+  .bar{gap:10px;align-items:stretch}
+  .tool{flex:1;display:flex;align-items:center;gap:11px;text-align:left;background:var(--card);
+    border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;box-shadow:var(--shadow)}
+  .tool:hover{background:#16294a;border-color:var(--line2)}
+  .tool .ico{font-size:22px;line-height:1}
+  .tool-txt b{display:block;font-size:14px;letter-spacing:.3px}
+  .tool-txt small{display:block;color:var(--muted);font-size:11px;margin-top:2px;font-weight:400}
+  .tool.featured{border-color:rgba(226,35,26,.5);background:linear-gradient(135deg,rgba(226,35,26,.18),var(--card) 60%)}
+  .tool.featured:hover{border-color:var(--accent)}
+  .tool.sq{flex:0 0 52px;justify-content:center;font-size:19px;padding:0}
+
+  .list-head{display:flex;align-items:baseline;gap:10px;margin:20px 2px 10px}
+  .list-head h2{font-size:12px;margin:0;letter-spacing:2px;text-transform:uppercase;color:var(--muted);font-weight:800}
+  .hint2{font-size:12px;color:var(--muted);opacity:.9;margin-left:auto;text-align:right}
+
+  /* Numeración de emisión sobre cada cartela */
+  #list{counter-reset:cardn}
+  #list .card{counter-increment:cardn;position:relative}
+  #list .card::before{content:counter(cardn,decimal-leading-zero);position:absolute;top:10px;left:10px;z-index:3;
+    background:rgba(4,9,18,.8);border:1px solid var(--line2);color:#fff;font-weight:900;font-size:12px;
+    padding:4px 9px;border-radius:8px;letter-spacing:1px;backdrop-filter:blur(4px)}
+
+  /* Accesibilidad: foco visible y toques cómodos */
+  button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{
+    outline:2px solid var(--accent2);outline-offset:2px}
+  input,textarea,select{transition:border-color .15s}
+  input:focus,textarea:focus,select:focus{border-color:var(--line2)}
+  .iconbtn{min-width:40px;min-height:40px}
+
+  /* Pie: publicar es la acción reina */
+  .footbar #btnPublish{flex:1.7}
+  .footbar .ghost{color:var(--txt)}
+
+  /* Franjas de estado y resumen */
+  .status{background:rgba(18,35,63,.5);border:1px solid var(--line);border-radius:10px;padding:9px 12px;margin-top:6px}
+  .toast{background:rgba(9,18,32,.96);border-color:var(--line2);box-shadow:0 10px 30px rgba(0,0,0,.5);font-size:13px}
+  .dlg-h{background:linear-gradient(180deg,rgba(38,65,105,.3),transparent)}
+  .empty{padding:52px 14px;border:1px dashed var(--line);border-radius:var(--r);background:rgba(18,35,63,.35)}
+
+  /* Scrollbars finos donde hay scroll interno */
+  .timeline::-webkit-scrollbar,#log::-webkit-scrollbar,.dlg-b::-webkit-scrollbar{height:8px;width:8px}
+  .timeline::-webkit-scrollbar-thumb,#log::-webkit-scrollbar-thumb,.dlg-b::-webkit-scrollbar-thumb{background:var(--line);border-radius:99px}
+  .timeline::-webkit-scrollbar-track,#log::-webkit-scrollbar-track,.dlg-b::-webkit-scrollbar-track{background:transparent}
+
+  @media (max-width:640px){
+    header>a.ghost,header>button.ghost{flex:0 0 auto;padding:9px 10px!important;font-size:13px!important}
+    .navbtn .lbl{display:none}
+    header h1{font-size:16px;letter-spacing:2px;flex:1}
+    .tool-txt small{display:none}
+    .tool{padding:11px 12px}
+    .tool.sq{flex-basis:46px}
+  }
+  @media (prefers-reduced-motion:reduce){
+    *{transition:none!important;animation:none!important}
+  }
 </style>
 </head>
 <body>
 <header>
-  <span class="dot" id="dot"></span>
+  <span class="dot" id="dot" title="Estado del sistema"></span>
   <h1>LA PANTALLA</h1>
   <span class="version-badge" id="versionBadge">v…</span>
-  <span id="who" style="font-size:12px;color:var(--muted)"></span>
-  <a href="/galeria.html" class="ghost" style="text-decoration:none;padding:11px 14px;border-radius:10px;background:var(--line);color:#fff;font-size:14px">Galería</a>
-  <button class="ghost" id="btnSettings">Ajustes</button>
-  <button class="ghost" id="btnStatus">Estado</button>
-  <button class="ghost" id="btnLogout" title="Cerrar sesión">Salir</button>
+  <span id="who"></span>
+  <span class="spacer"></span>
+  <a href="/galeria.html" class="ghost navbtn"><span class="ico">🖼</span><span class="lbl">Galería</span></a>
+  <button class="ghost navbtn" id="btnSettings"><span class="ico">⚙️</span><span class="lbl">Ajustes</span></button>
+  <button class="ghost navbtn" id="btnStatus"><span class="ico">📊</span><span class="lbl">Estado</span></button>
+  <button class="ghost navbtn" id="btnLogout" title="Cerrar sesión"><span class="ico">⏻</span><span class="lbl">Salir</span></button>
 </header>
 
 <main>
   <div class="bar">
-    <button class="ghost" id="btnRundown">Escaleta</button>
-    <button class="ghost" id="btnImport">Importar worker</button>
-    <button class="ghost" id="btnRefresh">↻ Refrescar</button>
+    <button class="tool featured" id="btnRundown">
+      <span class="ico">🗓</span>
+      <span class="tool-txt"><b>Escaleta</b><small>Orden del día y contenido programado</small></span>
+    </button>
+    <button class="tool" id="btnImport">
+      <span class="ico">📥</span>
+      <span class="tool-txt"><b>Importar</b><small>Archivos del worker</small></span>
+    </button>
+    <button class="tool sq" id="btnRefresh" title="Refrescar la lista">↻</button>
+  </div>
+  <div class="list-head">
+    <h2>Secuencia en pantalla</h2>
+    <span class="hint2" id="listSummary"></span>
   </div>
   <div id="list"></div>
   <div class="status" id="statusLine"></div>

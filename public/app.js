@@ -273,9 +273,17 @@ async function load() {
 
 function render() {
   const el = $('#list');
+  const sum = $('#listSummary');
   if (!cards.length) {
-    el.innerHTML = '<div class="empty">No hay cartelas todavía.<br>Pulsa ＋ para crear la primera.</div>';
+    el.innerHTML = '<div class="empty">No hay cartelas todavía.<br>Crea la primera con ＋ o genera el día con la Escaleta.</div>';
+    if (sum) sum.textContent = '';
     return;
+  }
+  if (sum) {
+    const act = cards.filter((c) => c.enabled !== false);
+    const secs = act.reduce((n, c) => n + (Number(c.duration) || 10), 0);
+    const pending = cards.filter((c) => c.type === 'generated' && !c.rendered).length;
+    sum.textContent = `${act.length} activa(s) · vuelta de ${secs}s${pending ? ` · ${pending} por generar` : ''}`;
   }
   el.innerHTML = '';
   cards.forEach((c, i) => {
