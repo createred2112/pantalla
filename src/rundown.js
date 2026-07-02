@@ -191,11 +191,27 @@ function read(options = {}) {
   return { rundown, library, libraryKeys: LIBRARY_KEYS, activeDate: date, dayTheme: dayTheme(date), workers, daily: dailyPack(library, date), report: report(rundown, library, date) };
 }
 
+// Saltos por día: rundown.days = { 'YYYY-MM-DD': { skip: [slotId, ...] } }.
+// "Activa" apaga un bloque para SIEMPRE; skip lo salta SOLO ese día.
+function cleanDays(days) {
+  const out = {};
+  for (const [d, v] of Object.entries(days && typeof days === 'object' ? days : {})) {
+    const skip = Array.isArray(v && v.skip) ? [...new Set(v.skip.map(String).filter(Boolean))] : [];
+    if (skip.length) out[String(d).slice(0, 10)] = { skip };
+  }
+  return out;
+}
+
+function skipSetFor(rundown, date) {
+  return new Set((((rundown.days || {})[date] || {}).skip) || []);
+}
+
 function save(rundown, options = {}) {
   const next = {
     title: rundown.title || 'Escaleta',
     updatedAt: new Date().toISOString(),
     slots: Array.isArray(rundown.slots) ? rundown.slots.map(normalizeSlot) : [],
+    days: cleanDays(rundown.days),
   };
   writeJson(RUNDOWN_FILE, next);
   return read(options);
@@ -323,10 +339,12 @@ function toCard(slot, library, order, date) {
 }
 
 function report(rundown, library, date) {
+  const skip = skipSetFor(rundown, date);
   return (rundown.slots || []).map((slot, i) => {
     const s = normalizeSlot(slot);
     const p = slotPayload(s, library, date);
-    const missing = s.enabled && (p.missing || !p.title);
+    const skippedToday = skip.has(s.id);
+    const missing = s.enabled && !skippedToday && (p.missing || !p.title);
     return {
       id: s.id,
       order: i + 1,
@@ -339,6 +357,7 @@ function report(rundown, library, date) {
       title: p.title || '',
       subtitle: p.subtitle || '',
       missing: Boolean(missing),
+      skippedToday,
       note: missing ? (s.source === 'worker' ? `Pendiente worker: ${s.workerKey}` : 'Pendiente de contenido') : '',
     };
   });
@@ -346,7 +365,8 @@ function report(rundown, library, date) {
 
 function materialize(options = {}) {
   const { rundown, library, activeDate, report: rep } = read(options);
-  const active = (rundown.slots || []).filter((s) => s.enabled !== false);
+  const skip = skipSetFor(rundown, activeDate);
+  const active = (rundown.slots || []).filter((s) => s.enabled !== false && !skip.has(String(s.id)));
   const generated = active.map((slot, i) => toCard(slot, library, i + 1, activeDate));
   const manual = store.list()
     .filter((card) => card.source !== 'rundown')

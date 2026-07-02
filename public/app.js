@@ -733,9 +733,11 @@ function renderRundown() {
   if (RUNDOWN_SELECTED >= slots.length) RUNDOWN_SELECTED = -1;
   $('#rundownTitle').value = rd.title || 'Escaleta';
   $('#rundownDate').value = RUNDOWN.activeDate || new Date().toISOString().slice(0, 10);
-  const active = slots.filter((s) => s.enabled !== false).length;
-  const missing = ((RUNDOWN.report || []).filter((r) => r.missing)).length;
-  const secs = slots.reduce((n, s) => n + (s.enabled === false ? 0 : (Number(s.duration) || 8)), 0);
+  const rep = RUNDOWN.report || [];
+  const emits = (s, i) => s.enabled !== false && !(rep[i] && rep[i].skippedToday);
+  const active = slots.filter(emits).length;
+  const missing = rep.filter((r) => r.missing).length;
+  const secs = slots.reduce((n, s, i) => n + (emits(s, i) ? (Number(s.duration) || 8) : 0), 0);
   $('#rundownSummary').innerHTML =
     `La pantalla dará una vuelta de <b>${secs}s</b> con <b>${active}</b> bloques` +
     (missing ? ` · <b style="color:#e0a106">⚠ ${missing} sin contenido</b>` : ' · <b style="color:#bff0d5">todo listo ✓</b>') +
@@ -761,16 +763,17 @@ function sbCardHtml(s, i) {
   const srcIco = s.source === 'library' ? '🔁' : (s.source === 'worker' ? '⚙️' : '✍️');
   const srcTitle = s.source === 'library' ? `Rota: cada día una pieza de «${libLabel(s.libraryKey)}»`
     : (s.source === 'worker' ? 'Automático: se rellena solo con datos reales' : 'Escrito por ti');
-  const say = rep.missing ? (rep.note || 'sin contenido todavía') : (rep.title || s.title || '—');
+  const say = rep.skippedToday ? 'no se emite este día'
+    : (rep.missing ? (rep.note || 'sin contenido todavía') : (rep.title || s.title || '—'));
   const sel = i === RUNDOWN_SELECTED;
-  return `<button type="button" class="sb-card ${sel ? 'sel' : ''} ${s.enabled === false ? 'off' : ''} ${rep.missing ? 'missing' : ''}" data-slot-open="${i}" title="${esc(srcTitle)}">
+  return `<button type="button" class="sb-card ${sel ? 'sel' : ''} ${s.enabled === false || rep.skippedToday ? 'off' : ''} ${rep.missing ? 'missing' : ''}" data-slot-open="${i}" title="${esc(srcTitle)}">
     <div class="sb-thumb">${srcIco}
       <img src="/media/output/rd_${encodeURIComponent(s.id)}.jpg?v=${RD_STAMP}" alt="" loading="lazy" onerror="this.remove()">
       <span class="sb-num">${String(i + 1).padStart(2, '0')}</span>
       <span class="sb-dur">${Number(s.duration) || 8}s${s.video ? ' ▶' : ''}</span>
     </div>
     <div class="sb-meta">
-      <div class="sb-name">${srcIco} ${esc(s.label)}${s.enabled === false ? ' · APAGADO' : ''}</div>
+      <div class="sb-name">${srcIco} ${esc(s.label)}${s.enabled === false ? ' · APAGADO' : (rep.skippedToday ? ' · HOY NO' : '')}</div>
       <div class="sb-say ${rep.missing ? 'warn' : ''}">${rep.missing ? '⚠ ' : ''}${esc(say)}</div>
     </div>
   </button>`;
@@ -828,8 +831,10 @@ function slotEditHtml(s, i) {
       <label>Subtítulo<input data-rd-current="subtitle" value="${esc(s.subtitle || '')}"></label>
       <label class="slot-wide">Texto<textarea data-rd-current="body">${esc(s.body || '')}</textarea></label>`)}
       <label>Duración (segundos)<input type="number" min="1" data-rd-current="duration" value="${Number(s.duration) || 8}"></label>
-      <label><input type="checkbox" data-rd-toggle="enabled" ${s.enabled !== false ? 'checked' : ''} style="width:auto;margin-right:8px"> Activa</label>
+      <label><input type="checkbox" data-rd-toggle="enabled" ${s.enabled !== false ? 'checked' : ''} style="width:auto;margin-right:8px"> Activa (todos los días)</label>
       <label><input type="checkbox" data-rd-toggle="video" ${s.video ? 'checked' : ''} style="width:auto;margin-right:8px"> Animada (MP4)</label>
+      <label class="slot-wide" style="color:#ffd98a"><input type="checkbox" data-rd-skipday ${((((RUNDOWN.rundown || {}).days || {})[RUNDOWN.activeDate] || {}).skip || []).includes(s.id) ? 'checked' : ''} style="width:auto;margin-right:8px">
+        No emitir SOLO el ${esc(RUNDOWN.activeDate || 'día elegido')} (el resto de días sale con normalidad)</label>
     </div>
     <div class="status">${rep.missing
       ? '⚠️ ' + esc(rep.note || 'Pendiente de contenido')
@@ -1026,6 +1031,16 @@ function collectRundown() {
     wrap.querySelectorAll('[data-rd-toggle]').forEach((el) => {
       slot[el.dataset.rdToggle] = el.checked;
     });
+    // Salto SOLO para el día visible (no toca el estado global del bloque).
+    const sd = wrap.querySelector('[data-rd-skipday]');
+    if (sd) {
+      const d = RUNDOWN.activeDate || new Date().toISOString().slice(0, 10);
+      if (!rd.days || typeof rd.days !== 'object') rd.days = {};
+      const rec = rd.days[d] && typeof rd.days[d] === 'object' ? rd.days[d] : { skip: [] };
+      rec.skip = Array.isArray(rec.skip) ? rec.skip.filter((x) => x !== slot.id) : [];
+      if (sd.checked) rec.skip.push(slot.id);
+      rd.days[d] = rec;
+    }
   }
   return rd;
 }
