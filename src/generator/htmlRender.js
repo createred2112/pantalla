@@ -196,6 +196,7 @@ const AUTOFIT = `
       if(el.scrollWidth<=el.parentElement.clientWidth && el.scrollHeight<=el.parentElement.clientHeight){best=mid;lo=mid+1;} else {hi=mid-1;} }
     el.style.fontSize=best+'px';
     if(el.scrollWidth>el.parentElement.clientWidth+1 || el.scrollHeight>el.parentElement.clientHeight+1){
+      el.dataset.overflow='1'; // en vídeo se convierte en marquesina LED
       var lh=parseFloat(getComputedStyle(el).lineHeight)||best*1.05;
       var lines=Math.max(1,Math.floor(el.parentElement.clientHeight/lh));
       el.style.whiteSpace='normal';

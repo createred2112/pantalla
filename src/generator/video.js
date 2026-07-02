@@ -40,15 +40,15 @@ function setupAnim(durMs, motion) {
     return el;
   }
 
-  // ===== 1) CORTINA DE APERTURA: plano de acento que sale hacia la derecha
-  // descubriendo la cartela. Firma de la casa; hace el encadenado entre
-  // cartelas animadas totalmente continuo (todas abren y cierran en acento).
+  // ===== 1) CORTINA DE APERTURA. Dos idents que alternan de forma
+  // determinista por cartela: barrido lateral o telón vertical.
   const OPEN_MS = 600;
+  const variant = (motion.seed || 0) % 2; // 0: lateral · 1: telón
   const plane = overlay(`inset:0;background:${accent};z-index:999;`);
-  add(plane, [
-    { transform: 'translateX(0)' },
-    { transform: 'translateX(102%)' },
-  ], { duration: OPEN_MS, delay: 60, easing: easeSnap });
+  add(plane, variant === 0
+    ? [{ transform: 'translateX(0)' }, { transform: 'translateX(102%)' }]
+    : [{ transform: 'translateY(0)' }, { transform: 'translateY(-102%)' }],
+    { duration: OPEN_MS, delay: 60, easing: easeSnap });
 
   // ===== 2) Fondo foto: Ken Burns lento (los fondos planos, quietos).
   const bg = document.querySelector('#bgimg');
@@ -131,19 +131,44 @@ function setupAnim(durMs, motion) {
   // icono del tiempo) flotan suavemente mientras la cartela está en reposo.
   els.filter((el) => el.dataset.anim === 'float').forEach((el) => {
     add(el, [
-      { transform: 'translateY(-1.2%)' },
-      { transform: 'translateY(1.2%)' },
-    ], { duration: 2800, delay: T0 + 500, iterations: Math.max(1, Math.ceil(durMs / 2800)), direction: 'alternate', easing: 'ease-in-out' });
+      { transform: 'translateY(-1.6%) rotate(-1.5deg)' },
+      { transform: 'translateY(1.6%) rotate(1.5deg)' },
+    ], { duration: 2600, delay: T0 + 500, iterations: Math.max(1, Math.ceil(durMs / 2600)), direction: 'alternate', easing: 'ease-in-out' });
+  });
+  // El sol gira despacio, sin parar: vida constante sin marear.
+  els.filter((el) => el.dataset.anim === 'spin').forEach((el) => {
+    add(el, [
+      { transform: 'rotate(0deg)' },
+      { transform: 'rotate(360deg)' },
+    ], { duration: 36000, delay: 0, iterations: Math.max(1, Math.ceil(durMs / 36000)), easing: 'linear' });
   });
 
   // ===== 4) CORTINA DE CIERRE: entra desde la izquierda cubriendo la cartela.
   // La siguiente abre cubierta en acento -> el bucle encadena sin costuras.
   const CLOSE_MS = 460;
-  const closePlane = overlay(`inset:0;background:${accent};z-index:1000;transform:translateX(-102%);`);
-  add(closePlane, [
-    { transform: 'translateX(-102%)' },
-    { transform: 'translateX(0)' },
-  ], { duration: CLOSE_MS, delay: Math.max(OPEN_MS + 400, durMs - CLOSE_MS), easing: easeSnap });
+  const closePlane = overlay(`inset:0;background:${accent};z-index:1000;transform:${variant === 0 ? 'translateX(-102%)' : 'translateY(102%)'};`);
+  add(closePlane, variant === 0
+    ? [{ transform: 'translateX(-102%)' }, { transform: 'translateX(0)' }]
+    : [{ transform: 'translateY(102%)' }, { transform: 'translateY(0)' }],
+    { duration: CLOSE_MS, delay: Math.max(OPEN_MS + 400, durMs - CLOSE_MS), easing: easeSnap });
+
+  // ===== 5) MARQUESINA LED: los textos que no cupieron (elipsis en estático)
+  // se desplazan en vídeo como un rótulo luminoso, de un extremo al otro.
+  [].slice.call(document.querySelectorAll('[data-overflow="1"]')).forEach((el) => {
+    el.style.display = 'inline-block';
+    el.style.webkitLineClamp = '';
+    el.style.webkitBoxOrient = '';
+    el.style.whiteSpace = 'nowrap';
+    el.style.overflow = 'visible';
+    const travel = el.scrollWidth - el.parentElement.clientWidth;
+    if (travel < 20) return;
+    const t0 = OPEN_MS + 700;
+    const span = Math.max(1500, durMs - CLOSE_MS - 300 - t0);
+    add(el, [
+      { transform: 'translateX(0)' },
+      { transform: `translateX(-${travel}px)` },
+    ], { duration: span, delay: t0, direction: 'alternate', iterations: 1, easing: 'ease-in-out' });
+  });
 
   window.__setT = function (ms) {
     animations.forEach((a) => {
@@ -227,10 +252,13 @@ async function renderVideoToFile(card) {
     await page.setContent(html, { waitUntil: 'load' });
     try { await page.evaluate('document.fonts.ready'); } catch {}
     await page.evaluate(AUTOFIT);
+    let seed = 0;
+    for (const ch of String(card.id || '')) seed = (seed + ch.charCodeAt(0)) % 997;
     await page.evaluate(setupAnim, duration * 1000, {
       accent: ctx.theme.accent,
       text: ctx.theme.text,
       bg: ctx.theme.bg,
+      seed,
     });
     for (let i = 0; i < frames; i++) {
       await page.evaluate((ms) => window.__setT(ms), (i / fps) * 1000);

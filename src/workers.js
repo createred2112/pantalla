@@ -128,9 +128,14 @@ const PROVIDERS = {
   // Los precios de gasolina cambian una vez al día y la respuesta es enorme:
   // no hay que machacar la API cada 30 min.
   fuel: { label: 'Gasolineras Vitoria (MITECO)', fn: fuel, ttlMs: 6 * 3600000, maxAgeMs: 26 * 3600000 },
-  // poolCapacity: sin fuente pública estable; se rellena a mano o por archivo
-  // en data/worker-inbox. Añadir proveedor aquí cuando haya API.
+  // MANUAL: sin API. El contenido lo escribes TÚ en los campos del bloque
+  // (título/subtítulo/texto) y se emite tal cual hasta que lo cambies.
+  poolCapacity: { label: 'Aforo piscinas (lo escribes tú)', manual: true },
 };
+
+function isManual(key) {
+  return Boolean(PROVIDERS[key] && PROVIDERS[key].manual);
+}
 
 function maxAgeOf(key) {
   return (PROVIDERS[key] && PROVIDERS[key].maxAgeMs) || MAX_AGE_MS;
@@ -152,6 +157,7 @@ async function refreshAll(opts = {}) {
   const results = {};
   let fetched = 0;
   for (const [key, p] of Object.entries(PROVIDERS)) {
+    if (p.manual) { results[key] = { ok: true, manual: true }; continue; }
     const rec = all[key];
     const age = rec && rec.at ? Date.now() - Date.parse(rec.at) : Infinity;
     if (!opts.force && age < (p.ttlMs || 30 * 60000)) {
@@ -199,4 +205,4 @@ function start() {
   if (_timer.unref) _timer.unref();
 }
 
-module.exports = { get, refreshAll, state, start, PROVIDERS };
+module.exports = { get, refreshAll, state, start, isManual, PROVIDERS };

@@ -281,6 +281,11 @@ function slotPayload(slot, library, date) {
         missing: false,
       };
     }
+    // Worker MANUAL (p. ej. aforo piscinas): lo que escribas en el bloque
+    // ES el contenido real, no un pendiente.
+    if (require('./workers').isManual(s.workerKey) && s.title) {
+      return { title: s.title, subtitle: s.subtitle || '', body: s.body || '', date: s.date || '', template: s.template || 'dato', theme: s.theme || '', missing: false };
+    }
     return {
       title: s.title || s.label,
       subtitle: s.subtitle || 'Dato automático pendiente',

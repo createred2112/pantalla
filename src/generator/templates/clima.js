@@ -62,11 +62,12 @@ module.exports = {
       align: 'left', valign: 'center', lineHeight: 1, letterSpacingEm: -0.02,
       autofit: { min: Math.round(H * 0.22), max: Math.round(H * 0.44), lines: 1 },
     });
+    const icoKey = keyOf(card.subtitle);
     const icoS = Math.min(Math.round(H * 0.5), Math.round(W * 0.32));
     els.push({
-      type: 'svg', anim: 'float',
+      type: 'svg', anim: icoKey === 'sol' ? 'spin' : 'float', // el sol gira, el resto flota
       x: W - pad - icoS - Math.round(W * 0.03), y: Math.round(zoneY + (zoneH - icoS) / 2),
-      w: icoS, h: icoS, svg: iconSvg(keyOf(card.subtitle), theme.accent),
+      w: icoS, h: icoS, svg: iconSvg(icoKey, theme.accent),
     });
 
     // Banda de acento a sangre (firma de la casa) con la condición y máx/mín.
