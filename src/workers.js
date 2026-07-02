@@ -53,6 +53,7 @@ async function weather() {
   const max = Math.round(j.daily.temperature_2m_max[0]);
   const min = Math.round(j.daily.temperature_2m_min[0]);
   return {
+    template: 'clima',
     title: `${t}º`,
     subtitle: wmoLabel(Number(j.current.weather_code)),
     body: `Máx ${max}º · Mín ${min}º`,
@@ -75,18 +76,54 @@ async function powerPrice() {
   const hour = now.getHours();
   const cur = values.find((v) => v.at.getHours() === hour) || values[values.length - 1];
   const cheap = values.reduce((m, v) => (v.eurMWh < m.eurMWh ? v : m), values[0]);
+  const exp = values.reduce((m, v) => (v.eurMWh > m.eurMWh ? v : m), values[0]);
   const cts = (e) => (e / 10).toFixed(1).replace('.', ',');
   return {
+    template: 'luz', // curva del día con la hora más barata señalada
     title: `${cts(cur.eurMWh)} cts`,
-    subtitle: 'Precio de la luz ahora (kWh)',
+    subtitle: 'Precio de la luz',
     body: `Hora más barata hoy: ${String(cheap.at.getHours()).padStart(2, '0')}:00 (${cts(cheap.eurMWh)} cts)`,
-    date: 'PVPC · REE',
+    date: 'kWh · PVPC · REE',
+    extra: {
+      series: values.map((v) => ({ h: v.at.getHours(), v: Math.round(v.eurMWh / 10 * 10) / 10 })),
+      cheap: { h: cheap.at.getHours(), v: Math.round(cheap.eurMWh / 10 * 10) / 10 },
+      exp: { h: exp.at.getHours(), v: Math.round(exp.eurMWh / 10 * 10) / 10 },
+      now: { h: hour, v: Math.round(cur.eurMWh / 10 * 10) / 10 },
+    },
+  };
+}
+
+// --- Proveedor: gasolineras más baratas de Vitoria (MITECO, gratis, sin clave) ---
+async function fuel() {
+  const j = await fetchJson('https://sedeaplicaciones.minetur.gob.es/ServiciosRESTCarburantes/PreciosCarburantes/EstacionesTerrestres/FiltroProvincia/01');
+  const num = (s) => { const v = parseFloat(String(s || '').replace(',', '.')); return isFinite(v) && v > 0 ? v : null; };
+  const st = (j.ListaEESSPrecio || [])
+    .filter((e) => String(e['Municipio'] || '').toUpperCase().includes('VITORIA'))
+    .map((e) => ({
+      name: String(e['Rótulo'] || '').trim(),
+      addr: String(e['Dirección'] || '').trim(),
+      g95: num(e['Precio Gasolina 95 E5']),
+      goa: num(e['Precio Gasoleo A']),
+    }))
+    .filter((s) => s.g95);
+  if (!st.length) throw new Error('sin gasolineras de Vitoria en la respuesta');
+  st.sort((a, b) => a.g95 - b.g95);
+  const top = st.slice(0, 3);
+  const f = (v) => v.toFixed(3).replace('.', ',');
+  return {
+    template: 'gasolina',
+    title: `${f(top[0].g95)} €`,
+    subtitle: 'Gasolina 95 · la más barata',
+    body: `${top[0].name} · ${top[0].addr}`,
+    date: 'Precios oficiales · MITECO',
+    extra: { stations: top },
   };
 }
 
 const PROVIDERS = {
   weather: { label: 'El tiempo (Open-Meteo)', fn: weather },
   powerPrice: { label: 'Precio de la luz (REE)', fn: powerPrice },
+  fuel: { label: 'Gasolineras Vitoria (MITECO)', fn: fuel },
   // poolCapacity: sin fuente pública estable; se rellena a mano o por archivo
   // en data/worker-inbox. Añadir proveedor aquí cuando haya API.
 };

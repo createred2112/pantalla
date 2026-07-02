@@ -56,7 +56,8 @@ const DEFAULT_RUNDOWN = {
     library('cita_historica', 'Cita histórica', 'citasHistoricas'),
     library('dato_curioso', 'Dato curioso', 'datosCuriosos'),
     worker('aforo_piscinas', 'Aforo piscinas', 'dato', 'lima', 'poolCapacity', 'Aforo piscinas', 'Pendiente de worker', 'Gamarra / Mendizorrotza'),
-    worker('precio_luz', 'Precio de la luz hoy', 'dato', 'azul', 'powerPrice', 'Precio luz', 'Pendiente de worker', 'Actualización diaria'),
+    worker('precio_luz', 'Precio de la luz hoy', 'luz', '', 'powerPrice', 'Precio luz', 'Pendiente de datos', 'Actualización diaria'),
+    worker('gasolina_hoy', 'Gasolina más barata', 'gasolina', '', 'fuel', 'Gasolina 95', 'Pendiente de datos', ''),
     library('efemeride_hoy', 'Efeméride hoy', 'efemerides'),
     fixed('agenda', 'Agenda', 'agenda', 'blanco', 'Agenda', '', '19:30 | Actividad pendiente | Lugar\n20:00 | Añade eventos | Vitoria-Gasteiz', 10, false),
     library('consejo_informatico', 'Consejo informático', 'consejosInformaticos'),
@@ -182,7 +183,9 @@ function read(options = {}) {
   const library = normalizeLibrary(readJson(LIBRARY_FILE, DEFAULT_LIBRARY));
   const date = options.date || todayKey();
   if (!Array.isArray(rundown.slots)) rundown.slots = [];
-  return { rundown, library, libraryKeys: LIBRARY_KEYS, activeDate: date, dayTheme: dayTheme(date), daily: dailyPack(library, date), report: report(rundown, library, date) };
+  let workers = [];
+  try { workers = require('./workers').state(); } catch {}
+  return { rundown, library, libraryKeys: LIBRARY_KEYS, activeDate: date, dayTheme: dayTheme(date), workers, daily: dailyPack(library, date), report: report(rundown, library, date) };
 }
 
 function save(rundown, options = {}) {
@@ -268,8 +271,10 @@ function slotPayload(slot, library, date) {
         subtitle: rec.data.subtitle || s.subtitle || '',
         body: rec.data.body || '',
         date: rec.data.date || '',
-        template: s.template || 'dato',
+        // El worker sabe cuál es su mejor presentación (luz→curva, fuel→lista).
+        template: rec.data.template || s.template || 'dato',
         theme: s.theme || '',
+        data: rec.data.extra || null,
         missing: false,
       };
     }
@@ -300,6 +305,7 @@ function toCard(slot, library, order, date) {
     subtitle: p.subtitle || s.subtitle || '',
     body: p.body || s.body || '',
     date: p.date || s.date || '',
+    data: p.data || null,
     duration: s.duration || p.duration || 8,
     video: s.video === true,
     source: 'rundown',

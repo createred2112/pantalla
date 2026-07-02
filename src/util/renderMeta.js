@@ -49,7 +49,7 @@ function renderHash(card) {
   let tplLayout = null;
   try { tplLayout = require('../templateLayouts').get(card.template); } catch {}
   const src = {
-    v: 3, // subir al cambiar el diseño de las plantillas en código
+    v: 4, // subir al cambiar el diseño de las plantillas en código
     template: card.template || '',
     theme: themeFor(card),
     layout: card.layout || null,
@@ -58,6 +58,7 @@ function renderHash(card) {
     subtitle: card.subtitle || '',
     body: card.body || '',
     date: card.date || '',
+    data: card.data || null,
     photo: fileSig(card.photo),
     video: card.video === true,
     motion: card.video ? 2 : null, // versión de la coreografía de animación

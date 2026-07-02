@@ -51,6 +51,7 @@ function normalize(card) {
     subtitle: card.subtitle || '',
     body: card.body || '',
     date: card.date || '',       // texto de fecha opcional para el pie
+    data: card.data || null,     // datos estructurados (series, listas) para plantillas con gráficos
     photo: card.photo || null,   // ruta a foto de fondo (para generated)
     file: card.file || null,     // ruta a archivo ya listo (image/video)
     duration: card.duration != null ? Number(card.duration) : cfg.defaults.duration,

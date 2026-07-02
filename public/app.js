@@ -759,13 +759,23 @@ function slotEditHtml(s, i) {
       ${isLib ? `<label>Categoría<select data-rd-current="libraryKey">
         ${keys.map((k) => `<option value="${esc(k.key)}" ${k.key === s.libraryKey ? 'selected' : ''}>${esc(k.label)}</option>`).join('')}
       </select></label>` : ''}
-      ${isWorker ? `<label>Clave del dato automático<input data-rd-current="workerKey" value="${esc(s.workerKey || '')}" placeholder="weather"></label>` : ''}
-      ${!isLib ? tplSelect : ''}
+      ${isWorker ? (() => {
+        const ws = RUNDOWN.workers || [];
+        const known = ws.some((w) => w.key === s.workerKey);
+        const sel = ws.map((w) =>
+          `<option value="${esc(w.key)}" ${w.key === s.workerKey ? 'selected' : ''}>${esc(w.label)}${w.fresh && w.preview ? ' — ' + esc(w.preview) : (w.fresh ? '' : ' (sin datos aún)')}</option>`).join('');
+        return `<label>Dato automático<select data-rd-current="workerKey">
+          ${known ? '' : `<option value="${esc(s.workerKey || '')}" selected>${esc(s.workerKey || 'elige uno…')}</option>`}${sel}
+        </select></label>`;
+      })() : ''}
+      ${!isLib && !isWorker ? tplSelect : ''}
       ${isLib
         ? `<div class="slot-wide hint" style="align-self:center">Este bloque coge cada día una pieza de la categoría elegida. Las piezas se editan en la pestaña «Contenido programado».</div>`
-        : `<label>Título<input data-rd-current="title" value="${esc(s.title || '')}"></label>
+        : (isWorker
+          ? `<div class="slot-wide hint" style="align-self:center">El dato se actualiza solo cada 30 min y antes de cada publicación. La plantilla la elige el propio dato (curva para la luz, lista para gasolineras…). Usa «↻ Datos automáticos» para traerlo ahora.</div>`
+          : `<label>Título<input data-rd-current="title" value="${esc(s.title || '')}"></label>
       <label>Subtítulo<input data-rd-current="subtitle" value="${esc(s.subtitle || '')}"></label>
-      <label class="slot-wide">Texto<textarea data-rd-current="body">${esc(s.body || '')}</textarea></label>`}
+      <label class="slot-wide">Texto<textarea data-rd-current="body">${esc(s.body || '')}</textarea></label>`)}
       <label>Duración (segundos)<input type="number" min="1" data-rd-current="duration" value="${Number(s.duration) || 8}"></label>
       <label><input type="checkbox" data-rd-toggle="enabled" ${s.enabled !== false ? 'checked' : ''} style="width:auto;margin-right:8px"> Activa</label>
       <label><input type="checkbox" data-rd-toggle="video" ${s.video ? 'checked' : ''} style="width:auto;margin-right:8px"> Animada (MP4)</label>

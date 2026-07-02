@@ -350,6 +350,23 @@ const SAMPLE_DATA = {
   foto: { title: 'Atardecer sobre la Catedral', subtitle: 'Postal', date: '22:00' },
   agenda: { title: 'Agenda', body: '19:30 | Los Chunguitos Live | Jimmy Jazz\n20:00 | La Tremenda Pasarela | Teatro Félix Petite' },
   mensaje: { title: 'Vitoria en verde.' },
+  luz: {
+    title: '12,4 cts', subtitle: 'Precio de la luz', date: 'kWh · PVPC · REE',
+    data: {
+      series: [18.2, 16.9, 15.8, 15.1, 14.7, 14.9, 16.2, 19.4, 22.1, 20.3, 17.6, 14.2, 10.8, 8.4, 6.9, 6.1, 6.6, 8.1, 12.7, 19.8, 24.6, 23.1, 20.9, 19.3].map((v, h) => ({ h, v })),
+      cheap: { h: 15, v: 6.1 }, exp: { h: 20, v: 24.6 }, now: { h: 12, v: 10.8 },
+    },
+  },
+  gasolina: {
+    title: '1,479 €', subtitle: 'Gasolina 95 · la más barata', date: 'Precios oficiales · MITECO',
+    data: {
+      stations: [
+        { name: 'Ballonti Energy', addr: 'Av. de los Huetos 46', g95: 1.479, goa: 1.389 },
+        { name: 'Petronor Arriaga', addr: 'Arriagako Atea 2', g95: 1.508, goa: 1.405 },
+        { name: 'Repsol Olarizu', addr: 'Ctra. de Castilla 12', g95: 1.531, goa: 1.419 },
+      ],
+    },
+  },
 };
 const SAMPLES_DIR = path.join(paths.output, 'samples');
 const SAMPLES_META = path.join(SAMPLES_DIR, 'meta.json');
@@ -357,7 +374,7 @@ const SAMPLES_META = path.join(SAMPLES_DIR, 'meta.json');
 function samplesHash() {
   const crypto = require('crypto');
   return crypto.createHash('sha1').update(JSON.stringify({
-    v: 3, // subir al cambiar el diseño de las plantillas en código
+    v: 4, // subir al cambiar el diseño de las plantillas en código
     brand: cfg.brand, palette: cfg.palette, screen: cfg.screen,
     tpls: templates.list().map((t) => t.id), data: SAMPLE_DATA,
   })).digest('hex');

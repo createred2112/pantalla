@@ -22,7 +22,17 @@ module.exports = {
     let y = Math.round(areaTop + (areaBottom - areaTop - blockH) / 2);
 
     const els = [];
-    els.push({ type: 'text', x: pad, y, w, h: numH, text: (card.title || '').toUpperCase(), font: 'display', weight: 800, color: theme.text, align: 'center', valign: 'center', lineHeight: 1, letterSpacingEm: -0.01, autofit: { min: Math.round(H * 0.12), max: Math.round(H * 0.4), lines: 1 } });
+    // Una CIFRA corta va a una línea gigante; una FRASE se parte en hasta 3
+    // líneas grandes (nunca se corta el texto).
+    const isFigure = String(card.title || '').replace(/\s+/g, '').length <= 9;
+    els.push({
+      type: 'text', x: pad, y, w, h: numH, text: (card.title || '').toUpperCase(),
+      font: 'display', weight: 800, color: theme.text, align: 'center', valign: 'center',
+      lineHeight: isFigure ? 1 : 0.98, letterSpacingEm: -0.01,
+      autofit: isFigure
+        ? { min: Math.round(H * 0.12), max: Math.round(H * 0.4), lines: 1 }
+        : { min: Math.round(H * 0.07), max: Math.round(H * 0.15), lines: 3 },
+    });
     y += numH + gap;
     const ruleW = Math.round(W * 0.12);
     els.push({ type: 'rect', x: Math.round((W - ruleW) / 2), y, w: ruleW, h: ruleH, color: theme.accent, radius: 3 });
@@ -33,7 +43,8 @@ module.exports = {
       els.push({ type: 'text', x: pad, y, w, h: bodyH, text: card.body, font: 'text', weight: 600, color: theme.textMuted, align: 'center', valign: 'top', size: Math.round(H * 0.046) });
     }
     if (card.date) {
-      els.push({ type: 'text', x: pad, y: H - Math.round(H * 0.075), w, h: Math.round(H * 0.05), text: card.date.toUpperCase(), font: 'text', weight: 700, color: theme.textMuted, align: 'center', valign: 'center', size: Math.round(H * 0.034) });
+      // Abajo a la DERECHA: el logo vive abajo-izquierda y no deben pisarse.
+      els.push({ type: 'text', x: Math.round(W * 0.5), y: H - Math.round(H * 0.075), w: Math.round(W * 0.5) - pad, h: Math.round(H * 0.05), text: card.date.toUpperCase(), font: 'text', weight: 700, color: theme.textMuted, align: 'right', valign: 'center', size: Math.round(H * 0.034) });
     }
     return { background: { type: 'solid', color: theme.bg }, elements: els };
   },
