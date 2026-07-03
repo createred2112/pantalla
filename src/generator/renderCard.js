@@ -90,16 +90,59 @@ function themeValue(ctx, key) {
   return theme[key] || null;
 }
 
+// Diseños ANTIGUOS (guardados antes de que el editor anotara colorTheme):
+// se deduce con qué tema de la paleta se guardó el layout (el que explique más
+// colores) y se re-ligan esos colores a sus roles (bg, texto, acento...) del
+// tema ACTUAL. Sin esto, los predeterminados viejos dejan los colores clavados
+// e ignoran el tema elegido en la cartela.
+const TOKEN_KEYS = ['bg', 'text', 'accent', 'accentText', 'bg2', 'textMuted', 'logoAccent'];
+
+function norm(color) {
+  return String(color || '').trim().toLowerCase();
+}
+
+// Mapa color->rol del tema de la paleta que mejor explica los colores usados.
+function legacyTokenMap(layout) {
+  const used = new Set();
+  if (layout.background && layout.background.color && !layout.background.colorTheme) used.add(norm(layout.background.color));
+  for (const e of layout.elements || []) {
+    if (e.color && !e.colorTheme) used.add(norm(e.color));
+    if (e.bg && !e.bgTheme) used.add(norm(e.bg));
+  }
+  used.delete('');
+  if (!used.size) return {};
+  let best = null;
+  let bestHits = 0;
+  for (const theme of Object.values(cfg.palette || {})) {
+    let hits = 0;
+    for (const v of used) if (TOKEN_KEYS.some((k) => norm(theme[k]) === v)) hits++;
+    if (hits > bestHits) { bestHits = hits; best = theme; }
+  }
+  // Con menos de 2 coincidencias no hay evidencia suficiente: se deja fijo.
+  if (!best || bestHits < 2) return {};
+  const map = {};
+  for (const k of TOKEN_KEYS) {
+    const v = norm(best[k]);
+    if (v && !(v in map)) map[v] = k;
+  }
+  return map;
+}
+
 // Aplica un layout (elementos) a los datos de la cartela (refresca texto vinculado
 // y mantiene vivos los colores ligados al tema cuando el editor los guardó así).
 function applyLayout(layout, card, ctx) {
+  const legacy = legacyTokenMap(layout);
+  const live = (explicitToken, rawColor) => {
+    const token = explicitToken || legacy[norm(rawColor)];
+    return (token && themeValue(ctx, token)) || rawColor;
+  };
   const bg = layout.background ? { ...layout.background } : undefined;
-  if (bg && bg.colorTheme) bg.color = themeValue(ctx, bg.colorTheme) || bg.color;
+  if (bg && bg.color) bg.color = live(bg.colorTheme, bg.color);
   const elements = (layout.elements || []).map((e) => {
     const el = { ...e };
     if (el.bind && card[el.bind] != null) el.text = el.transform === 'upper' ? String(card[el.bind]).toUpperCase() : String(card[el.bind]);
-    if (el.colorTheme) el.color = themeValue(ctx, el.colorTheme) || el.color;
-    if (el.bgTheme) el.bg = themeValue(ctx, el.bgTheme) || el.bg;
+    if (el.color) el.color = live(el.colorTheme, el.color);
+    if (el.bg) el.bg = live(el.bgTheme, el.bg);
     return el;
   });
   return { background: bg, elements };
