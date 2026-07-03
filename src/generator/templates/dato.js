@@ -17,6 +17,8 @@ module.exports = {
     const title = String(card.title || '');
     const isFigure = title.replace(/\s+/g, '').length <= 9;
     const hasBody = Boolean(String(card.body || '').trim());
+    const subtitle = String(card.subtitle || '').trim();
+    const showBand = Boolean(subtitle && !/^(gasteizberri|gasteizberri\.com)$/i.test(subtitle));
 
     // La cifra (o frase) domina el lienzo superior.
     els.push({
@@ -38,13 +40,13 @@ module.exports = {
     }
 
     // Banda de acento a sangre: la etiqueta vive dentro. Firma visual de la casa.
-    if (card.subtitle) {
+    if (showBand) {
       const bandY = Math.round(H * 0.67);
       const bandH = Math.round(H * 0.14);
       els.push({ type: 'rect', x: 0, y: bandY, w: W, h: bandH, color: theme.accent });
       els.push({
         type: 'text', x: pad, y: bandY, w, h: bandH,
-        text: card.subtitle.toUpperCase(), font: 'display', weight: 800, color: theme.accentText,
+        text: subtitle.toUpperCase(), font: 'display', weight: 800, color: theme.accentText,
         align: 'center', valign: 'center', lineHeight: 1, letterSpacingEm: 0.02,
         autofit: { min: Math.round(H * 0.04), max: Math.round(H * 0.075), lines: 1 },
       });
