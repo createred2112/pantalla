@@ -48,7 +48,7 @@ const DEFAULT_RUNDOWN = {
   title: 'Protoescaleta diaria',
   updatedAt: null,
   slots: [
-    fixed('intro', 'Intro', 'mensaje', 'carbon', 'LA PANTALLA', '', '', 5, true),
+    fixed('intro', 'Intro', 'mensaje', 'carbon', 'GASTEIZBERRI', '', '', 5, true),
     fixed('subintro', 'Subintro', 'mensaje', 'azul', 'Gasteiz en claro', 'Titulares, datos útiles y vida local', '', 5, true),
     fixed('ultima_hora', 'Última hora', 'alerta', 'rojo', 'Última hora pendiente', 'Añade titular', 'Completa este bloque si hay urgencia.', 8, true),
     worker('temperatura', 'Temperatura', 'clima', 'azul', 'weather', '24ºC', 'SOLEADO', 'Máx 28º · Mín 14º'),

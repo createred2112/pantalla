@@ -1,5 +1,5 @@
 'use strict';
-// Panel de admin de LA PANTALLA. Vanilla JS, móvil-first.
+// Estudio GasteizBerri — panel de administración. Vanilla JS, móvil-first.
 
 const TOKEN = new URLSearchParams(location.search).get('token') || '';
 const H = { 'Content-Type': 'application/json', ...(TOKEN ? { 'x-panel-token': TOKEN } : {}) };
@@ -615,12 +615,12 @@ function renderPilot() {
   const bar = $('#pilotBar');
   bar.style.display = 'flex';
   bar.classList.toggle('on', PILOT.enabled);
-  $('#pilotIco').textContent = PILOT.enabled ? '🛫' : '🛬';
-  $('#pilotTitle').textContent = PILOT.enabled ? 'Piloto automático · ACTIVO' : 'Piloto automático · apagado';
+  $('#pilotIco').textContent = PILOT.enabled ? '●' : '○';
+  $('#pilotTitle').textContent = PILOT.enabled ? 'Publicación automática · activa' : 'Publicación automática · desactivada';
   const workersTxt = (PILOT.workers || []).filter((w) => w.fresh).map((w) => w.preview).filter(Boolean).join(' · ');
   $('#pilotInfo').textContent = PILOT.enabled
-    ? `Escaleta y publicación solas cada día a las ${PILOT.time} · ${fmtLastRun(PILOT.last)}${workersTxt ? ' · Datos: ' + workersTxt : ''}`
-    : `Actívalo y la pantalla se actualizará sola cada mañana, sin tocar nada${workersTxt ? ' · Datos listos: ' + workersTxt : ''}`;
+    ? `Guion y publicación diarios a las ${PILOT.time} · ${fmtLastRun(PILOT.last)}${workersTxt ? ' · ' + workersTxt : ''}`
+    : `Programe la hora y active para publicar cada día sin intervención${workersTxt ? ' · Datos: ' + workersTxt : ''}`;
   $('#pilotTime').value = PILOT.time || '08:00';
   $('#pilotToggle').textContent = PILOT.enabled ? 'Apagar' : 'Activar';
   $('#pilotToggle').classList.toggle('primary', !PILOT.enabled);
@@ -660,7 +660,7 @@ $('#pilotRun').addEventListener('click', async (e) => {
     toast('Error: ' + err.message);
   } finally {
     b.disabled = false;
-    b.textContent = '⚡ Preparar hoy';
+    b.textContent = 'Preparar hoy';
   }
 });
 
@@ -690,7 +690,7 @@ $('#bkGo').addEventListener('click', async () => {
     const body = /^https?:\/\//i.test(v) ? { url: v } : { title: v };
     await api('/breaking', { method: 'POST', body: JSON.stringify(body) });
     breakingDlg.close();
-    toast('🚨 ÚLTIMA HORA en primera posición. Revisa el plan y confirma.');
+    toast('Última hora creada en primera posición. Revise el plan y confirme.');
     await load();
     preparePublish();
   } catch (e) {
@@ -710,22 +710,22 @@ let RD_PLAN_DAYS = 7;      // días que enseña el planificador (lo fija el asis
 
 // Catálogo del asistente "Planificar días": tipos de cartela predeterminados.
 const PLAN_TYPES = [
-  { id: 'tiempo', label: '🌤 Tiempo de hoy (automático)', def: true, slot: { source: 'worker', workerKey: 'weather', template: 'clima', label: 'Tiempo' } },
-  { id: 'prevision', label: '📆 Previsión 3 días (automático)', def: true, slot: { source: 'worker', workerKey: 'forecast', template: 'prevision', label: 'Previsión' } },
-  { id: 'agenda', label: '🗓 Agenda (la escribes tú)', def: true, duration: 10, slot: { source: 'fixed', template: 'agenda', label: 'Agenda', title: 'Agenda', body: '19:30 | Escribe aquí el plan | Lugar' } },
-  { id: 'curioso', label: '💡 Dato curioso (rota del almacén)', def: true, slot: { source: 'library', libraryKey: 'datosCuriosos', label: 'Dato curioso' } },
-  { id: 'utiles', label: 'ℹ️ Aviso útil (rota del almacén)', slot: { source: 'library', libraryKey: 'datosUtiles', label: 'Aviso útil' } },
-  { id: 'consejo', label: '💻 Consejo · Fast2Computer (rota)', slot: { source: 'library', libraryKey: 'consejosInformaticos', label: 'Consejo informático' } },
-  { id: 'luz', label: '💶 Precio de la luz (automático)', slot: { source: 'worker', workerKey: 'powerPrice', label: 'Precio de la luz' } },
-  { id: 'gasolina', label: '⛽ Gasolineras más baratas (automático)', slot: { source: 'worker', workerKey: 'fuel', label: 'Gasolina más barata' } },
-  { id: 'aire', label: '🍃 Calidad del aire (automático)', slot: { source: 'worker', workerKey: 'airQuality', template: 'dato', label: 'Calidad del aire' } },
-  { id: 'piscinas', label: '🏊 Aforo piscinas (lo escribes tú)', slot: { source: 'worker', workerKey: 'poolCapacity', template: 'dato', label: 'Aforo piscinas', subtitle: 'Personas en las piscinas' } },
-  { id: 'ultima', label: '🚨 Hueco de última hora (apagado hasta que haga falta)', enabled: false, slot: { source: 'fixed', template: 'alerta', label: 'Última hora', subtitle: 'ÚLTIMA HORA' } },
+  { id: 'tiempo', label: 'Tiempo de hoy · automático', def: true, slot: { source: 'worker', workerKey: 'weather', template: 'clima', label: 'Tiempo' } },
+  { id: 'prevision', label: 'Previsión 3 días · automático', def: true, slot: { source: 'worker', workerKey: 'forecast', template: 'prevision', label: 'Previsión' } },
+  { id: 'agenda', label: 'Agenda · manual', def: true, duration: 10, slot: { source: 'fixed', template: 'agenda', label: 'Agenda', title: 'Agenda', body: '' } },
+  { id: 'curioso', label: 'Dato curioso · rotación', def: true, slot: { source: 'library', libraryKey: 'datosCuriosos', label: 'Dato curioso' } },
+  { id: 'utiles', label: 'Aviso útil · rotación', slot: { source: 'library', libraryKey: 'datosUtiles', label: 'Aviso útil' } },
+  { id: 'consejo', label: 'Consejo informático (Fast2Computer) · rotación', slot: { source: 'library', libraryKey: 'consejosInformaticos', label: 'Consejo informático' } },
+  { id: 'luz', label: 'Precio de la luz · automático', slot: { source: 'worker', workerKey: 'powerPrice', label: 'Precio de la luz' } },
+  { id: 'gasolina', label: 'Gasolineras más baratas · automático', slot: { source: 'worker', workerKey: 'fuel', label: 'Gasolina más barata' } },
+  { id: 'aire', label: 'Calidad del aire · automático', slot: { source: 'worker', workerKey: 'airQuality', template: 'dato', label: 'Calidad del aire' } },
+  { id: 'piscinas', label: 'Aforo piscinas · manual', slot: { source: 'worker', workerKey: 'poolCapacity', template: 'dato', label: 'Aforo piscinas', subtitle: 'Personas en las piscinas' } },
+  { id: 'ultima', label: 'Última hora · reservado (desactivado)', enabled: false, slot: { source: 'fixed', template: 'alerta', label: 'Última hora', subtitle: 'ÚLTIMA HORA' } },
 ];
 
 function rdSetDirty(v) {
   RD_DIRTY = v;
-  $('#btnRundownSave').textContent = v ? '💾 Guardar cambios ●' : '💾 Guardar cambios';
+  $('#btnRundownSave').textContent = v ? 'Guardar cambios ●' : 'Guardar cambios';
 }
 
 function setRundownTab(tab) {
@@ -811,7 +811,7 @@ function renderSlotEditor() {
   box.hidden = false;
   box.innerHTML = `
     <div class="slot-editor-h">
-      <b>✏️ ${esc(s.label)} — bloque ${String(RUNDOWN_SELECTED + 1).padStart(2, '0')}</b>
+      <b>${esc(s.label)} · bloque ${String(RUNDOWN_SELECTED + 1).padStart(2, '0')}</b>
       <button type="button" class="ghost" data-rd-close title="Cerrar el editor">✕</button>
     </div>` + slotEditHtml(s, RUNDOWN_SELECTED);
 }
@@ -829,12 +829,12 @@ function slotEditHtml(s, i) {
   return `
     <div class="slot-grid">
       <label>Nombre del bloque<input data-rd-current="label" value="${esc(s.label)}"></label>
-      <label>¿De dónde sale el contenido?<select data-rd-current="source">
-        <option value="fixed" ${s.source === 'fixed' ? 'selected' : ''}>✍️ Lo escribo yo aquí</option>
-        <option value="library" ${isLib ? 'selected' : ''}>🔁 Rota: cada día una pieza distinta</option>
-        <option value="worker" ${isWorker ? 'selected' : ''}>⚙️ Automático: se rellena solo</option>
+      <label>Origen del contenido<select data-rd-current="source">
+        <option value="fixed" ${s.source === 'fixed' ? 'selected' : ''}>✍️ Manual</option>
+        <option value="library" ${isLib ? 'selected' : ''}>🔁 Rotación diaria</option>
+        <option value="worker" ${isWorker ? 'selected' : ''}>⚙️ Dato automático</option>
       </select></label>
-      ${isLib ? `<label>Tipo de pieza (del almacén)<select data-rd-current="libraryKey">
+      ${isLib ? `<label>Tipo de contenido rotativo<select data-rd-current="libraryKey">
         ${keys.map((k) => `<option value="${esc(k.key)}" ${k.key === s.libraryKey ? 'selected' : ''}>${esc(k.label)}</option>`).join('')}
       </select></label>` : ''}
       ${isWorker ? (() => {
@@ -848,9 +848,9 @@ function slotEditHtml(s, i) {
       })() : ''}
       ${!isLib && !isWorker ? tplSelect : ''}
       ${isLib
-        ? `<div class="slot-wide hint" style="align-self:center">Cada día este bloque enseña una pieza distinta de ese tipo. Las piezas se crean y programan en la pestaña «🔁 Piezas que rotan».</div>`
+        ? `<div class="slot-wide hint" style="align-self:center">Emite cada día una pieza distinta de este tipo. Las piezas se gestionan en la pestaña «Contenido rotativo».</div>`
         : (isWorker
-          ? `<div class="slot-wide hint" style="align-self:center">No hay nada que escribir: el dato llega solo (se refresca cada 30 min y antes de publicar) y elige su propia plantilla. «⚙️ Actualizar datos reales» lo trae ahora mismo.</div>`
+          ? `<div class="slot-wide hint" style="align-self:center">Contenido automático: se actualiza cada 30 minutos y antes de cada publicación.</div>`
           : `<label>Título<input data-rd-current="title" value="${esc(s.title || '')}"></label>
       <label>Subtítulo<input data-rd-current="subtitle" value="${esc(s.subtitle || '')}"></label>
       <label class="slot-wide">Texto<textarea data-rd-current="body">${esc(s.body || '')}</textarea></label>`)}
@@ -861,13 +861,13 @@ function slotEditHtml(s, i) {
         No emitir SOLO el ${esc(RUNDOWN.activeDate || 'día elegido')} (el resto de días sale con normalidad)</label>
     </div>
     <div class="status">${rep.missing
-      ? '⚠️ ' + esc(rep.note || 'Pendiente de contenido')
-      : `✅ El ${esc(RUNDOWN.activeDate || 'día elegido')} saldrá: <b>${esc(rep.title || s.title || s.label)}</b>`}</div>
+      ? '⚠ ' + esc(rep.note || 'Pendiente de contenido')
+      : `Programado para el ${esc(RUNDOWN.activeDate || 'día elegido')}: <b>${esc(rep.title || s.title || s.label)}</b>`}</div>
     <div class="slot-tools">
       <button class="ghost" data-rd-move="-1" ${i === 0 ? 'disabled' : ''}>← Emitir antes</button>
       <button class="ghost" data-rd-move="1" ${i === slots.length - 1 ? 'disabled' : ''}>Emitir después →</button>
       <span class="spacer"></span>
-      <button class="ghost" data-rd-delete-current>🗑 Eliminar bloque</button>
+      <button class="ghost" data-rd-delete-current>Eliminar bloque</button>
     </div>`;
 }
 
@@ -1037,7 +1037,7 @@ function libraryItemHtml(meta, item, i) {
       <div class="slot-tools">
         <label style="margin:0"><input type="checkbox" data-lib-field="enabled" ${item.enabled !== false ? 'checked' : ''} style="width:auto;margin-right:6px">Activa</label>
         <span class="spacer"></span>
-        <button type="button" class="ghost" data-lib-del>🗑 Quitar pieza</button>
+        <button type="button" class="ghost" data-lib-del>Quitar pieza</button>
       </div>
     </div>
   </div>`;
@@ -1170,8 +1170,8 @@ async function openWizard() {
 
 function wzWorkerLine(key) {
   const w = (RUNDOWN.workers || []).find((x) => x.key === key);
-  if (!w) return 'automático';
-  return w.fresh && w.preview ? `✓ dato en vivo: ${w.preview}` : '⏳ aún sin datos (se traen solos)';
+  if (!w) return 'Contenido automático.';
+  return w.fresh && w.preview ? `Dato actual: ${w.preview}` : 'Sin datos aún; se obtienen automáticamente.';
 }
 
 function renderWizard() {
@@ -1183,7 +1183,7 @@ function renderWizard() {
 
   if (WZ.step === 1) {
     $('#wzBody').innerHTML = `
-      <p class="hint" style="margin-top:0"><b>¿Qué cartelas quieres en pantalla?</b> Marca los tipos y cuántos días cubrir. En el siguiente paso rellenas lo que sea tuyo y revisas lo que rota.</p>
+      <p class="hint" style="margin-top:0">Seleccione los tipos de cartela y los días a cubrir.</p>
       <label>Días a cubrir</label>
       <input id="wzDays" type="number" min="1" max="14" value="${WZ.days}">
       <label>Tipos de cartela</label>
@@ -1196,7 +1196,7 @@ function renderWizard() {
     const sections = chosen.map((t) => {
       const head = `<h3 style="margin:14px 0 4px;font-size:14px">${t.label}</h3>`;
       if (t.slot.source === 'worker' && t.slot.workerKey !== 'poolCapacity') {
-        return head + `<div class="status">${esc(wzWorkerLine(t.slot.workerKey))} · nada que hacer aquí</div>`;
+        return head + `<div class="status">${esc(wzWorkerLine(t.slot.workerKey))}</div>`;
       }
       if (t.id === 'piscinas') {
         return head + `<label>Aforo actual (lo escribes tú)</label>
@@ -1207,32 +1207,32 @@ function renderWizard() {
           <textarea data-wz-manual="agenda:body" placeholder="19:30 | Concierto en la Virgen Blanca | Casco Viejo">${esc((WZ.manual.agenda || {}).body || '')}</textarea>`;
       }
       if (t.id === 'ultima') {
-        return head + `<div class="status">Queda como hueco APAGADO. Cuando pase algo, botón 🚨 del panel y listo.</div>`;
+        return head + `<div class="status">Reservado y desactivado. Se activa desde el botón 🚨 del panel cuando haga falta.</div>`;
       }
       if (t.slot.source === 'library') {
         const key = t.slot.libraryKey;
         const items = (RUNDOWN.library && RUNDOWN.library[key]) || [];
         const preview = items.slice(0, 5).map((p) => `· ${esc(p.title || p.body || '')}`).join('<br>');
-        return head + `<div class="status"><b>${items.length}</b> actualización(es) cargadas — irán rotando SIN repetirse${items.length ? ':<br>' + preview + (items.length > 5 ? '<br>…' : '') : ''}</div>
-          <label>Añadir nuevas (una por línea: Título | firma | texto)</label>
+        return head + `<div class="status"><b>${items.length}</b> pieza(s) en rotación${items.length ? ':<br>' + preview + (items.length > 5 ? '<br>…' : '') : ''}</div>
+          <label>Añadir piezas (una por línea: Título | firma | texto)</label>
           <textarea data-wz-add="${esc(key)}" placeholder="El casco medieval tiene forma de almendra | Dato curioso |">${esc(WZ.adds[key] || '')}</textarea>`;
       }
-      return head + '<div class="status">Listo.</div>';
+      return head + '<div class="status">Sin configuración adicional.</div>';
     }).join('');
-    $('#wzBody').innerHTML = `<p class="hint" style="margin-top:0"><b>Revisa y rellena.</b> Lo automático ya viene con datos; lo que rota enseña su almacén; lo tuyo lo escribes aquí.</p>` + sections;
+    $('#wzBody').innerHTML = `<p class="hint" style="margin-top:0">Revise el contenido de cada tipo. Los datos automáticos no requieren edición.</p>` + sections;
     return;
   }
 
   // Paso 3: confirmación
   const newPieces = Object.values(WZ.adds).reduce((n, txt) => n + String(txt || '').split(/\r?\n/).filter((l) => l.trim()).length, 0);
   $('#wzBody').innerHTML = `
-    <p class="hint" style="margin-top:0"><b>Todo listo.</b> Esto es lo que va a pasar al confirmar:</p>
+    <p class="hint" style="margin-top:0">Resumen antes de confirmar:</p>
     <div class="status" style="line-height:1.7">
-      📺 Guion con <b>${chosen.length}</b> cartelas: ${chosen.map((t) => esc(t.slot.label)).join(' → ')}<br>
-      📆 Cubre <b>${WZ.days}</b> día(s); el contenido rota solo cada día sin repetirse<br>
-      ${newPieces ? `🧊 Se añaden <b>${newPieces}</b> actualización(es) nuevas al almacén<br>` : ''}
-      🖼 Se crean las cartelas y se abre la <b>vista previa</b> (el bucle tal cual se verá)<br>
-      📤 Publicar sigue siendo decisión tuya — o del piloto automático cada mañana
+      Guion de <b>${chosen.length}</b> cartelas: ${chosen.map((t) => esc(t.slot.label)).join(' → ')}<br>
+      Cobertura: <b>${WZ.days}</b> día(s), con rotación diaria sin repetición<br>
+      ${newPieces ? `Se incorporan <b>${newPieces}</b> pieza(s) nuevas a la rotación<br>` : ''}
+      Se generan las cartelas y se abre la vista previa del bucle<br>
+      La publicación requiere confirmación manual o la publicación automática programada
     </div>`;
 }
 
@@ -1296,33 +1296,6 @@ $('#wzNext').addEventListener('click', () => {
   wizardFinish();
 });
 
-// --- 🪄 Asistente Planificar días: días + tipos → guion generado ---
-const planDlg = $('#planDlg');
-$('#btnPlanWizard').addEventListener('click', () => {
-  if (!RUNDOWN) return;
-  $('#planTypes').innerHTML = PLAN_TYPES.map((t, i) =>
-    `<label class="chk"><input type="checkbox" data-plan="${i}" ${t.def ? 'checked' : ''}>${t.label}</label>`).join('');
-  planDlg.showModal();
-});
-$('#planGo').addEventListener('click', () => {
-  if (!RUNDOWN) return;
-  const sel = [...$('#planTypes').querySelectorAll('[data-plan]:checked')].map((el) => PLAN_TYPES[Number(el.dataset.plan)]);
-  if (!sel.length) { toast('Elige al menos un tipo de cartela'); return; }
-  RD_PLAN_DAYS = Math.max(1, Math.min(14, Number($('#planDays').value) || 3));
-  const stamp = Date.now().toString(36);
-  const newSlots = sel.map((t) => ({
-    id: `plan_${t.id}_${stamp}`, enabled: t.enabled !== false, duration: t.duration || 8, video: false,
-    theme: '', title: '', subtitle: '', body: '', date: '', template: '', libraryKey: '', workerKey: '',
-    ...t.slot,
-  }));
-  collectRundown();
-  RUNDOWN.rundown.slots = $('#planReplace').checked ? newSlots : [...(RUNDOWN.rundown.slots || []), ...newSlots];
-  RUNDOWN_SELECTED = -1;
-  rdSetDirty(true);
-  planDlg.close();
-  renderRundown();
-  toast(`Guion generado: ${sel.length} tipos · ${RD_PLAN_DAYS} día(s). Revisa, 💾 Guarda y «Crear las cartelas».`);
-});
 $('#btnWorkersRefresh').addEventListener('click', async (e) => {
   const b = e.target; b.disabled = true;
   toast('Actualizando datos automáticos…');

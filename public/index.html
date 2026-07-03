@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>PANTALLA · gasteizberri</title>
+<title>Estudio · GasteizBerri</title>
 <link rel="stylesheet" href="/api/fontcss">
 <style>
   :root{
@@ -269,11 +269,12 @@
   details.adv summary{cursor:pointer;color:var(--muted);font-size:13px}
   details.adv[open] summary{color:var(--txt);margin-bottom:2px}
 
-  /* Piloto automático: la pantalla se alimenta sola */
+  /* Publicación automática */
   .pilot{display:flex;align-items:center;gap:11px;background:var(--card);border:1px solid var(--line);
     border-radius:var(--r);padding:11px 14px;margin-bottom:4px;box-shadow:var(--shadow)}
   .pilot.on{border-color:rgba(43,182,115,.55);background:linear-gradient(135deg,rgba(43,182,115,.14),var(--card) 60%)}
-  .pilot-ico{font-size:22px;line-height:1}
+  .pilot-ico{font-size:20px;line-height:1;color:var(--muted)}
+  .pilot.on .pilot-ico{color:var(--ok)}
   .pilot-txt{flex:1;min-width:0}
   .pilot-txt b{display:block;font-size:14px}
   .pilot-txt small{display:block;color:var(--muted);font-size:11.5px;margin-top:2px;line-height:1.35}
@@ -285,7 +286,7 @@
 <body>
 <header>
   <span class="dot" id="dot" title="Estado del sistema"></span>
-  <h1>LA PANTALLA</h1>
+  <h1>ESTUDIO</h1>
   <span class="version-badge" id="versionBadge">v…</span>
   <span id="who"></span>
   <span class="spacer"></span>
@@ -312,14 +313,14 @@
     <button class="tool sq" id="btnRefresh" title="Refrescar la lista">↻</button>
   </div>
   <div class="pilot" id="pilotBar" style="display:none">
-    <span class="pilot-ico" id="pilotIco">🛫</span>
+    <span class="pilot-ico" id="pilotIco">○</span>
     <div class="pilot-txt">
       <b id="pilotTitle">Piloto automático</b>
       <small id="pilotInfo">cargando…</small>
     </div>
     <input type="time" id="pilotTime" value="08:00" title="Hora de publicación diaria">
     <button class="ghost" id="pilotToggle">Activar</button>
-    <button class="ghost" id="pilotRun" title="Trae los datos automáticos y prepara la escaleta de hoy para revisarla. NO publica: eso lo decides tú con el botón Publicar.">⚡ Preparar hoy</button>
+    <button class="ghost" id="pilotRun" title="Actualiza los datos y genera las cartelas de hoy para revisión. No publica.">Preparar hoy</button>
   </div>
   <div class="list-head">
     <h2>Secuencia en pantalla</h2>
@@ -521,29 +522,10 @@
   <div class="dlg-h"><h2 id="wzTitle">Escaleta</h2><button class="ghost" id="wzClose">✕</button></div>
   <div class="dlg-b" id="wzBody"></div>
   <div class="dlg-f">
-    <button class="ghost" id="wzAdvanced" title="Storyboard completo: bloques sueltos, orden, saltos por día, almacén…">⚙️ Modo avanzado</button>
+    <button class="ghost" id="wzAdvanced" title="Storyboard completo: bloques sueltos, orden, saltos por día, contenido rotativo">Modo avanzado</button>
     <span class="spacer"></span>
     <button class="ghost" id="wzBack" hidden>← Atrás</button>
     <button class="primary" id="wzNext">Siguiente →</button>
-  </div>
-</dialog>
-
-<!-- 🪄 Planificar días -->
-<dialog id="planDlg">
-  <div class="dlg-h"><h2>🪄 Planificar días</h2><button class="ghost" onclick="planDlg.close()">✕</button></div>
-  <div class="dlg-b">
-    <p class="hint" style="margin-top:0">Elige cuántos días cubrir y qué tipos de cartela. El guion se genera ordenado;
-      el contenido de cada tipo <b>rota solo cada día sin repetirse</b> hasta agotar lo que haya en el almacén.
-      En «🔁 Piezas que rotan» verás exactamente qué saldrá cada día.</p>
-    <label>Días a cubrir</label>
-    <input id="planDays" type="number" min="1" max="14" value="3">
-    <label>Tipos de cartela</label>
-    <div id="planTypes" style="display:grid;gap:2px"></div>
-    <label class="chk" style="margin-top:10px"><input type="checkbox" id="planReplace" checked>Sustituir el guion actual (si lo desmarcas, se añaden al final)</label>
-  </div>
-  <div class="dlg-f">
-    <button class="ghost" onclick="planDlg.close()">Cancelar</button>
-    <button class="primary" id="planGo">Generar guion →</button>
   </div>
 </dialog>
 
@@ -553,8 +535,8 @@
   <div class="dlg-b">
     <label style="margin-top:0">Pega la URL de la noticia (o escribe el titular directamente)</label>
     <input id="bkInput" placeholder="https://gasteizberri.com/…  o el titular a pelo" autocomplete="off">
-    <div class="hint" style="margin-top:8px">Se crea como <b>ALERTA roja</b>, en <b>primera posición</b> del bucle, ya renderizada.
-      Tú solo revisas y confirmas la publicación. De la calle a la pantalla en 30 segundos.</div>
+    <div class="hint" style="margin-top:8px">Se crea como alerta en primera posición del bucle, ya renderizada.
+      La publicación requiere su confirmación.</div>
   </div>
   <div class="dlg-f">
     <button class="ghost" onclick="breakingDlg.close()">Cancelar</button>
@@ -579,38 +561,33 @@
   <div class="dlg-h">
     <h2 style="flex:0 0 auto">Escaleta</h2>
     <div class="rd-tabs">
-      <button type="button" class="rd-tab sel" data-rd-tab="seq">📺 El guion del día</button>
-      <button type="button" class="rd-tab" data-rd-tab="lib">🔁 Piezas que rotan</button>
+      <button type="button" class="rd-tab sel" data-rd-tab="seq">Guion</button>
+      <button type="button" class="rd-tab" data-rd-tab="lib">Contenido rotativo</button>
     </div>
     <button class="ghost" id="btnRundownClose">✕</button>
   </div>
   <div class="dlg-b">
     <section id="rdTabSeq">
       <input type="hidden" id="rundownTitle" value="Escaleta">
-      <p class="hint" style="margin:0 0 10px">Este es el <b>guion de la pantalla</b>: estos bloques, en este orden, son lo que se emite en bucle.
-        Toca cualquier bloque para cambiarlo. Cuando te guste, pulsa <b>Crear las cartelas</b> (abajo) y después Publicar
-        — o no hagas nada: el piloto automático lo hace solo cada mañana.</p>
       <div class="rundown-top" style="grid-template-columns:190px 1fr;align-items:end">
-        <label>Ver / preparar el día<input id="rundownDate" type="date"></label>
+        <label>Día<input id="rundownDate" type="date"></label>
         <div class="status" id="rundownSummary" style="margin:0"></div>
       </div>
-      <div class="hint" style="margin:8px 2px 0">✍️ lo escribes tú &nbsp;·&nbsp; 🔁 cada día sale una pieza distinta &nbsp;·&nbsp; ⚙️ se rellena solo con datos reales &nbsp;·&nbsp; toca una miniatura para editarla</div>
+      <div class="hint" style="margin:8px 2px 0">✍️ manual &nbsp;·&nbsp; 🔁 rotación diaria &nbsp;·&nbsp; ⚙️ dato automático &nbsp;·&nbsp; seleccione una miniatura para editar</div>
       <div id="slotList" class="storyboard"></div>
       <div class="slot-tools" style="margin-top:10px">
-        <button class="ghost" id="btnPlanWizard" title="Elige días y tipos de cartela: el guion se genera solo">🪄 Planificar días</button>
         <button class="ghost" id="btnRundownAdd">＋ Añadir bloque</button>
-        <button class="ghost" id="btnWorkersRefresh" title="Trae ahora mismo el tiempo, el precio de la luz y las gasolineras">⚙️ Actualizar datos reales</button>
+        <button class="ghost" id="btnWorkersRefresh" title="Actualiza tiempo, previsión, luz, gasolineras y aire">Actualizar datos</button>
       </div>
       <div id="slotEditor" class="slot-editor" hidden></div>
     </section>
     <section id="rdTabLib" hidden>
       <div class="library-head">
-        <h3>Piezas que rotan</h3>
+        <h3>Contenido rotativo</h3>
         <button class="ghost" id="btnLibraryAdd">＋ Añadir pieza</button>
       </div>
-      <p class="hint" style="margin:0 0 10px">Este es el <b>almacén</b> que alimenta los bloques 🔁 del guion: consejos, citas, datos curiosos…
-        Cada día sale una pieza distinta de cada tipo, sola. Una pieza puede salir <b>siempre</b> (entra en la rotación)
-        o <b>solo cuando la programes</b> (fechas, días de la semana). Abajo tienes qué saldrá los próximos 7 días.</p>
+      <p class="hint" style="margin:0 0 10px">Fondo de piezas para los bloques 🔁 del guion. Cada día se emite una distinta, en ciclo,
+        sin repetir hasta agotar el fondo. Una pieza puede entrar en rotación permanente o limitarse a fechas y días concretos.</p>
       <div class="library-tools">
         <label>Categoría<select id="libraryCategory"></select></label>
         <div class="status" id="librarySummary"></div>
@@ -626,8 +603,8 @@
     </section>
   </div>
   <div class="dlg-f">
-    <button class="ghost" id="btnRundownReset" title="Vuelve al guion de ejemplo (las piezas del almacén no se tocan)">Restaurar ejemplo</button>
-    <button class="ghost" id="btnRundownSave">💾 Guardar cambios</button>
+    <button class="ghost" id="btnRundownReset" title="Vuelve al guion de ejemplo (el contenido rotativo no se toca)">Restaurar ejemplo</button>
+    <button class="ghost" id="btnRundownSave">Guardar cambios</button>
     <button class="primary" id="btnRundownMake" title="Convierte el guion en cartelas listas para revisar y publicar">Crear las cartelas →</button>
   </div>
 </dialog>
