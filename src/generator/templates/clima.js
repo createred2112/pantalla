@@ -37,6 +37,7 @@ function iconSvg(key, c) {
 }
 
 module.exports = {
+  iconSvg, keyOf, // reutilizados por la plantilla "prevision"
   id: 'clima',
   label: 'Clima / Tiempo (temperatura + icono)',
   hint: { title: 'Temperatura (p. ej. 24ºC)', subtitle: 'Condición: SOLEADO, LLUVIA…', body: 'Máx/Mín (opcional)', date: 'Cuándo: HOY, MAÑANA…' },

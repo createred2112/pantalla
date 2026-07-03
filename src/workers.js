@@ -61,6 +61,46 @@ async function weather() {
   };
 }
 
+// --- Proveedor: previsión 3 días (Open-Meteo) ---
+async function forecast() {
+  const j = await fetchJson(
+    `https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}` +
+    `&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=Europe%2FMadrid&forecast_days=3`
+  );
+  const labels = ['HOY', 'MAÑANA', 'PASADO'];
+  const days = (j.daily.time || []).slice(0, 3).map((t, i) => ({
+    label: labels[i] || t,
+    cond: wmoLabel(Number(j.daily.weather_code[i])),
+    max: Math.round(j.daily.temperature_2m_max[i]),
+    min: Math.round(j.daily.temperature_2m_min[i]),
+  }));
+  if (!days.length) throw new Error('sin previsión');
+  return {
+    template: 'prevision',
+    title: `${days[0].max}º`,
+    subtitle: 'Previsión · Vitoria-Gasteiz',
+    body: days.map((d) => `${d.label} ${d.max}º/${d.min}º`).join(' · '),
+    date: 'Open-Meteo',
+    extra: { days },
+  };
+}
+
+// --- Proveedor: calidad del aire (Open-Meteo Air Quality, índice europeo) ---
+async function airQuality() {
+  const j = await fetchJson(
+    `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${LAT}&longitude=${LON}&current=european_aqi&timezone=Europe%2FMadrid`
+  );
+  const v = Math.round(j.current.european_aqi);
+  const label = v <= 20 ? 'MUY BUENA' : v <= 40 ? 'BUENA' : v <= 60 ? 'MODERADA' : v <= 80 ? 'MALA' : 'MUY MALA';
+  return {
+    template: 'dato',
+    title: label,
+    subtitle: 'Calidad del aire',
+    body: `Índice europeo: ${v}`,
+    date: 'Vitoria-Gasteiz · Open-Meteo',
+  };
+}
+
 // --- Proveedor: precio de la luz PVPC (REE apidatos, gratis, sin clave) ---
 async function powerPrice() {
   const now = new Date();
@@ -124,6 +164,8 @@ const PROVIDERS = {
   // ttlMs: cada cuánto merece la pena re-consultar la fuente.
   // maxAgeMs: cuándo un dato guardado deja de valer para publicarse.
   weather: { label: 'El tiempo (Open-Meteo)', fn: weather, ttlMs: 25 * 60000, maxAgeMs: 3 * 3600000 },
+  forecast: { label: 'Previsión 3 días (Open-Meteo)', fn: forecast, ttlMs: 3 * 3600000, maxAgeMs: 12 * 3600000 },
+  airQuality: { label: 'Calidad del aire (Open-Meteo)', fn: airQuality, ttlMs: 60 * 60000, maxAgeMs: 4 * 3600000 },
   powerPrice: { label: 'Precio de la luz (REE)', fn: powerPrice, ttlMs: 25 * 60000, maxAgeMs: 3 * 3600000 },
   // Los precios de gasolina cambian una vez al día y la respuesta es enorme:
   // no hay que machacar la API cada 30 min.

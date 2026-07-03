@@ -350,6 +350,14 @@ const SAMPLE_DATA = {
   foto: { title: 'Atardecer sobre la Catedral', subtitle: 'Postal', date: '22:00' },
   agenda: { title: 'Agenda', body: '19:30 | Los Chunguitos Live | Jimmy Jazz\n20:00 | La Tremenda Pasarela | Teatro Félix Petite' },
   mensaje: { title: 'Vitoria en verde.' },
+  prevision: {
+    title: '24º', subtitle: 'Previsión · Vitoria-Gasteiz', date: 'Open-Meteo',
+    data: { days: [
+      { label: 'HOY', cond: 'Soleado', max: 24, min: 14 },
+      { label: 'MAÑANA', cond: 'Poco nuboso', max: 22, min: 13 },
+      { label: 'PASADO', cond: 'Lluvia', max: 18, min: 12 },
+    ] },
+  },
   luz: {
     title: '12,4 cts', subtitle: 'Precio de la luz', date: 'kWh · PVPC · REE',
     data: {

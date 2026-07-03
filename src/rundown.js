@@ -260,12 +260,15 @@ function normalizeSlot(slot) {
   };
 }
 
+// Rotación SIN repetir: recorre TODAS las piezas en orden, una por día, y
+// solo vuelve a empezar cuando se agotan. Determinista (sin estado): el día
+// epoch avanza el cursor; el offset por bloque desincroniza bloques entre sí.
 function pickDaily(items, key, date) {
   if (!Array.isArray(items) || !items.length) return null;
-  const day = date || todayKey();
-  let h = 0;
-  for (const ch of `${day}:${key}`) h = ((h << 5) - h + ch.charCodeAt(0)) | 0;
-  return items[Math.abs(h) % items.length];
+  const epochDay = Math.floor(Date.parse(`${date || todayKey()}T12:00:00Z`) / 86400000);
+  let off = 0;
+  for (const ch of String(key)) off = (off + ch.charCodeAt(0)) % 9973;
+  return items[(epochDay + off) % items.length];
 }
 
 function slotPayload(slot, library, date) {

@@ -12,6 +12,7 @@ const modules = [
   require('./evento'),
   require('./cita'),
   require('./clima'),
+  require('./prevision'),
   require('./foto'),
   require('./agenda'),
   require('./mensaje'),

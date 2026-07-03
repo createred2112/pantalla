@@ -706,6 +706,22 @@ const rundownDlg = $('#rundownDlg');
 let RD_DIRTY = false;   // hay cambios sin guardar en escaleta/contenido
 let LIB_OPEN = -1;      // índice de la pieza expandida en la lista
 let RD_STAMP = Date.now(); // cache-bust de las miniaturas del storyboard
+let RD_PLAN_DAYS = 7;      // días que enseña el planificador (lo fija el asistente)
+
+// Catálogo del asistente "Planificar días": tipos de cartela predeterminados.
+const PLAN_TYPES = [
+  { id: 'tiempo', label: '🌤 Tiempo de hoy (automático)', def: true, slot: { source: 'worker', workerKey: 'weather', template: 'clima', label: 'Tiempo' } },
+  { id: 'prevision', label: '📆 Previsión 3 días (automático)', def: true, slot: { source: 'worker', workerKey: 'forecast', template: 'prevision', label: 'Previsión' } },
+  { id: 'agenda', label: '🗓 Agenda (la escribes tú)', def: true, duration: 10, slot: { source: 'fixed', template: 'agenda', label: 'Agenda', title: 'Agenda', body: '19:30 | Escribe aquí el plan | Lugar' } },
+  { id: 'curioso', label: '💡 Dato curioso (rota del almacén)', def: true, slot: { source: 'library', libraryKey: 'datosCuriosos', label: 'Dato curioso' } },
+  { id: 'utiles', label: 'ℹ️ Aviso útil (rota del almacén)', slot: { source: 'library', libraryKey: 'datosUtiles', label: 'Aviso útil' } },
+  { id: 'consejo', label: '💻 Consejo · Fast2Computer (rota)', slot: { source: 'library', libraryKey: 'consejosInformaticos', label: 'Consejo informático' } },
+  { id: 'luz', label: '💶 Precio de la luz (automático)', slot: { source: 'worker', workerKey: 'powerPrice', label: 'Precio de la luz' } },
+  { id: 'gasolina', label: '⛽ Gasolineras más baratas (automático)', slot: { source: 'worker', workerKey: 'fuel', label: 'Gasolina más barata' } },
+  { id: 'aire', label: '🍃 Calidad del aire (automático)', slot: { source: 'worker', workerKey: 'airQuality', template: 'dato', label: 'Calidad del aire' } },
+  { id: 'piscinas', label: '🏊 Aforo piscinas (lo escribes tú)', slot: { source: 'worker', workerKey: 'poolCapacity', template: 'dato', label: 'Aforo piscinas', subtitle: 'Personas en las piscinas' } },
+  { id: 'ultima', label: '🚨 Hueco de última hora (apagado hasta que haga falta)', enabled: false, slot: { source: 'fixed', template: 'alerta', label: 'Última hora', subtitle: 'ÚLTIMA HORA' } },
+];
 
 function rdSetDirty(v) {
   RD_DIRTY = v;
@@ -912,12 +928,13 @@ function addDays(dateStr, n) {
   return dt.toISOString().slice(0, 10);
 }
 
-// Réplica exacta de la elección diaria del servidor (hash fecha+bloque).
+// Réplica exacta de la rotación del servidor: ciclo secuencial sin repetir.
 function clientPickDaily(items, key, date) {
   if (!Array.isArray(items) || !items.length) return null;
-  let h = 0;
-  for (const ch of `${date}:${key}`) h = ((h << 5) - h + ch.charCodeAt(0)) | 0;
-  return items[Math.abs(h) % items.length];
+  const epochDay = Math.floor(Date.parse(`${date}T12:00:00Z`) / 86400000);
+  let off = 0;
+  for (const ch of String(key)) off = (off + ch.charCodeAt(0)) % 9973;
+  return items[(epochDay + off) % items.length];
 }
 
 // Réplica de libraryItems del servidor: pack del día + fechas exactas o programadas.
@@ -937,8 +954,9 @@ function renderPlanner() {
   if (!slots.length) { box.innerHTML = ''; return; }
   const start = RUNDOWN.activeDate || new Date().toISOString().slice(0, 10);
   const lib = RUNDOWN.library || {};
-  let html = '<label style="margin-top:12px">Qué saldrá los próximos días</label><div class="planner">';
-  for (let d = 0; d < 7; d++) {
+  const nDays = Math.max(1, Math.min(14, RD_PLAN_DAYS));
+  let html = `<label style="margin-top:12px">Qué saldrá los próximos ${nDays} día(s)</label><div class="planner">`;
+  for (let d = 0; d < nDays; d++) {
     const date = addDays(start, d);
     const dayLabel = new Date(date + 'T12:00:00').toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' });
     const chips = slots.map((s) => {
@@ -1139,6 +1157,33 @@ function confirmDiscard() {
 }
 
 $('#btnRundown').addEventListener('click', openRundown);
+// --- 🪄 Asistente Planificar días: días + tipos → guion generado ---
+const planDlg = $('#planDlg');
+$('#btnPlanWizard').addEventListener('click', () => {
+  if (!RUNDOWN) return;
+  $('#planTypes').innerHTML = PLAN_TYPES.map((t, i) =>
+    `<label class="chk"><input type="checkbox" data-plan="${i}" ${t.def ? 'checked' : ''}>${t.label}</label>`).join('');
+  planDlg.showModal();
+});
+$('#planGo').addEventListener('click', () => {
+  if (!RUNDOWN) return;
+  const sel = [...$('#planTypes').querySelectorAll('[data-plan]:checked')].map((el) => PLAN_TYPES[Number(el.dataset.plan)]);
+  if (!sel.length) { toast('Elige al menos un tipo de cartela'); return; }
+  RD_PLAN_DAYS = Math.max(1, Math.min(14, Number($('#planDays').value) || 3));
+  const stamp = Date.now().toString(36);
+  const newSlots = sel.map((t) => ({
+    id: `plan_${t.id}_${stamp}`, enabled: t.enabled !== false, duration: t.duration || 8, video: false,
+    theme: '', title: '', subtitle: '', body: '', date: '', template: '', libraryKey: '', workerKey: '',
+    ...t.slot,
+  }));
+  collectRundown();
+  RUNDOWN.rundown.slots = $('#planReplace').checked ? newSlots : [...(RUNDOWN.rundown.slots || []), ...newSlots];
+  RUNDOWN_SELECTED = -1;
+  rdSetDirty(true);
+  planDlg.close();
+  renderRundown();
+  toast(`Guion generado: ${sel.length} tipos · ${RD_PLAN_DAYS} día(s). Revisa, 💾 Guarda y «Crear las cartelas».`);
+});
 $('#btnWorkersRefresh').addEventListener('click', async (e) => {
   const b = e.target; b.disabled = true;
   toast('Actualizando datos automáticos…');

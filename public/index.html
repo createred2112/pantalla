@@ -516,6 +516,25 @@
   </div>
 </dialog>
 
+<!-- 🪄 Planificar días -->
+<dialog id="planDlg">
+  <div class="dlg-h"><h2>🪄 Planificar días</h2><button class="ghost" onclick="planDlg.close()">✕</button></div>
+  <div class="dlg-b">
+    <p class="hint" style="margin-top:0">Elige cuántos días cubrir y qué tipos de cartela. El guion se genera ordenado;
+      el contenido de cada tipo <b>rota solo cada día sin repetirse</b> hasta agotar lo que haya en el almacén.
+      En «🔁 Piezas que rotan» verás exactamente qué saldrá cada día.</p>
+    <label>Días a cubrir</label>
+    <input id="planDays" type="number" min="1" max="14" value="3">
+    <label>Tipos de cartela</label>
+    <div id="planTypes" style="display:grid;gap:2px"></div>
+    <label class="chk" style="margin-top:10px"><input type="checkbox" id="planReplace" checked>Sustituir el guion actual (si lo desmarcas, se añaden al final)</label>
+  </div>
+  <div class="dlg-f">
+    <button class="ghost" onclick="planDlg.close()">Cancelar</button>
+    <button class="primary" id="planGo">Generar guion →</button>
+  </div>
+</dialog>
+
 <!-- 🚨 Última hora -->
 <dialog id="breakingDlg">
   <div class="dlg-h"><h2>🚨 Última hora</h2><button class="ghost" onclick="breakingDlg.close()">✕</button></div>
@@ -566,6 +585,7 @@
       <div class="hint" style="margin:8px 2px 0">✍️ lo escribes tú &nbsp;·&nbsp; 🔁 cada día sale una pieza distinta &nbsp;·&nbsp; ⚙️ se rellena solo con datos reales &nbsp;·&nbsp; toca una miniatura para editarla</div>
       <div id="slotList" class="storyboard"></div>
       <div class="slot-tools" style="margin-top:10px">
+        <button class="ghost" id="btnPlanWizard" title="Elige días y tipos de cartela: el guion se genera solo">🪄 Planificar días</button>
         <button class="ghost" id="btnRundownAdd">＋ Añadir bloque</button>
         <button class="ghost" id="btnWorkersRefresh" title="Trae ahora mismo el tiempo, el precio de la luz y las gasolineras">⚙️ Actualizar datos reales</button>
       </div>
