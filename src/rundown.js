@@ -324,14 +324,18 @@ function slotPayload(slot, library, date) {
 function toCard(slot, library, order, date) {
   const s = normalizeSlot(slot);
   const p = slotPayload(s, library, date);
+  // En bloques de carrusel, la plantilla/tema fijados EN EL BLOQUE mandan
+  // sobre los de la pieza (permite unificar el estilo de todo el bloque).
+  const tplOverride = s.source === 'library' && s.template;
+  const themeOverride = s.source === 'library' && s.theme;
   return store.normalize({
     id: `rd_${s.id}`,
     order,
     enabled: s.enabled,
     type: 'generated',
-    template: p.template || s.template || 'noticia',
+    template: tplOverride ? s.template : (p.template || s.template || 'noticia'),
     // Sin tema fijo → look del día (paleta rotativa determinista).
-    theme: p.theme || s.theme || dayTheme(date),
+    theme: themeOverride ? s.theme : (p.theme || s.theme || dayTheme(date)),
     title: p.title || s.title || s.label,
     subtitle: p.subtitle || s.subtitle || '',
     body: p.body || s.body || '',

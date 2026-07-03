@@ -540,6 +540,35 @@ app.post('/api/extract', async (req, res) => {
   }
 });
 
+// --- Vista previa con memoria: si nada cambió, la simulación anterior vale ---
+let _reviewCache = null;
+function reviewHash() {
+  const crypto = require('crypto');
+  const sig = store.active().map((c) =>
+    `${c.id}:${Number(c.duration) || 0}:` +
+    (c.type === 'generated' ? renderMeta.renderHash(c) : `${c.file || ''}:${c.updatedAt || ''}`)
+  ).join('|');
+  return crypto.createHash('sha1')
+    .update(sig + JSON.stringify({ n: cfg.naming, p: cfg.screenProfile, f: cfg.screen.format }))
+    .digest('hex');
+}
+
+// ¿Sigue vigente la última simulación? (lectura instantánea, cero trabajo)
+app.get('/api/review', (req, res) => {
+  if (_reviewCache && _reviewCache.hash === reviewHash()) {
+    return res.json({ fresh: true, at: _reviewCache.at, result: _reviewCache.result, cards: store.list() });
+  }
+  res.json({ fresh: false });
+});
+
+// (Re)generar la simulación y recordarla.
+app.post('/api/review', async (req, res) => {
+  const result = await publish({ dryRun: true, skipImport: true });
+  const at = new Date().toISOString();
+  if (result.ok) _reviewCache = { hash: reviewHash(), result, at };
+  res.json({ fresh: Boolean(result.ok), at, result, cards: store.list() });
+});
+
 app.post('/api/publish', async (req, res) => {
   const dryRun = req.body && req.body.dryRun;
   const importWorker = req.body && req.body.importWorker === true;

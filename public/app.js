@@ -372,12 +372,21 @@ async function loadEditorRundown(card) {
     ED_SLOT = slot;
     box.style.display = '';
     if (slot.source === 'library') {
-      $('#genFields').style.display = 'none';
+      // Plantilla y tema quedan editables (se guardan en el bloque, persisten);
+      // solo se ocultan los textos por-pieza, que el siguiente pase repone.
+      $('#edContentFields').style.display = 'none';
+      if (![...$('#edTemplate').options].some((o) => o.value === '')) {
+        $('#edTemplate').insertAdjacentHTML('afterbegin', '<option value="">Auto (cada pieza con la suya)</option>');
+      }
+      $('#edTemplate').value = slot.template || '';
+      $('#edTheme').value = slot.theme || '';
+      renderSwatches();
       const keys = RUNDOWN.libraryKeys || [];
       const catLabel = (keys.find((k) => k.key === slot.libraryKey) || {}).label || slot.libraryKey;
       const items = (RUNDOWN.library && RUNDOWN.library[slot.libraryKey]) || [];
       box.innerHTML = `
-        <div class="status">Producida por el bloque <b>«${esc(slot.label)}»</b> · carrusel: <b>${esc(catLabel)}</b></div>
+        <div class="status">Producida por el bloque <b>«${esc(slot.label)}»</b> · carrusel: <b>${esc(catLabel)}</b>.
+          La plantilla y el tema elegidos abajo se aplican a TODO el bloque (vacío = cada pieza con el suyo).</div>
         <label>Cambia de pieza<select id="edSlotRotation">
           <option value="dia" ${slot.rotation !== 'hora' ? 'selected' : ''}>Cada día</option>
           <option value="hora" ${slot.rotation === 'hora' ? 'selected' : ''}>Cada hora</option>
@@ -412,6 +421,9 @@ function openEditor(card) {
   $('#edRundownBox').style.display = 'none';
   $('#edRundownBox').innerHTML = '';
   $('#genFields').style.display = '';
+  $('#edContentFields').style.display = '';
+  const autoOpt = [...$('#edTemplate').options].find((o) => o.value === '');
+  if (autoOpt && !(card && card.source === 'rundown')) autoOpt.remove();
   $('#urlImport').style.display = card && card.source === 'rundown' ? 'none' : '';
   if (card && card.source === 'rundown' && card.rundownSlot) loadEditorRundown(card);
   $('#edTitle').textContent = card ? 'Editar cartela' : 'Nueva cartela';
@@ -630,6 +642,9 @@ $('#btnSave').addEventListener('click', async () => {
       ED_SLOT.duration = Number($('#edDuration').value) || 8;
       ED_SLOT.enabled = $('#edEnabled').checked;
       ED_SLOT.video = $('#edVideo').checked;
+      // Plantilla y tema del BLOQUE: mandan sobre los de cada pieza (vacío = auto).
+      ED_SLOT.template = $('#edTemplate').value || '';
+      ED_SLOT.theme = $('#edTheme').value || '';
       document.querySelectorAll('#edRundownBox [data-ed-lib]').forEach((el) => {
         const arr = RUNDOWN.library && RUNDOWN.library[ED_SLOT.libraryKey];
         const it = arr && arr[Number(el.dataset.edLib)];

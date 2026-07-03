@@ -240,7 +240,17 @@ function publishError(r) {
   return 'No se pudo preparar la vista previa.';
 }
 
-async function load() {
+function showResult(result, cards, note) {
+  const manifest = (result.steps.sequence && result.steps.sequence.manifest) || [];
+  renderPlayer(manifest, new Map(cards.map((c) => [c.id, c])));
+  const files = (result.steps.sequence && result.steps.sequence.files) || manifest.map((m) => m.file);
+  const playlistText = files.includes('playlist.json') ? ', incluyendo <b>playlist.json</b>' : '';
+  $('#status').innerHTML = `${note} <b>${manifest.length}</b> cartela(s); al publicar se subirían <b>${files.length}</b> archivo(s)${playlistText}.`;
+}
+
+// Con memoria: si nada cambió desde la última simulación, se muestra al
+// instante. Solo se regenera si hay cambios o al pulsar el botón.
+async function load(force) {
   clearPlayback();
   slides = [];
   index = 0;
@@ -248,19 +258,20 @@ async function load() {
   $('#loading').style.display = '';
   $('#player').classList.remove('ready');
   $('#content').innerHTML = '';
-  $('#liveLog').textContent = 'Arrancando...';
-  loadStarted = Date.now() - 1000;
-  startProgress();
   try {
-    const result = await api('/publish', { method: 'POST', body: JSON.stringify({ dryRun: true, importWorker: false }) });
-    if (!result.ok) throw new Error(publishError(result));
-    const cards = await api('/cards');
-    const manifest = (result.steps.sequence && result.steps.sequence.manifest) || [];
-    const map = new Map(cards.map((c) => [c.id, c]));
-    renderPlayer(manifest, map);
-    const files = (result.steps.sequence && result.steps.sequence.files) || manifest.map((m) => m.file);
-    const playlistText = files.includes('playlist.json') ? ', incluyendo <b>playlist.json</b>' : '';
-    $('#status').innerHTML = `Simulación lista: <b>${manifest.length}</b> cartela(s). Si publicas ahora, se subirían <b>${files.length}</b> archivo(s)${playlistText}.`;
+    if (!force) {
+      const c = await api('/review');
+      if (c.fresh && c.result && c.result.ok) {
+        showResult(c.result, c.cards, `Simulación vigente (sin cambios desde las ${new Date(c.at).toLocaleTimeString('es-ES')}):`);
+        return;
+      }
+    }
+    $('#liveLog').textContent = 'Arrancando...';
+    loadStarted = Date.now() - 1000;
+    startProgress();
+    const r = await api('/review', { method: 'POST' });
+    if (!r.result || !r.result.ok) throw new Error(publishError(r.result));
+    showResult(r.result, r.cards, 'Simulación lista:');
   } catch (e) {
     $('#content').innerHTML = `<div class="error">${esc(e.message)}</div>`;
     $('#status').textContent = 'No se pudo preparar la vista previa.';
@@ -270,7 +281,7 @@ async function load() {
   }
 }
 
-$('#btnReload').addEventListener('click', load);
+$('#btnReload').addEventListener('click', () => load(true));
 $('#btnPrev').addEventListener('click', prevSlide);
 $('#btnNext').addEventListener('click', nextSlide);
 $('#btnPlay').addEventListener('click', togglePlay);
@@ -290,3 +301,4 @@ document.addEventListener('visibilitychange', () => {
 });
 
 renderSteps(null);
+load(); // al entrar: instantánea si nada cambió; se genera sola si hay cambios

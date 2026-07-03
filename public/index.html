@@ -369,13 +369,15 @@
         <label>Tema de color</label>
         <select id="edTheme"></select>
         <div id="themeSwatches" style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap"></div>
-        <label>Título <span class="hint" id="hTitle"></span></label><input id="edTitleField" placeholder="Titular">
-        <label>Subtítulo <span class="hint" id="hSubtitle"></span></label><input id="edSubtitle" placeholder="Sección">
-        <label>Texto <span class="hint" id="hBody"></span></label><textarea id="edBody"></textarea>
-        <label>Fecha <span class="hint" id="hDate"></span></label><input id="edDate" placeholder="opcional">
-        <label>Foto de fondo</label>
-        <input type="file" id="edPhotoFile" accept="image/*" capture="environment">
-        <input type="hidden" id="edPhoto">
+        <div id="edContentFields">
+          <label>Título <span class="hint" id="hTitle"></span></label><input id="edTitleField" placeholder="Titular">
+          <label>Subtítulo <span class="hint" id="hSubtitle"></span></label><input id="edSubtitle" placeholder="Sección">
+          <label>Texto <span class="hint" id="hBody"></span></label><textarea id="edBody"></textarea>
+          <label>Fecha <span class="hint" id="hDate"></span></label><input id="edDate" placeholder="opcional">
+          <label>Foto de fondo</label>
+          <input type="file" id="edPhotoFile" accept="image/*" capture="environment">
+          <input type="hidden" id="edPhoto">
+        </div>
       </div>
 
       <div id="fileFields" style="display:none">
