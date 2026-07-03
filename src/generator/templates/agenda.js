@@ -19,10 +19,19 @@ module.exports = {
     const els = [];
     const cleanTitle = String(card.title || '').trim();
     const title = (!cleanTitle || cleanTitle.length < 3) ? 'AGENDA' : cleanTitle;
+    const subtitle = String(card.subtitle || '').trim();
 
     // Banda superior + etiqueta + caja flecha.
     els.push({ type: 'rect', x: 0, y: 0, w: W, h: topH, color: acc });
-    els.push({ type: 'text', x: pad, y: 0, w: Math.round(W * 0.6), h: topH, text: title.toUpperCase(), font: 'display', weight: 800, color: accText, align: 'left', valign: 'center', size: Math.round(topH * 0.42), letterSpacingEm: 0.03 });
+    els.push({ type: 'text', x: pad, y: 0, w: Math.round(W * (subtitle ? 0.44 : 0.6)), h: topH, text: title.toUpperCase(), font: 'display', weight: 800, color: accText, align: 'left', valign: 'center', size: Math.round(topH * 0.42), letterSpacingEm: 0.03 });
+    if (subtitle) {
+      els.push({
+        type: 'text', x: Math.round(W * 0.5), y: 0, w: Math.round(W * 0.37), h: topH,
+        text: subtitle.toUpperCase(), font: 'display', weight: 800, color: accText,
+        align: 'right', valign: 'center', letterSpacingEm: 0.03,
+        autofit: { min: Math.round(topH * 0.22), max: Math.round(topH * 0.42), lines: 1 },
+      });
+    }
     els.push({ type: 'rect', x: W - topH, y: 0, w: topH, h: topH, color: dark });
     const a = topH * 0.3, m = topH / 2, swA = topH * 0.08;
     els.push({ type: 'svg', x: W - topH, y: 0, w: topH, h: topH, svg: `<svg viewBox="0 0 ${topH} ${topH}" width="100%" height="100%"><line x1="${m - a}" y1="${m + a}" x2="${m + a}" y2="${m - a}" stroke="${acc}" stroke-width="${swA}" stroke-linecap="round"/><polyline points="${m + a * 0.1},${m - a} ${m + a},${m - a} ${m + a},${m + a * 0.1}" fill="none" stroke="${acc}" stroke-width="${swA}" stroke-linecap="round" stroke-linejoin="round"/></svg>` });

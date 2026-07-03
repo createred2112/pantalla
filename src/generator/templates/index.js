@@ -6,6 +6,7 @@ const modules = [
   require('./noticia'),
   require('./titular'),
   require('./dato'),
+  require('./datocurioso'),
   require('./aire'),
   require('./luz'),
   require('./gasolina'),

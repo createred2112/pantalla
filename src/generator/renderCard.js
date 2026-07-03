@@ -85,22 +85,32 @@ function inferBind(el, card) {
   return null;
 }
 
-// Aplica un layout (elementos) a los datos de la cartela (refresca texto vinculado).
-function applyLayout(layout, card) {
+function themeValue(ctx, key) {
+  const theme = (ctx && ctx.theme) || {};
+  return theme[key] || null;
+}
+
+// Aplica un layout (elementos) a los datos de la cartela (refresca texto vinculado
+// y mantiene vivos los colores ligados al tema cuando el editor los guardó así).
+function applyLayout(layout, card, ctx) {
+  const bg = layout.background ? { ...layout.background } : undefined;
+  if (bg && bg.colorTheme) bg.color = themeValue(ctx, bg.colorTheme) || bg.color;
   const elements = (layout.elements || []).map((e) => {
     const el = { ...e };
     if (el.bind && card[el.bind] != null) el.text = el.transform === 'upper' ? String(card[el.bind]).toUpperCase() : String(card[el.bind]);
+    if (el.colorTheme) el.color = themeValue(ctx, el.colorTheme) || el.color;
+    if (el.bgTheme) el.bg = themeValue(ctx, el.bgTheme) || el.bg;
     return el;
   });
-  return { background: layout.background, elements };
+  return { background: bg, elements };
 }
 
 // Frame resuelto, por prioridad: layout propio de la cartela > layout por defecto
 // de la plantilla > el que genera la plantilla en código.
 function resolveFrame(card, ctx, tpl) {
-  if (card.layout && Array.isArray(card.layout.elements)) return applyLayout(card.layout, card);
+  if (card.layout && Array.isArray(card.layout.elements)) return applyLayout(card.layout, card, ctx);
   const tl = require('../templateLayouts').get(card.template);
-  if (tl && Array.isArray(tl.elements)) return applyLayout(tl, card);
+  if (tl && Array.isArray(tl.elements)) return applyLayout(tl, card, ctx);
   const frame = tpl.build(card, ctx) || { elements: [] };
   frame.elements = (frame.elements || []).map((e, i) => Object.assign({ id: 'el' + i, bind: inferBind(e, card) }, e));
   return frame;
@@ -112,7 +122,7 @@ function resolveForEditor(card) {
   if (typeof tpl.build !== 'function') return null;
   const ctx = buildCtx(card, tpl);
   const frame = resolveFrame(card, ctx, tpl);
-  return { W: ctx.W, H: ctx.H, template: tpl.id, photo: card.photo || null, fontDisplay: ctx.fontDisplay, fontText: ctx.font, background: frame.background || { type: 'solid', color: ctx.theme.bg }, elements: frame.elements };
+  return { W: ctx.W, H: ctx.H, template: tpl.id, photo: card.photo || null, fontDisplay: ctx.fontDisplay, fontText: ctx.font, theme: ctx.theme, background: frame.background || { type: 'solid', color: ctx.theme.bg }, elements: frame.elements };
 }
 
 async function renderToBuffer(card) {

@@ -20,8 +20,8 @@ const DEFAULT_LIBRARY = {
     { title: 'La ciudad también se escribe en sus pequeñas noticias.', subtitle: 'Archivo local', template: 'cita', theme: 'carbon' },
   ],
   datosCuriosos: [
-    { title: 'Vitoria-Gasteiz tiene más de 40 m2 de zona verde por habitante.', subtitle: 'Dato curioso', template: 'dato', theme: 'lima' },
-    { title: 'El anillo verde suma más de 30 kilómetros de recorrido.', subtitle: 'Dato curioso', template: 'dato', theme: 'azul' },
+    { title: 'Vitoria-Gasteiz tiene más de 40 m2 de zona verde por habitante.', subtitle: 'Dato curioso', template: 'datocurioso', theme: 'lima' },
+    { title: 'El anillo verde suma más de 30 kilómetros de recorrido.', subtitle: 'Dato curioso', template: 'datocurioso', theme: 'azul' },
   ],
   efemerides: [
     { title: 'Hoy también pasó algo que merece memoria.', subtitle: 'Efeméride', body: 'Añade aquí efemérides locales o históricas.', template: 'noticia', theme: 'carbon' },
@@ -41,7 +41,7 @@ const DEFAULT_LIBRARY = {
 const LIBRARY_KEYS = [
   { key: 'datosUtiles', label: 'Datos útiles', template: 'dato', theme: 'lima' },
   { key: 'citasHistoricas', label: 'Citas históricas', template: 'cita', theme: 'carbon' },
-  { key: 'datosCuriosos', label: 'Datos curiosos', template: 'dato', theme: 'lima' },
+  { key: 'datosCuriosos', label: 'Datos curiosos', template: 'datocurioso', theme: 'lima' },
   { key: 'efemerides', label: 'Efemérides', template: 'noticia', theme: 'carbon' },
   { key: 'consejosInformaticos', label: 'Consejos informáticos', template: 'noticia', theme: 'azul' },
   { key: 'comentariosSemana', label: 'Comentarios de la semana', template: 'cita', theme: 'carbon' },
@@ -110,11 +110,13 @@ function normalizeLibraryItem(item, defaults) {
   const weekdays = Array.isArray(item && item.weekdays)
     ? item.weekdays
     : String((item && item.weekdays) || '').split(',');
+  let template = String((item && item.template) || defaults.template || 'noticia');
+  if (defaults.key === 'datosCuriosos' && template === 'dato') template = 'datocurioso';
   return {
     title: String((item && item.title) || ''),
     subtitle: String((item && item.subtitle) || ''),
     body: String((item && item.body) || ''),
-    template: String((item && item.template) || defaults.template || 'noticia'),
+    template,
     theme: String((item && item.theme) || defaults.theme || ''),
     date: String((item && item.date) || ''),
     enabled: !item || item.enabled !== false,

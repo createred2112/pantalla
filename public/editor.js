@@ -23,6 +23,11 @@ async function load() {
   FONT_DISPLAY = FRAME.fontDisplay || FONT_DISPLAY;
   FONT_TEXT = FRAME.fontText || FONT_TEXT;
   $('#hint').textContent = FRAME.template + ' · ' + FRAME.W + '×' + FRAME.H;
+  if (FRAME.template === 'agenda') {
+    $('#btnDefault').disabled = true;
+    $('#btnDefault').title = 'Agenda cambia mucho segun tenga horas o solo frases. Guarda el diseno solo en esta cartela.';
+    $('#btnDefault').textContent = 'Predeterminado bloqueado';
+  }
   fit(); build();
 }
 
@@ -159,7 +164,10 @@ function apply(inp) {
   else if (k === 'afmax') el.autofit.max = +v;
   else if (['x', 'y', 'w', 'h', 'size', 'weight'].includes(k)) el[k] = +v;
   else if (k === 'letterSpacingEm') el.letterSpacingEm = +v;
-  else el[k] = v;
+  else {
+    el[k] = v;
+    if (k === 'color') delete el.colorTheme;
+  }
   const div = canvas.querySelector(`.el[data-idx="${SEL}"]`);
   if (div) div.replaceWith(renderEl(el, SEL));
 }
@@ -167,15 +175,43 @@ function syncXY() { const p = $('#panel'); const xi = p.querySelector('[data-k="
 function syncWH() { const p = $('#panel'); const wi = p.querySelector('[data-k="w"]'), hi = p.querySelector('[data-k="h"]'); if (wi) wi.value = ELS[SEL].w; if (hi) hi.value = ELS[SEL].h; }
 
 // --- Guardar / restablecer ---
-$('#btnSave').addEventListener('click', async () => {
+function sameColor(a, b) {
+  return String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
+}
+function themeTokenFor(value) {
+  const theme = FRAME.theme || {};
+  for (const key of ['bg', 'bg2', 'text', 'textMuted', 'accent', 'accentText', 'logoAccent']) {
+    if (sameColor(value, theme[key])) return key;
+  }
+  return '';
+}
+function layoutPayload() {
   const bg = FRAME.background ? { type: FRAME.background.type, color: FRAME.background.color } : undefined;
-  const r = await fetch('/api/cards/' + ID + '/layout', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ layout: { background: bg, elements: ELS } }) });
+  if (bg) {
+    const bgToken = themeTokenFor(bg.color);
+    if (bgToken) bg.colorTheme = bgToken;
+  }
+  const elements = ELS.map((src) => {
+    const el = { ...src };
+    const colorToken = themeTokenFor(el.color);
+    const bgToken = themeTokenFor(el.bg);
+    if (colorToken) el.colorTheme = colorToken;
+    if (bgToken) el.bgTheme = bgToken;
+    return el;
+  });
+  return { background: bg, elements };
+}
+$('#btnSave').addEventListener('click', async () => {
+  const r = await fetch('/api/cards/' + ID + '/layout', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ layout: layoutPayload() }) });
   toast(r.ok ? 'Diseño guardado ✓' : 'Error al guardar');
 });
 $('#btnDefault').addEventListener('click', async () => {
+  if (FRAME.template === 'agenda') {
+    toast('En Agenda usa Guardar diseño: el predeterminado global esta bloqueado');
+    return;
+  }
   if (!confirm('¿Aplicar este diseño como PREDETERMINADO de la plantilla "' + FRAME.template + '"? Afectará a todas sus cartelas que no tengan diseño propio.')) return;
-  const bg = FRAME.background ? { type: FRAME.background.type, color: FRAME.background.color } : undefined;
-  const r = await fetch('/api/templates/' + FRAME.template + '/layout', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ layout: { background: bg, elements: ELS } }) });
+  const r = await fetch('/api/templates/' + FRAME.template + '/layout', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ layout: layoutPayload() }) });
   toast(r.ok ? 'Guardado como predeterminado ✓' : 'Error');
 });
 $('#btnReset').addEventListener('click', async () => {
