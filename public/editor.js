@@ -58,7 +58,7 @@ function renderEl(el, i) {
   else if (el.type === 'rect' || el.type === 'band') { d.style.background = el.gradient || el.color || '#000'; if (el.radius) d.style.borderRadius = el.radius + 'px'; }
   else if (el.type === 'svg') {
     d.innerHTML = el.svg || '';
-    if (el.decorative || !el.bind) d.style.pointerEvents = 'none';
+    if (el.decorative) d.style.pointerEvents = 'none';
   }
   else if (el.type === 'image') d.style.background = '#1a2a44';
 

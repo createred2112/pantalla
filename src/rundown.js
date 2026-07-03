@@ -33,6 +33,9 @@ const DEFAULT_LIBRARY = {
   comentariosSemana: [
     { title: 'La conversación también es ciudad.', subtitle: 'Comentario de la semana', body: 'Selecciona aquí un comentario destacado de GasteizBerri.', template: 'cita', theme: 'carbon' },
   ],
+  agendaEventos: [
+    { title: 'Agenda', subtitle: 'Hoy', body: '19:30 | Actividad pendiente | Lugar\n20:00 | Añade eventos | Vitoria-Gasteiz', template: 'agenda', theme: 'blanco' },
+  ],
 };
 
 const LIBRARY_KEYS = [
@@ -42,6 +45,7 @@ const LIBRARY_KEYS = [
   { key: 'efemerides', label: 'Efemérides', template: 'noticia', theme: 'carbon' },
   { key: 'consejosInformaticos', label: 'Consejos informáticos', template: 'noticia', theme: 'azul' },
   { key: 'comentariosSemana', label: 'Comentarios de la semana', template: 'cita', theme: 'carbon' },
+  { key: 'agendaEventos', label: 'Agenda viva', template: 'agenda', theme: 'blanco' },
 ];
 
 const DEFAULT_RUNDOWN = {
@@ -116,6 +120,8 @@ function normalizeLibraryItem(item, defaults) {
     enabled: !item || item.enabled !== false,
     start: String((item && (item.start || item.from)) || ''),
     end: String((item && (item.end || item.to)) || ''),
+    startAt: String((item && (item.startAt || item.fromAt)) || ''),
+    endAt: String((item && (item.endAt || item.toAt)) || ''),
     dates: dates.map((d) => String(d).trim()).filter(Boolean),
     weekdays: weekdays.map((d) => Number(d)).filter((n) => n >= 1 && n <= 7),
     notes: String((item && item.notes) || ''),
@@ -137,7 +143,20 @@ function dayTheme(date) {
 function itemApplies(item, date) {
   const d = String(date || todayKey()).slice(0, 10);
   if (item.enabled === false) return false;
-  if (item.dates && item.dates.length) return item.dates.includes(d);
+  if (item.dates && item.dates.length && !item.dates.includes(d)) return false;
+  const now = new Date();
+  const dayStart = new Date(`${d}T00:00:00`);
+  const dayEnd = new Date(`${d}T23:59:59`);
+  if (item.startAt) {
+    const startAt = new Date(item.startAt);
+    if (!Number.isNaN(startAt.getTime()) && dayEnd < startAt) return false;
+    if (d === todayKey() && !Number.isNaN(startAt.getTime()) && now < startAt) return false;
+  }
+  if (item.endAt) {
+    const endAt = new Date(item.endAt);
+    if (!Number.isNaN(endAt.getTime()) && dayStart > endAt) return false;
+    if (d === todayKey() && !Number.isNaN(endAt.getTime()) && now > endAt) return false;
+  }
   if (item.start && d < item.start) return false;
   if (item.end && d > item.end) return false;
   if (item.weekdays && item.weekdays.length && !item.weekdays.includes(dayNumber(d))) return false;
@@ -175,7 +194,7 @@ function libraryItems(library, key, date) {
   const lib = normalizeLibrary(library);
   const daily = lib.days[date] && Array.isArray(lib.days[date][key]) ? lib.days[date][key] : [];
   const pool = Array.isArray(lib[key]) ? lib[key] : [];
-  const exact = pool.filter((item) => item.enabled !== false && item.dates && item.dates.includes(date));
+  const exact = pool.filter((item) => item.enabled !== false && item.dates && item.dates.includes(date) && itemApplies(item, date));
   const scheduled = exact.length ? exact : pool.filter((item) => itemApplies(item, date));
   return [...daily, ...scheduled];
 }
@@ -183,12 +202,26 @@ function libraryItems(library, key, date) {
 function read(options = {}) {
   ensureFiles();
   const rundown = readJson(RUNDOWN_FILE, DEFAULT_RUNDOWN);
+  upgradeRundown(rundown);
   const library = normalizeLibrary(readJson(LIBRARY_FILE, DEFAULT_LIBRARY));
   const date = options.date || todayKey();
   if (!Array.isArray(rundown.slots)) rundown.slots = [];
   let workers = [];
   try { workers = require('./workers').state(); } catch {}
   return { rundown, library, libraryKeys: LIBRARY_KEYS, activeDate: date, dayTheme: dayTheme(date), workers, daily: dailyPack(library, date), report: report(rundown, library, date) };
+}
+
+function upgradeRundown(rundown) {
+  if (!rundown || !Array.isArray(rundown.slots)) return rundown;
+  for (const slot of rundown.slots) {
+    if (slot && slot.id === 'agenda' && slot.source !== 'library') {
+      slot.source = 'library';
+      slot.libraryKey = 'agendaEventos';
+      slot.template = '';
+      slot.theme = '';
+    }
+  }
+  return rundown;
 }
 
 // Saltos por día: rundown.days = { 'YYYY-MM-DD': { skip: [slotId, ...] } }.

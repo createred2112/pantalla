@@ -52,6 +52,12 @@ MP4 por tipo de cartela (`clima`, `luz`, `agenda`, etc.). El resultado final de
 cada posición sigue siendo un único `berri-N.mp4`, con intro + cartela + outro
 unidos en el mismo archivo.
 
+La **Agenda viva** permite programar piezas por momento: una pieza puede salir
+desde ahora, desaparecer a una hora concreta o quedar preparada para mañana a
+una hora exacta. Así un concierto de las 21:00 deja de verse a las 22:00 y se
+puede dejar preparado otro mensaje para mañana sin tocar la pantalla a última
+hora.
+
 ### Crear una cartela desde una URL
 
 En el editor, pega una URL (noticia de WordPress o cualquier web con Open Graph

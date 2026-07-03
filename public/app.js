@@ -1036,7 +1036,7 @@ function currentLibraryMeta() {
 }
 
 function blankLibraryItem(meta) {
-  return { title: '', subtitle: '', body: '', template: meta.template || 'noticia', theme: meta.theme || '', enabled: true, start: '', end: '', dates: [], weekdays: [] };
+  return { title: '', subtitle: '', body: '', template: meta.template || 'noticia', theme: meta.theme || '', enabled: true, start: '', end: '', startAt: '', endAt: '', dates: [], weekdays: [] };
 }
 
 function clientDayNumber(date) {
@@ -1049,7 +1049,21 @@ function clientItemApplies(item, date) {
   const d = date || new Date().toISOString().slice(0, 10);
   const dates = Array.isArray(item.dates) ? item.dates : [];
   const weekdays = Array.isArray(item.weekdays) ? item.weekdays.map(Number) : [];
-  if (dates.length) return dates.includes(d);
+  if (dates.length && !dates.includes(d)) return false;
+  const now = new Date();
+  const today = new Date().toISOString().slice(0, 10);
+  const dayStart = new Date(`${d}T00:00:00`);
+  const dayEnd = new Date(`${d}T23:59:59`);
+  if (item.startAt) {
+    const startAt = new Date(item.startAt);
+    if (!Number.isNaN(startAt.getTime()) && dayEnd < startAt) return false;
+    if (d === today && !Number.isNaN(startAt.getTime()) && now < startAt) return false;
+  }
+  if (item.endAt) {
+    const endAt = new Date(item.endAt);
+    if (!Number.isNaN(endAt.getTime()) && dayStart > endAt) return false;
+    if (d === today && !Number.isNaN(endAt.getTime()) && now > endAt) return false;
+  }
   if (item.start && d < item.start) return false;
   if (item.end && d > item.end) return false;
   if (weekdays.length && !weekdays.includes(clientDayNumber(d))) return false;
@@ -1058,7 +1072,7 @@ function clientItemApplies(item, date) {
 
 // ¿La pieza tiene alguna programación de fechas?
 function isScheduled(item) {
-  return Boolean((item.dates && item.dates.length) || (item.weekdays && item.weekdays.length) || item.start || item.end);
+  return Boolean((item.dates && item.dates.length) || (item.weekdays && item.weekdays.length) || item.start || item.end || item.startAt || item.endAt);
 }
 
 const WEEKDAY_SHORT = ['', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb', 'dom'];
@@ -1068,11 +1082,21 @@ function fmtShortDate(d) {
   catch { return d; }
 }
 
+function fmtMoment(v) {
+  if (!v) return '';
+  try {
+    return new Date(v).toLocaleString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  } catch { return v; }
+}
+
 // Resumen legible de cuándo sale una pieza: "siempre", "1 jul – 31 ago · lun mié", "solo 15 jul"...
 function scheduleSummary(item) {
   if (item.enabled === false) return 'desactivada';
   if (item.dates && item.dates.length) return 'solo ' + item.dates.map(fmtShortDate).join(', ');
   const parts = [];
+  if (item.startAt && item.endAt) parts.push(`${fmtMoment(item.startAt)} – ${fmtMoment(item.endAt)}`);
+  else if (item.startAt) parts.push(`desde ${fmtMoment(item.startAt)}`);
+  else if (item.endAt) parts.push(`hasta ${fmtMoment(item.endAt)}`);
   if (item.start && item.end) parts.push(`${fmtShortDate(item.start)} – ${fmtShortDate(item.end)}`);
   else if (item.start) parts.push(`desde ${fmtShortDate(item.start)}`);
   else if (item.end) parts.push(`hasta ${fmtShortDate(item.end)}`);
@@ -1085,6 +1109,10 @@ function addDays(dateStr, n) {
   const dt = new Date(dateStr + 'T12:00:00');
   dt.setDate(dt.getDate() + n);
   return dt.toISOString().slice(0, 10);
+}
+
+function dtLocal(date, time) {
+  return `${date}T${time}`;
 }
 
 // Réplica exacta de la rotación del servidor: ciclo secuencial sin repetir.
@@ -1100,7 +1128,7 @@ function clientPickDaily(items, key, date) {
 function clientLibraryItems(lib, key, date) {
   const daily = (lib.days && lib.days[date] && Array.isArray(lib.days[date][key])) ? lib.days[date][key] : [];
   const pool = Array.isArray(lib[key]) ? lib[key] : [];
-  const exact = pool.filter((it) => it.enabled !== false && Array.isArray(it.dates) && it.dates.includes(date));
+  const exact = pool.filter((it) => it.enabled !== false && Array.isArray(it.dates) && it.dates.includes(date) && clientItemApplies(it, date));
   const scheduled = exact.length ? exact : pool.filter((it) => clientItemApplies(it, date));
   return [...daily, ...scheduled];
 }
@@ -1174,6 +1202,17 @@ function libraryItemHtml(meta, item, i) {
         </select>
       </label>
       <div class="lib-sched" ${sched ? '' : 'hidden'}>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin:6px 0 8px">
+          <button type="button" class="ghost" data-quick-time="now">Sale desde ahora</button>
+          <button type="button" class="ghost" data-quick-time="tonight">Quitar a las 22:00</button>
+          <button type="button" class="ghost" data-quick-time="tomorrow1320">Mañana 13:20</button>
+          <button type="button" class="ghost" data-quick-time="tomorrow1342">Mañana 13:42</button>
+        </div>
+        <div class="mini">
+          <label>Empieza a salir<input type="datetime-local" data-lib-field="startAt" value="${esc(item.startAt || '')}"></label>
+          <label>Deja de salir<input type="datetime-local" data-lib-field="endAt" value="${esc(item.endAt || '')}"></label>
+        </div>
+        <div class="hint">Para agenda: pon “deja de salir” cuando el evento ya no tenga sentido. Puedes dejar preparado mañana desde ahora.</div>
         <div class="mini">
           <label>Desde<input type="date" data-lib-field="start" value="${esc(item.start || '')}"></label>
           <label>Hasta<input type="date" data-lib-field="end" value="${esc(item.end || '')}"></label>
@@ -1246,7 +1285,7 @@ function collectLibraryCategory() {
   });
   obj.weekdays = [...wrap.querySelectorAll('[data-lib-weekday]:checked')].map((field) => Number(field.dataset.libWeekday));
   const mode = wrap.querySelector('[data-lib-mode]');
-  if (mode && mode.value === 'always') { obj.start = ''; obj.end = ''; obj.dates = []; obj.weekdays = []; }
+  if (mode && mode.value === 'always') { obj.start = ''; obj.end = ''; obj.startAt = ''; obj.endAt = ''; obj.dates = []; obj.weekdays = []; }
 }
 
 function parseWeekdays(text) {
@@ -1278,6 +1317,8 @@ function parseBulkItems(text, meta) {
       end: parts[4] || '',
       weekdays: parseWeekdays(parts[5] || ''),
       dates: (parts[6] || '').split(/[,\s]+/).map((x) => x.trim()).filter(Boolean),
+      startAt: parts[7] || '',
+      endAt: parts[8] || '',
     };
   }).filter((item) => item.title || item.body);
 }
@@ -1624,6 +1665,27 @@ $('#libraryList').addEventListener('change', (e) => {
 });
 $('#libraryList').addEventListener('click', (e) => {
   if (!RUNDOWN) return;
+  const quick = e.target.closest('[data-quick-time]');
+  if (quick) {
+    const wrap = quick.closest('.lib-edit');
+    const active = RUNDOWN.activeDate || new Date().toISOString().slice(0, 10);
+    const tomorrow = addDays(active, 1);
+    const now = new Date();
+    const nowLocal = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}T${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    const start = wrap.querySelector('[data-lib-field="startAt"]');
+    const end = wrap.querySelector('[data-lib-field="endAt"]');
+    if (quick.dataset.quickTime === 'now' && start) start.value = nowLocal;
+    if (quick.dataset.quickTime === 'tonight' && end) end.value = dtLocal(active, '22:00');
+    if (quick.dataset.quickTime === 'tomorrow1320') {
+      if (start) start.value = dtLocal(tomorrow, '13:20');
+      if (end && !end.value) end.value = dtLocal(tomorrow, '13:42');
+    }
+    if (quick.dataset.quickTime === 'tomorrow1342' && start) start.value = dtLocal(tomorrow, '13:42');
+    collectLibraryCategory();
+    rdSetDirty(true);
+    renderLibraryPanel();
+    return;
+  }
   const del = e.target.closest('[data-lib-del]');
   if (del) {
     if (!confirm('¿Quitar esta pieza definitivamente?')) return;
