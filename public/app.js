@@ -447,7 +447,7 @@ async function loadEditorRundown(card) {
     } else {
       box.innerHTML = `
         <div class="status">Producida por el bloque <b>«${esc(slot.label)}»</b> del guion${slot.source === 'worker' ? ' (dato automático)' : ''}.
-          Los cambios de contenido hechos aquí durarán hasta el próximo pase: para que persistan, edite el bloque.</div>
+          La plantilla, el tema, la duración y la animación se guardan en el bloque para que no los pise el próximo pase.</div>
         <button type="button" class="ghost" id="edOpenRundown" style="margin-top:8px;width:100%">Abrir el guion (modo avanzado)</button>`;
     }
     $('#edOpenRundown').addEventListener('click', async () => {
@@ -688,6 +688,11 @@ $('#btnPreview').addEventListener('click', async () => {
 
 $('#btnSave').addEventListener('click', async () => {
   const id = $('#edId').value;
+  const renderSavedCard = async () => {
+    if (!id) return;
+    try { await api('/cards/' + id + '/render', { method: 'POST' }); }
+    catch (e) { toast('Guardado; no se pudo regenerar ahora: ' + e.message); }
+  };
   // Cartela de carrusel: se guarda el BLOQUE (cadencia, piezas, duración) y se
   // regeneran las cartelas; editar la copia materializada sería pan para hoy.
   if (ED_SLOT && ED_SLOT.source === 'library') {
@@ -710,6 +715,7 @@ $('#btnSave').addEventListener('click', async () => {
       await api('/rundown', { method: 'PUT', body: JSON.stringify(RUNDOWN.rundown) });
       await api('/rundown/library', { method: 'PUT', body: JSON.stringify(RUNDOWN.library) });
       await api('/rundown/materialize', { method: 'POST', body: '{}' });
+      await renderSavedCard();
       editor.close();
       toast('Bloque actualizado; cartelas regeneradas');
       load();
@@ -718,10 +724,41 @@ $('#btnSave').addEventListener('click', async () => {
     return;
   }
   const data = collect();
+  if (ED_SLOT && ED_SLOT.source !== 'library') {
+    const b = $('#btnSave');
+    b.disabled = true;
+    try {
+      ED_SLOT.template = data.template || ED_SLOT.template || 'noticia';
+      ED_SLOT.theme = data.theme || '';
+      ED_SLOT.duration = data.duration || ED_SLOT.duration || 8;
+      ED_SLOT.enabled = data.enabled !== false;
+      ED_SLOT.video = data.video === true;
+      ED_SLOT.videoIntro = data.videoIntro || '';
+      ED_SLOT.videoOutro = data.videoOutro || '';
+      if (ED_SLOT.source !== 'worker') {
+        ED_SLOT.title = data.title || '';
+        ED_SLOT.subtitle = data.subtitle || '';
+        ED_SLOT.body = data.body || '';
+        ED_SLOT.date = data.date || '';
+      }
+      await api('/rundown', { method: 'PUT', body: JSON.stringify(RUNDOWN.rundown) });
+      await api('/rundown/materialize', { method: 'POST', body: '{}' });
+      await renderSavedCard();
+      editor.close();
+      toast('Tema guardado en el bloque; cartela regenerada');
+      load();
+    } catch (e) { toast('Error: ' + e.message); }
+    finally { b.disabled = false; }
+    return;
+  }
   try {
-    if (id) await api('/cards/' + id, { method: 'PUT', body: JSON.stringify(data) });
-    else await api('/cards', { method: 'POST', body: JSON.stringify(data) });
-    editor.close(); toast('Guardado'); load();
+    const saved = id
+      ? await api('/cards/' + id, { method: 'PUT', body: JSON.stringify(data) })
+      : await api('/cards', { method: 'POST', body: JSON.stringify(data) });
+    if ((saved && saved.type) === 'generated') {
+      await api('/cards/' + saved.id + '/render', { method: 'POST' });
+    }
+    editor.close(); toast('Guardado y regenerado'); load();
   } catch (e) { toast('Error: ' + e.message); }
 });
 
@@ -1272,6 +1309,29 @@ function agendaRangeForDay(item, date, idx) {
   return { idx, item, start, end, lane: 0 };
 }
 
+function agendaDatesFrom(startDate) {
+  const start = startDate || new Date().toISOString().slice(0, 10);
+  const nDays = Math.max(1, Math.min(14, RD_PLAN_DAYS || 7));
+  return Array.from({ length: nDays }, (_, i) => addDays(start, i));
+}
+
+function agendaSortKey(item, idx, startDate) {
+  const dates = agendaDatesFrom(startDate);
+  for (let d = 0; d < dates.length; d++) {
+    const range = agendaRangeForDay(item, dates[d], idx);
+    if (range) return d * 24 * 60 + range.start;
+  }
+  const at = Date.parse(item.startAt || item.start || '');
+  if (!Number.isNaN(at)) return 1000000 + at / 60000;
+  return 2000000 + idx;
+}
+
+function agendaViewItems(items, startDate) {
+  return (items || [])
+    .map((item, i) => ({ item, i, key: agendaSortKey(item, i, startDate) }))
+    .sort((a, b) => a.key - b.key || String(a.item.title || '').localeCompare(String(b.item.title || ''), 'es') || a.i - b.i);
+}
+
 // Réplica exacta de la rotación del servidor: ciclo secuencial sin repetir.
 function clientPickDaily(items, key, date) {
   if (!Array.isArray(items) || !items.length) return null;
@@ -1314,16 +1374,16 @@ function renderPlanner() {
   box.innerHTML = html + '</div>';
 }
 
-function renderAgendaTimeline(items, date) {
-  const box = $('#libraryPlanner');
-  if (!box) return;
+function agendaTimelineDayHtml(items, date, dayIndex) {
   const blocks = (items || [])
     .map((item, idx) => agendaRangeForDay(item, date, idx))
     .filter(Boolean)
     .sort((a, b) => a.start - b.start || a.end - b.end);
   if (!blocks.length) {
-    box.innerHTML = `<div class="agenda-timeline"><div class="status"><b>Sin bloques visibles para ${esc(fmtShortDate(date))}.</b> Añade un bloque de agenda para ver la línea de tiempo.</div></div>`;
-    return;
+    return `<div class="agenda-day ${dayIndex === 0 ? 'today' : ''}">
+      <div class="agenda-day-title"><b>${esc(fmtShortDate(date))}</b><span>sin bloques</span></div>
+      <div class="status">No hay nada programado para este día.</div>
+    </div>`;
   }
   const minStart = Math.min(...blocks.map((b) => b.start));
   const maxEnd = Math.max(...blocks.map((b) => b.end));
@@ -1361,12 +1421,27 @@ function renderAgendaTimeline(items, date) {
       <b>${minLabel(b.start)}-${minLabel(b.end)}</b><span>${esc(label)}</span>
     </button>`;
   }).join('');
-  box.innerHTML = `<div class="agenda-timeline">
-    <div class="agenda-timeline-head"><b>Línea de tiempo</b><span>${esc(fmtShortDate(date))} · los huecos quedan marcados en amarillo</span></div>
+  return `<div class="agenda-day ${dayIndex === 0 ? 'today' : ''}">
+    <div class="agenda-day-title"><b>${esc(fmtShortDate(date))}</b><span>${blocks.length} bloque(s)</span></div>
     <div class="agenda-time-scroll">
       <div class="agenda-time-scale">${markers.join('')}</div>
       <div class="agenda-time-track" style="height:${Math.max(70, lanes.length * 54 + 8)}px">${gapHtml}${blockHtml}</div>
     </div>
+  </div>`;
+}
+
+function renderAgendaTimeline(items, date) {
+  const box = $('#libraryPlanner');
+  if (!box) return;
+  const dates = agendaDatesFrom(date);
+  const hasBlocks = dates.some((d) => (items || []).some((item, idx) => agendaRangeForDay(item, d, idx)));
+  if (!hasBlocks) {
+    box.innerHTML = `<div class="agenda-timeline"><div class="status"><b>Sin bloques visibles en los próximos ${dates.length} días.</b> Añade un bloque de agenda para ver la línea de tiempo.</div></div>`;
+    return;
+  }
+  box.innerHTML = `<div class="agenda-timeline">
+    <div class="agenda-timeline-head"><b>Línea de tiempo</b><span>próximos ${dates.length} día(s) · los huecos quedan marcados en amarillo</span></div>
+    ${dates.map((d, i) => agendaTimelineDayHtml(items, d, i)).join('')}
   </div>`;
 }
 
@@ -1379,6 +1454,7 @@ function renderLibraryPanel() {
   const items = (RUNDOWN.library && Array.isArray(RUNDOWN.library[meta.key])) ? RUNDOWN.library[meta.key] : [];
   const activeDate = RUNDOWN.activeDate || new Date().toISOString().slice(0, 10);
   const eligible = items.filter((item) => clientItemApplies(item, activeDate)).length;
+  const viewItems = isAgenda ? agendaViewItems(items, activeDate) : items.map((item, i) => ({ item, i }));
   const libTitle = document.querySelector('#rdTabLib .library-head h3');
   if (libTitle) libTitle.textContent = isAgenda ? 'Agenda viva' : 'Carrusel';
   $('#btnLibraryAdd').textContent = isAgenda ? '＋ Añadir bloque de agenda' : '＋ Añadir pieza';
@@ -1389,7 +1465,7 @@ function renderLibraryPanel() {
       : `<b>${items.length}</b> pieza(s) en esta categoría · <b style="color:${eligible ? '#bff0d5' : '#ffd98a'}">${eligible}</b> pueden salir el ${esc(fmtShortDate(activeDate))}`;
   if (isAgenda) renderAgendaTimeline(items, activeDate);
   else renderPlanner();
-  $('#libraryList').innerHTML = items.length ? items.map((item, i) => libraryItemHtml(meta, item, i)).join('') :
+  $('#libraryList').innerHTML = items.length ? viewItems.map(({ item, i }) => libraryItemHtml(meta, item, i)).join('') :
     `<div class="empty">Esta categoría está vacía. ${isAgenda ? 'Añade un bloque de agenda.' : 'Añade una pieza o importa un lote.'}</div>`;
 }
 
@@ -1510,6 +1586,13 @@ function collectLibraryCategory() {
   if (mode && mode.value === 'always') { obj.start = ''; obj.end = ''; obj.startAt = ''; obj.endAt = ''; obj.dates = []; obj.weekdays = []; }
 }
 
+function sortAgendaLibraryForSave(startDate) {
+  if (!RUNDOWN || !RUNDOWN.library || !Array.isArray(RUNDOWN.library.agendaEventos)) return;
+  const openItem = RUNDOWN.library.agendaEventos[LIB_OPEN] || null;
+  RUNDOWN.library.agendaEventos = agendaViewItems(RUNDOWN.library.agendaEventos, startDate).map(({ item }) => item);
+  if (openItem) LIB_OPEN = RUNDOWN.library.agendaEventos.indexOf(openItem);
+}
+
 function parseWeekdays(text) {
   const src = String(text || '').toUpperCase();
   const map = { L: 1, M: 2, X: 3, J: 4, V: 5, S: 6, D: 7 };
@@ -1550,6 +1633,7 @@ async function saveAllRundown(opts = {}) {
   const date = $('#rundownDate').value || new Date().toISOString().slice(0, 10);
   collectRundown();
   collectLibraryCategory();
+  sortAgendaLibraryForSave(date);
   const rd = RUNDOWN.rundown;
   const lib = RUNDOWN.library;
   await api('/rundown?date=' + encodeURIComponent(date), { method: 'PUT', body: JSON.stringify(rd) });

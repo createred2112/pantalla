@@ -360,10 +360,10 @@ function slotPayload(slot, library, date) {
 function toCard(slot, library, order, date) {
   const s = normalizeSlot(slot);
   const p = slotPayload(s, library, date);
-  // En bloques de carrusel, la plantilla/tema fijados EN EL BLOQUE mandan
-  // sobre los de la pieza (permite unificar el estilo de todo el bloque).
-  const tplOverride = s.source === 'library' && s.template;
-  const themeOverride = s.source === 'library' && s.theme;
+  // La plantilla/tema fijados EN EL BLOQUE mandan sobre la pieza o el dato
+  // automático. Si quedan vacíos, cada pieza conserva su estilo propio.
+  const tplOverride = s.template;
+  const themeOverride = s.theme;
   return store.normalize({
     id: `rd_${s.id}`,
     order,
