@@ -141,6 +141,18 @@
   .pl-chip{font-size:11px;background:#0a1a30;border:1px solid var(--line);border-radius:999px;padding:3px 9px;color:var(--muted);max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .pl-chip b{color:var(--txt);font-weight:600}
   .pl-chip.warn{border-color:var(--warn);color:#ffd98a}
+  .agenda-wizard{display:flex;flex-direction:column;gap:10px;margin-top:8px}
+  .agenda-moment{background:#081729;border:1px solid var(--line);border-radius:12px;padding:10px}
+  .agenda-moment.live{border-color:rgba(43,182,115,.55)}
+  .agenda-moment-head{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+  .agenda-moment-head b{font-size:13px;flex:1}
+  .agenda-moment-head button{padding:7px 9px}
+  .agenda-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .agenda-grid label{margin-top:0}
+  .agenda-wide{grid-column:1/-1}
+  .agenda-quick{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
+  .agenda-quick button{padding:7px 9px;font-size:12px}
+  .agenda-add{width:100%;margin-top:8px}
   .bulk-box summary{cursor:pointer;color:var(--muted);font-size:13px}
   .weekdays{display:flex;gap:4px;flex-wrap:wrap;margin-top:4px}
   .weekdays label{margin:0;color:var(--txt);font-size:11px;background:#0a1a30;border:1px solid var(--line);border-radius:8px;padding:5px 7px}
@@ -158,6 +170,8 @@
     }
     .rundown-top{grid-template-columns:1fr}
     .library-tools{grid-template-columns:1fr}
+    .agenda-grid{grid-template-columns:1fr}
+    .agenda-wide{grid-column:1}
     .tl-card{flex-basis:132px}
     .slot-grid{grid-template-columns:1fr}
     .slot-wide{grid-column:1}

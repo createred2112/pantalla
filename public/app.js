@@ -918,7 +918,7 @@ let RD_PLAN_DAYS = 7;      // días que enseña el planificador (lo fija el asis
 const PLAN_TYPES = [
   { id: 'tiempo', label: 'Tiempo ahora · automático', def: true, slot: { source: 'worker', workerKey: 'weather', template: 'clima', label: 'Tiempo ahora' } },
   { id: 'prevision', label: 'Previsión 3 días · automático', def: true, slot: { source: 'worker', workerKey: 'forecast', template: 'prevision', label: 'Previsión' } },
-  { id: 'agenda', label: 'Agenda · manual', def: true, duration: 10, slot: { source: 'fixed', template: 'agenda', label: 'Agenda', title: 'Agenda', body: '' } },
+  { id: 'agenda', label: 'Agenda viva · programable', def: true, duration: 10, slot: { source: 'library', libraryKey: 'agendaEventos', label: 'Agenda' } },
   { id: 'curioso', label: 'Dato curioso · carrusel', def: true, slot: { source: 'library', libraryKey: 'datosCuriosos', label: 'Dato curioso' } },
   { id: 'utiles', label: 'Aviso útil · carrusel', slot: { source: 'library', libraryKey: 'datosUtiles', label: 'Aviso útil' } },
   { id: 'consejo', label: 'Consejo informático (Fast2Computer) · carrusel', slot: { source: 'library', libraryKey: 'consejosInformaticos', label: 'Consejo informático' } },
@@ -1423,7 +1423,7 @@ let WZ = null;
 
 async function openWizard() {
   RUNDOWN = await api('/rundown'); // trae almacén, workers y claves
-  WZ = { step: 1, days: 3, sel: new Set(PLAN_TYPES.filter((t) => t.def).map((t) => t.id)), manual: {}, adds: {} };
+  WZ = { step: 1, days: 3, sel: new Set(PLAN_TYPES.filter((t) => t.def).map((t) => t.id)), manual: {}, adds: {}, agenda: initialAgendaMoments() };
   renderWizard();
   wizardDlg.showModal();
 }
@@ -1432,6 +1432,88 @@ function wzWorkerLine(key) {
   const w = (RUNDOWN.workers || []).find((x) => x.key === key);
   if (!w) return 'Contenido automático.';
   return w.fresh && w.preview ? `Dato actual: ${w.preview}` : 'Sin datos aún; se obtienen automáticamente.';
+}
+
+function pad2(n) {
+  return String(n).padStart(2, '0');
+}
+
+function localDatePart(dt = new Date()) {
+  return `${dt.getFullYear()}-${pad2(dt.getMonth() + 1)}-${pad2(dt.getDate())}`;
+}
+
+function localDateTimePart(dt = new Date()) {
+  return `${localDatePart(dt)}T${pad2(dt.getHours())}:${pad2(dt.getMinutes())}`;
+}
+
+function dateAtTime(date, time) {
+  return `${date}T${time}`;
+}
+
+function agendaBaseDate() {
+  return (RUNDOWN && RUNDOWN.activeDate) || localDatePart();
+}
+
+function blankAgendaMoment() {
+  const today = agendaBaseDate();
+  return { title: 'Agenda', subtitle: 'Hoy', body: '', startAt: dateAtTime(today, '08:00'), endAt: dateAtTime(today, '22:00') };
+}
+
+function initialAgendaMoments() {
+  const today = agendaBaseDate();
+  const items = (((RUNDOWN || {}).library || {}).agendaEventos || [])
+    .filter((it) => it && it.enabled !== false)
+    .map((it) => {
+      const hasSchedule = Boolean(it.startAt || it.endAt || it.start || it.end || (Array.isArray(it.dates) && it.dates.length));
+      return {
+        title: it.title || 'Agenda',
+        subtitle: it.subtitle || 'Hoy',
+        body: it.body || '',
+        startAt: it.startAt || (hasSchedule ? '' : dateAtTime(today, '08:00')),
+        endAt: it.endAt || (hasSchedule ? '' : dateAtTime(today, '22:00')),
+        start: it.start || '',
+        end: it.end || '',
+        dates: Array.isArray(it.dates) ? it.dates : [],
+      };
+    });
+  if (items.length) return items;
+  return [blankAgendaMoment()];
+}
+
+function agendaMomentSummary(m) {
+  const when = scheduleSummary({ enabled: true, startAt: m.startAt, endAt: m.endAt, start: m.start, end: m.end, dates: m.dates || [] });
+  const lines = String(m.body || '').split(/\r?\n/).filter((x) => x.trim()).length;
+  return `${when} · ${lines || 0} evento(s)`;
+}
+
+function agendaMomentHtml(m, i) {
+  const live = clientItemApplies({ enabled: true, startAt: m.startAt, endAt: m.endAt, start: m.start, end: m.end, dates: m.dates || [] }, agendaBaseDate());
+  return `<div class="agenda-moment ${live ? 'live' : ''}" data-wz-agenda="${i}">
+    <div class="agenda-moment-head">
+      <b>${esc(agendaMomentSummary(m))}</b>
+      <button type="button" class="ghost" data-wz-agenda-copy="${i}">Duplicar</button>
+      <button type="button" class="ghost" data-wz-agenda-del="${i}" ${WZ.agenda.length <= 1 ? 'disabled' : ''}>Quitar</button>
+    </div>
+    <div class="agenda-quick">
+      <button type="button" class="ghost" data-wz-agenda-quick="now" data-i="${i}">Sale ahora</button>
+      <button type="button" class="ghost" data-wz-agenda-quick="tonight" data-i="${i}">Hasta las 22:00</button>
+      <button type="button" class="ghost" data-wz-agenda-quick="tomorrow1320" data-i="${i}">Mañana 13:20</button>
+      <button type="button" class="ghost" data-wz-agenda-quick="tomorrow1342" data-i="${i}">Mañana 13:42</button>
+    </div>
+    <div class="agenda-grid">
+      <label>Título<input data-wz-agenda-field="title" value="${esc(m.title || '')}" placeholder="Agenda"></label>
+      <label>Etiqueta<input data-wz-agenda-field="subtitle" value="${esc(m.subtitle || '')}" placeholder="Hoy, Mañana, Ahora en..."></label>
+      <label>Empieza a salir<input type="datetime-local" data-wz-agenda-field="startAt" value="${esc(m.startAt || '')}"></label>
+      <label>Deja de salir<input type="datetime-local" data-wz-agenda-field="endAt" value="${esc(m.endAt || '')}"></label>
+      <label class="agenda-wide">Eventos que verá la pantalla<textarea data-wz-agenda-field="body" placeholder="21:00 | Concierto en la Virgen Blanca | Casco Viejo&#10;22:30 | DJ set | Plaza Nueva">${esc(m.body || '')}</textarea></label>
+    </div>
+  </div>`;
+}
+
+function renderAgendaWizard() {
+  return `<div class="status"><b>Agenda viva:</b> crea tantos mensajes como necesites y decide cuándo empieza y cuándo desaparece cada uno.</div>
+    <div class="agenda-wizard">${(WZ.agenda || []).map(agendaMomentHtml).join('')}</div>
+    <button type="button" class="ghost agenda-add" data-wz-agenda-add>Añadir otro momento de agenda</button>`;
 }
 
 function renderWizard() {
@@ -1463,8 +1545,7 @@ function renderWizard() {
           <input data-wz-manual="piscinas:title" value="${esc((WZ.manual.piscinas || {}).title || '')}" placeholder="p. ej. 1.240">`;
       }
       if (t.id === 'agenda') {
-        return head + `<label>Planes del día · una línea por evento: HORA | Nombre | Lugar</label>
-          <textarea data-wz-manual="agenda:body" placeholder="19:30 | Concierto en la Virgen Blanca | Casco Viejo">${esc((WZ.manual.agenda || {}).body || '')}</textarea>`;
+        return head + renderAgendaWizard();
       }
       if (t.id === 'ultima') {
         return head + `<div class="status">Reservado y desactivado. Se activa desde el botón 🚨 del panel cuando haga falta.</div>`;
@@ -1485,11 +1566,15 @@ function renderWizard() {
 
   // Paso 3: confirmación
   const newPieces = Object.values(WZ.adds).reduce((n, txt) => n + String(txt || '').split(/\r?\n/).filter((l) => l.trim()).length, 0);
+  const agendaMoments = WZ.sel.has('agenda')
+    ? (WZ.agenda || []).filter((m) => String(m.body || '').trim() || (String(m.title || '').trim() && String(m.title || '').trim() !== 'Agenda')).length
+    : 0;
   $('#wzBody').innerHTML = `
     <p class="hint" style="margin-top:0">Resumen antes de confirmar:</p>
     <div class="status" style="line-height:1.7">
       Guion de <b>${chosen.length}</b> cartelas: ${chosen.map((t) => esc(t.slot.label)).join(' → ')}<br>
       Cobertura: <b>${WZ.days}</b> día(s); el carrusel cambia a diario sin repetir<br>
+      ${agendaMoments ? `Agenda viva: <b>${agendaMoments}</b> mensaje(s) programado(s)<br>` : ''}
       ${newPieces ? `Se incorporan <b>${newPieces}</b> pieza(s) nuevas al carrusel<br>` : ''}
       Se generan las cartelas y se abre la vista previa del bucle<br>
       La publicación requiere confirmación manual o la publicación automática programada
@@ -1500,6 +1585,14 @@ function renderWizard() {
 function wzCollect() {
   const d = $('#wzDays');
   if (d) WZ.days = Math.max(1, Math.min(14, Number(d.value) || 3));
+  const agendaBoxes = [...$('#wzBody').querySelectorAll('[data-wz-agenda]')];
+  if (agendaBoxes.length) {
+    WZ.agenda = agendaBoxes.map((box) => {
+      const obj = {};
+      box.querySelectorAll('[data-wz-agenda-field]').forEach((el) => { obj[el.dataset.wzAgendaField] = el.value; });
+      return obj;
+    });
+  }
   $('#wzBody').querySelectorAll('[data-wz-type]').forEach((el) => {
     if (el.checked) WZ.sel.add(el.dataset.wzType); else WZ.sel.delete(el.dataset.wzType);
   });
@@ -1523,6 +1616,23 @@ async function wizardFinish() {
       return Object.assign(s, WZ.manual[t.id] || {});
     });
     const lib = RUNDOWN.library || {};
+    if (WZ.sel.has('agenda')) {
+      const meta = (RUNDOWN.libraryKeys || []).find((k) => k.key === 'agendaEventos') || { key: 'agendaEventos', template: 'agenda', theme: 'blanco' };
+      lib.agendaEventos = (WZ.agenda || [])
+        .filter((m) => String(m.body || '').trim() || (String(m.title || '').trim() && String(m.title || '').trim() !== 'Agenda'))
+        .map((m) => ({
+          ...blankLibraryItem(meta),
+          title: m.title || 'Agenda',
+          subtitle: m.subtitle || '',
+          body: m.body || '',
+          startAt: m.startAt || '',
+          endAt: m.endAt || '',
+          start: m.start || '',
+          end: m.end || '',
+          dates: Array.isArray(m.dates) ? m.dates : [],
+        }))
+        .filter((item) => String(item.title || item.body || '').trim());
+    }
     for (const [key, text] of Object.entries(WZ.adds)) {
       const meta = (RUNDOWN.libraryKeys || []).find((k) => k.key === key) || { key, template: 'noticia', theme: '' };
       const items = parseBulkItems(text || '', meta);
@@ -1545,10 +1655,59 @@ async function wizardFinish() {
   }
 }
 
+function applyAgendaQuick(i, kind) {
+  wzCollect();
+  const m = (WZ.agenda || [])[i];
+  if (!m) return;
+  const today = agendaBaseDate();
+  const tomorrow = addDays(today, 1);
+  if (kind === 'now') m.startAt = localDateTimePart();
+  if (kind === 'tonight') m.endAt = dateAtTime(today, '22:00');
+  if (kind === 'tomorrow1320') {
+    m.subtitle = m.subtitle || 'Mañana';
+    m.startAt = dateAtTime(tomorrow, '13:20');
+    m.endAt = '';
+  }
+  if (kind === 'tomorrow1342') {
+    m.subtitle = m.subtitle || 'Mañana';
+    m.startAt = dateAtTime(tomorrow, '13:42');
+    m.endAt = '';
+  }
+  renderWizard();
+}
+
 $('#btnRundown').addEventListener('click', openWizard);
 $('#wzClose').addEventListener('click', () => wizardDlg.close());
 $('#wzAdvanced').addEventListener('click', () => { wizardDlg.close(); openRundown(); });
 $('#wzBack').addEventListener('click', () => { wzCollect(); WZ.step = Math.max(1, WZ.step - 1); renderWizard(); });
+$('#wzBody').addEventListener('click', (e) => {
+  const quick = e.target.closest('[data-wz-agenda-quick]');
+  if (quick) {
+    applyAgendaQuick(Number(quick.dataset.i), quick.dataset.wzAgendaQuick);
+    return;
+  }
+  const add = e.target.closest('[data-wz-agenda-add]');
+  if (add) {
+    wzCollect();
+    WZ.agenda.push(blankAgendaMoment());
+    renderWizard();
+    return;
+  }
+  const copy = e.target.closest('[data-wz-agenda-copy]');
+  if (copy) {
+    wzCollect();
+    const src = WZ.agenda[Number(copy.dataset.wzAgendaCopy)];
+    WZ.agenda.splice(Number(copy.dataset.wzAgendaCopy) + 1, 0, { ...src });
+    renderWizard();
+    return;
+  }
+  const del = e.target.closest('[data-wz-agenda-del]');
+  if (del) {
+    wzCollect();
+    if (WZ.agenda.length > 1) WZ.agenda.splice(Number(del.dataset.wzAgendaDel), 1);
+    renderWizard();
+  }
+});
 $('#wzNext').addEventListener('click', () => {
   wzCollect();
   if (WZ.step === 1 && !WZ.sel.size) { toast('Marca al menos un tipo de cartela'); return; }
