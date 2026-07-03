@@ -355,7 +355,65 @@ async function move(i, dir) {
 
 // --- Editor ---
 const editor = $('#editor');
+let ED_SLOT = null; // bloque del guion que produce la cartela abierta (si aplica)
+
+// Cartela producida por el guion: el lápiz enseña el mando REAL (cadencia,
+// piezas del carrusel) en vez de campos que el siguiente pase sobreescribiría.
+async function loadEditorRundown(card) {
+  const box = $('#edRundownBox');
+  try {
+    RUNDOWN = await api('/rundown');
+    const slot = ((RUNDOWN.rundown || {}).slots || []).find((s) => s.id === card.rundownSlot);
+    if (!slot) {
+      box.style.display = '';
+      box.innerHTML = '<div class="status">Esta cartela venía de un bloque del guion que ya no existe. Puede editarla como cartela suelta.</div>';
+      return;
+    }
+    ED_SLOT = slot;
+    box.style.display = '';
+    if (slot.source === 'library') {
+      $('#genFields').style.display = 'none';
+      const keys = RUNDOWN.libraryKeys || [];
+      const catLabel = (keys.find((k) => k.key === slot.libraryKey) || {}).label || slot.libraryKey;
+      const items = (RUNDOWN.library && RUNDOWN.library[slot.libraryKey]) || [];
+      box.innerHTML = `
+        <div class="status">Producida por el bloque <b>«${esc(slot.label)}»</b> · carrusel: <b>${esc(catLabel)}</b></div>
+        <label>Cambia de pieza<select id="edSlotRotation">
+          <option value="dia" ${slot.rotation !== 'hora' ? 'selected' : ''}>Cada día</option>
+          <option value="hora" ${slot.rotation === 'hora' ? 'selected' : ''}>Cada hora</option>
+        </select></label>
+        <label>Piezas del carrusel (marcadas = en emisión)</label>
+        <div style="max-height:220px;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:6px 10px">
+          ${items.map((p, i) => `<label class="chk"><input type="checkbox" data-ed-lib="${i}" ${p.enabled !== false ? 'checked' : ''}>${esc(p.title || p.body || '(sin título)')}</label>`).join('') || '<div class="hint">Sin piezas. Añádalas en Escaleta → Carrusel.</div>'}
+        </div>
+        <button type="button" class="ghost" id="edOpenRundown" style="margin-top:8px;width:100%">Abrir el guion (modo avanzado)</button>`;
+    } else {
+      box.innerHTML = `
+        <div class="status">Producida por el bloque <b>«${esc(slot.label)}»</b> del guion${slot.source === 'worker' ? ' (dato automático)' : ''}.
+          Los cambios de contenido hechos aquí durarán hasta el próximo pase: para que persistan, edite el bloque.</div>
+        <button type="button" class="ghost" id="edOpenRundown" style="margin-top:8px;width:100%">Abrir el guion (modo avanzado)</button>`;
+    }
+    $('#edOpenRundown').addEventListener('click', async () => {
+      editor.close();
+      await openRundown();
+      const idx = ((RUNDOWN.rundown || {}).slots || []).findIndex((s) => s.id === card.rundownSlot);
+      if (idx >= 0) {
+        RUNDOWN_SELECTED = idx;
+        renderRundown();
+        const ed = $('#slotEditor');
+        if (ed && !ed.hidden) ed.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    });
+  } catch { box.style.display = 'none'; }
+}
+
 function openEditor(card) {
+  ED_SLOT = null;
+  $('#edRundownBox').style.display = 'none';
+  $('#edRundownBox').innerHTML = '';
+  $('#genFields').style.display = '';
+  $('#urlImport').style.display = card && card.source === 'rundown' ? 'none' : '';
+  if (card && card.source === 'rundown' && card.rundownSlot) loadEditorRundown(card);
   $('#edTitle').textContent = card ? 'Editar cartela' : 'Nueva cartela';
   $('#edId').value = card?.id || '';
   $('#edType').value = card?.type || 'generated';
@@ -561,6 +619,32 @@ $('#btnPreview').addEventListener('click', async () => {
 
 $('#btnSave').addEventListener('click', async () => {
   const id = $('#edId').value;
+  // Cartela de carrusel: se guarda el BLOQUE (cadencia, piezas, duración) y se
+  // regeneran las cartelas; editar la copia materializada sería pan para hoy.
+  if (ED_SLOT && ED_SLOT.source === 'library') {
+    const b = $('#btnSave');
+    b.disabled = true;
+    try {
+      const rot = $('#edSlotRotation');
+      if (rot) ED_SLOT.rotation = rot.value === 'hora' ? 'hora' : 'dia';
+      ED_SLOT.duration = Number($('#edDuration').value) || 8;
+      ED_SLOT.enabled = $('#edEnabled').checked;
+      ED_SLOT.video = $('#edVideo').checked;
+      document.querySelectorAll('#edRundownBox [data-ed-lib]').forEach((el) => {
+        const arr = RUNDOWN.library && RUNDOWN.library[ED_SLOT.libraryKey];
+        const it = arr && arr[Number(el.dataset.edLib)];
+        if (it) it.enabled = el.checked;
+      });
+      await api('/rundown', { method: 'PUT', body: JSON.stringify(RUNDOWN.rundown) });
+      await api('/rundown/library', { method: 'PUT', body: JSON.stringify(RUNDOWN.library) });
+      await api('/rundown/materialize', { method: 'POST', body: '{}' });
+      editor.close();
+      toast('Bloque actualizado; cartelas regeneradas');
+      load();
+    } catch (e) { toast('Error: ' + e.message); }
+    finally { b.disabled = false; }
+    return;
+  }
   const data = collect();
   try {
     if (id) await api('/cards/' + id, { method: 'PUT', body: JSON.stringify(data) });

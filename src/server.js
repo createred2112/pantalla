@@ -382,7 +382,7 @@ const SAMPLES_META = path.join(SAMPLES_DIR, 'meta.json');
 function samplesHash() {
   const crypto = require('crypto');
   return crypto.createHash('sha1').update(JSON.stringify({
-    v: 8, // subir al cambiar el diseño de las plantillas en código
+    v: 9, // subir al cambiar el diseño de las plantillas en código
     brand: cfg.brand, palette: cfg.palette, screen: cfg.screen,
     tpls: templates.list().map((t) => t.id), data: SAMPLE_DATA,
   })).digest('hex');

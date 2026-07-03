@@ -133,6 +133,22 @@ function ensureContrast(color, bg) {
   if (contrastRatio(fx, b.slice(0, 3)) >= 1.9) return color;
   return luminance(b.slice(0, 3)) > 0.4 ? '#0E0E0E' : '#F2F1ED';
 }
+
+// Fondo REAL bajo un texto: si el texto cae dentro de un rect/banda de color
+// pintado antes que él, ese color es su fondo (no el de la cartela). Evita
+// falsos rescates tipo "hora carbón sobre caja lima" vista como carbón/carbón.
+function effectiveBgFor(el, elements, solidBg) {
+  let bg = solidBg;
+  for (const r of elements) {
+    if (r === el) break; // solo cuenta lo pintado debajo
+    if ((r.type !== 'rect' && r.type !== 'band') || !r.color || r.gradient) continue;
+    if (el.x >= r.x - 1 && el.y >= r.y - 1 &&
+        (el.x + (el.w || 0)) <= r.x + r.w + 1 && (el.y + (el.h || 0)) <= r.y + r.h + 1) {
+      bg = r.color;
+    }
+  }
+  return bg;
+}
 function famOf(font) {
   return font === 'display' ? (cfg.brand.fontDisplay || 'sans-serif') : (cfg.brand.fontFamily || 'sans-serif');
 }
@@ -172,7 +188,7 @@ async function elHtml(el, ctx) {
   }
   if (el.type === 'text') {
     const fam = famOf(el.font);
-    const color = ctx._solidBg ? ensureContrast(el.color || '#fff', ctx._solidBg) : (el.color || '#fff');
+    const color = ctx._elBg ? ensureContrast(el.color || '#fff', ctx._elBg) : (el.color || '#fff');
     const align = el.align || 'left';
     const valign = el.valign === 'center' ? 'center' : el.valign === 'bottom' ? 'flex-end' : 'flex-start';
     const just = align === 'center' ? 'center' : align === 'right' ? 'flex-end' : 'flex-start';
@@ -262,8 +278,14 @@ async function buildHtml(card, ctx, tpl, frame, opts = {}) {
   // Fondo plano visible → activa la guardia de contraste para los textos.
   ctx._solidBg = bgHtml ? null : bodyBg;
 
+  const _all = frame.elements || [];
   const parts = [];
-  for (const el of (frame.elements || [])) parts.push(await elHtml(el, ctx));
+  for (const el of _all) {
+    // Fondo efectivo del elemento: la caja de color que lo cubre, o el fondo plano.
+    ctx._elBg = ctx._solidBg ? effectiveBgFor(el, _all, ctx._solidBg) : null;
+    parts.push(await elHtml(el, ctx));
+  }
+  ctx._elBg = null;
   parts.push(await logoHtml(ctx, tpl));
 
   return `<!doctype html><html><head><meta charset="utf-8"><style>` +
