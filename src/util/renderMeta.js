@@ -44,12 +44,22 @@ function fileSig(p) {
   } catch { return p || null; }
 }
 
+function templateBumpersFor(card) {
+  const all = cfg.templateBumpers || {};
+  const b = all[card.template] || {};
+  return {
+    intro: b.intro || '',
+    outro: b.outro || '',
+  };
+}
+
 // Hash de TODO lo que afecta al píxel final de una cartela generada.
 function renderHash(card) {
   let tplLayout = null;
   try { tplLayout = require('../templateLayouts').get(card.template); } catch {}
+  const tplBumpers = templateBumpersFor(card);
   const src = {
-    v: 9, // subir al cambiar el diseño de las plantillas en código
+    v: 10, // subir al cambiar el diseño de las plantillas en código
     template: card.template || '',
     theme: themeFor(card),
     layout: card.layout || null,
@@ -62,8 +72,8 @@ function renderHash(card) {
     photo: fileSig(card.photo),
     video: card.video === true,
     motion: card.video ? 4 : null, // versión de la coreografía de animación
-    videoIntro: card.video ? fileSig(card.videoIntro) : null,
-    videoOutro: card.video ? fileSig(card.videoOutro) : null,
+    videoIntro: card.video ? fileSig(card.videoIntro || tplBumpers.intro) : null,
+    videoOutro: card.video ? fileSig(card.videoOutro || tplBumpers.outro) : null,
     duration: card.video ? (Number(card.duration) || 0) : null, // el MP4 depende de la duración
     brand: cfg.brand || {},
     screen: { width: cfg.screen.width, height: cfg.screen.height, format: cfg.screen.format, quality: cfg.screen.quality, background: cfg.screen.background },

@@ -181,6 +181,7 @@ app.get('/api/settings', (req, res) => {
     screen: cfg.screen,
     screenProfile: cfg.screenProfile || {},
     naming: cfg.naming || {},
+    templateBumpers: cfg.templateBumpers || {},
     ftp: { ...ftp, password: '', hasPassword: Boolean(ftp.password || process.env.FTP_PASSWORD), effective: effectiveFtp },
     fonts: fontFamilies(),
   });
@@ -196,6 +197,7 @@ app.put('/api/settings', (req, res) => {
   if (body.screen) partial.screen = body.screen;
   if (body.screenProfile) partial.screenProfile = body.screenProfile;
   if (body.naming) partial.naming = body.naming;
+  if (body.templateBumpers) partial.templateBumpers = body.templateBumpers;
   if (body.ftp) {
     const nextFtp = { ...(cfg.ftp || {}), ...body.ftp };
     if (!body.ftp.password) nextFtp.password = (cfg.ftp && cfg.ftp.password) || '';
@@ -203,7 +205,7 @@ app.put('/api/settings', (req, res) => {
   }
   saveConfig(partial);
   log.info('settings', 'Ajustes de diseño actualizados', Object.keys(partial));
-  res.json({ ok: true, brand: cfg.brand, palette: cfg.palette, screen: cfg.screen, screenProfile: cfg.screenProfile, naming: cfg.naming, ftp: { ...cfg.ftp, password: '' } });
+  res.json({ ok: true, brand: cfg.brand, palette: cfg.palette, screen: cfg.screen, screenProfile: cfg.screenProfile, naming: cfg.naming, templateBumpers: cfg.templateBumpers, ftp: { ...cfg.ftp, password: '' } });
 });
 
 app.get('/api/cards', (req, res) => {
@@ -492,6 +494,8 @@ app.post('/api/preview-video', async (req, res) => {
   } catch (e) {
     log.error('preview-video', e.message);
     res.status(500).json({ error: e.message });
+  } finally {
+    try { await require('./generator/htmlRender').close(); } catch {}
   }
 });
 
@@ -549,7 +553,7 @@ function reviewHash() {
     (c.type === 'generated' ? renderMeta.renderHash(c) : `${c.file || ''}:${c.updatedAt || ''}`)
   ).join('|');
   return crypto.createHash('sha1')
-    .update(sig + JSON.stringify({ n: cfg.naming, p: cfg.screenProfile, f: cfg.screen.format }))
+    .update(sig + JSON.stringify({ n: cfg.naming, p: cfg.screenProfile, f: cfg.screen.format, b: cfg.templateBumpers || {} }))
     .digest('hex');
 }
 
@@ -618,12 +622,18 @@ app.post('/api/workers/refresh', async (req, res) => {
 app.get('/api/status', (req, res) => {
   const { ftpConfig } = require('./config');
   const ftpCfg = ftpConfig();
+  const mem = process.memoryUsage();
   res.json({
     status: status.read(),
     ftpConfigured: Boolean(ftpCfg.host && ftpCfg.user),
     screen: cfg.screen,
     screenProfile: cfg.screenProfile || {},
     safety: renderGuard.safetyInfo(),
+    processMemory: {
+      rssMb: Math.round(mem.rss / 1024 / 1024),
+      heapUsedMb: Math.round(mem.heapUsed / 1024 / 1024),
+      externalMb: Math.round(mem.external / 1024 / 1024),
+    },
   });
 });
 

@@ -57,12 +57,17 @@ async function generate(opts = {}) {
   const cards = publishableCards().filter((c) => c.type === 'generated');
   const results = [];
   let reused = 0;
-  for (const card of cards) {
+  status.set('generate', { ok: null, running: true, count: cards.length, done: 0, reused: 0, results: [] });
+  for (let i = 0; i < cards.length; i++) {
+    const card = cards[i];
     try {
+      log.info('generate', `Preparando vídeo ${i + 1}/${cards.length}: ${card.title || card.id}`);
+      status.set('generate', { ok: null, running: true, count: cards.length, done: i, current: card.id, currentTitle: card.title || card.id, reused, results });
       const r = await renderOne(card, opts);
       if (r.reused) reused++;
       results.push({ id: card.id, file: r.file, ok: true, reused: r.reused });
-      if (!r.reused) log.info('generate', `OK ${card.id} -> ${r.file}`);
+      log.info('generate', r.reused ? `Reutilizado ${card.id} -> ${r.file}` : `OK ${card.id} -> ${r.file}`);
+      status.set('generate', { ok: null, running: true, count: cards.length, done: i + 1, current: null, reused, results });
     } catch (e) {
       results.push({ id: card.id, ok: false, error: e.message });
       log.error('generate', `FALLO ${card.id}: ${e.message}`);

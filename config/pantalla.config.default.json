@@ -45,6 +45,7 @@
     "requiredCount": 8,
     "notes": ""
   },
+  "templateBumpers": {},
   "defaults": {
     "duration": 10,
     "template": "titular",

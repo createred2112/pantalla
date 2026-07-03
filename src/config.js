@@ -47,6 +47,7 @@ function migrateProductionContract(c) {
     outputFormat: 'mp4',
     requiredCount: FIXED_SCREEN_FILES.length,
   };
+  c.templateBumpers = c.templateBumpers && typeof c.templateBumpers === 'object' ? c.templateBumpers : {};
   return c;
 }
 

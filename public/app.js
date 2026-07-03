@@ -119,6 +119,7 @@ async function openSettings() {
   const eff = ftp.effective || {};
   $('#setFtpHint').textContent = `${ftp.hasPassword ? 'Hay contraseña guardada. ' : ''}FTP activo: ${eff.host || 'sin servidor'}:${eff.port || 21} · carpeta ${eff.remoteDir || '/'}`;
   $('#setFtpTest').style.display = 'none';
+  buildBumperEditor();
   buildColorEditor();
   $('#setPreview').style.display = 'none';
   settingsDlg.showModal();
@@ -143,6 +144,35 @@ function buildColorEditor() {
 }
 function hex(c) { return (c && c[0] === '#') ? c.slice(0, 7) : '#000000'; }
 
+function buildBumperEditor() {
+  const bumpers = SETTINGS.templateBumpers || {};
+  const chosen = ['clima', 'prevision', 'luz', 'gasolina', 'dato', 'alerta', 'agenda', 'noticia', 'mensaje'];
+  const list = chosen.map((id) => TEMPLATES.find((t) => t.id === id)).filter(Boolean);
+  $('#setTemplateBumpers').innerHTML = list.map((t) => {
+    const b = bumpers[t.id] || {};
+    return `<div data-bumper-template="${esc(t.id)}" style="padding:10px;margin:8px 0;background:#0a1a30;border:1px dashed var(--line);border-radius:10px">
+      <b style="font-size:13px">${esc(t.label)}</b>
+      <label>Entrada MP4</label>
+      <input type="file" data-bumper-file="intro" accept="video/mp4,video/*">
+      <input data-bumper-path="intro" value="${esc(b.intro || '')}" placeholder="data/uploads/entrada-${esc(t.id)}.mp4">
+      <label>Salida MP4</label>
+      <input type="file" data-bumper-file="outro" accept="video/mp4,video/*">
+      <input data-bumper-path="outro" value="${esc(b.outro || '')}" placeholder="data/uploads/salida-${esc(t.id)}.mp4">
+    </div>`;
+  }).join('');
+}
+
+function collectTemplateBumpers() {
+  const out = {};
+  $('#setTemplateBumpers').querySelectorAll('[data-bumper-template]').forEach((row) => {
+    const id = row.dataset.bumperTemplate;
+    const intro = row.querySelector('[data-bumper-path="intro"]').value.trim();
+    const outro = row.querySelector('[data-bumper-path="outro"]').value.trim();
+    if (intro || outro) out[id] = { intro, outro };
+  });
+  return out;
+}
+
 $('#setLogoW').addEventListener('input', (e) => $('#setLogoWVal').textContent = e.target.value);
 $('#setScale').addEventListener('input', (e) => $('#setScaleVal').textContent = e.target.value);
 $('#setClimaScale').addEventListener('input', (e) => $('#setClimaScaleVal').textContent = e.target.value);
@@ -154,6 +184,16 @@ $('#setLogoLight').addEventListener('change', async (e) => {
 });
 $('#setLogoDark').addEventListener('change', async (e) => {
   if (e.target.files[0]) { toast('Subiendo logo…'); const p = await uploadFile(e.target); SETTINGS.brand.logoDark = p; showLogoPrev('setLogoDarkPrev', p); toast('Logo oscuro listo'); }
+});
+$('#setTemplateBumpers').addEventListener('change', async (e) => {
+  const fileInput = e.target.closest('[data-bumper-file]');
+  if (!fileInput || !fileInput.files[0]) return;
+  const row = fileInput.closest('[data-bumper-template]');
+  const kind = fileInput.dataset.bumperFile;
+  toast('Subiendo cortinilla…');
+  const p = await uploadFile(fileInput);
+  row.querySelector(`[data-bumper-path="${kind}"]`).value = p || '';
+  toast('Cortinilla lista');
 });
 
 function collectSettings() {
@@ -206,6 +246,7 @@ function collectSettings() {
       lowercase: $('#setLowercase').checked,
       prefixWithOrder: true,
     },
+    templateBumpers: collectTemplateBumpers(),
     ftp,
   };
 }
@@ -341,7 +382,7 @@ function render() {
         <button class="iconbtn" data-edit="${c.id}" title="Editar contenido">✎</button>
         ${c.type === 'generated' ? `<button class="iconbtn ${!rendered ? 'attn' : ''}" data-render="${c.id}" title="${rendered ? 'Regenerar archivo (no suele hacer falta)' : 'Generar el archivo'}">⟳</button>` : ''}
         ${rendered && rendered.type === 'video' ? `<button class="iconbtn" data-view-video="${c.id}" title="Ver vídeo generado">▶</button>` : ''}
-        ${c.type === 'generated' && c.template !== 'luz' && c.template !== 'gasolina' ? `<button class="iconbtn" data-design="${c.id}" title="Editor de diseño">🎨</button>` : ''}
+        ${c.type === 'generated' && c.template !== 'gasolina' ? `<button class="iconbtn" data-design="${c.id}" title="Editor de diseño">🎨</button>` : ''}
         <button class="iconbtn danger" data-del="${c.id}" title="Eliminar">🗑</button>
       </div>`;
     el.appendChild(div);

@@ -42,6 +42,16 @@ remota antes de subir. La etapa `sequence` valida la tanda completa antes de
 tocar `publish/`: con menos de ocho cartelas activas o con algún archivo que no
 sea MP4, la publicación se detiene y el FTP no recibe una tanda parcial.
 
+Los MP4 generados se cachean por firma de contenido: textos, datos, plantilla,
+tema, diseño, duración, marca, resolución y cortinillas. Si nada cambia, la
+vista previa y la publicación reutilizan el mismo archivo; si cambia una sola
+cartela, solo se regenera esa pieza.
+
+En **Ajustes → Cortinillas por plantilla** se pueden subir entradas y salidas
+MP4 por tipo de cartela (`clima`, `luz`, `agenda`, etc.). El resultado final de
+cada posición sigue siendo un único `berri-N.mp4`, con intro + cartela + outro
+unidos en el mismo archivo.
+
 ### Crear una cartela desde una URL
 
 En el editor, pega una URL (noticia de WordPress o cualquier web con Open Graph

@@ -11,6 +11,7 @@ const { cfg, paths, abs } = require('../config');
 const { buildHtml, withPage, AUTOFIT } = require('./htmlRender');
 const { prepare } = require('./renderCard');
 const renderGuard = require('../util/renderGuard');
+const log = require('../util/logger');
 
 // Se inyecta en la página: crea una coreografía completa (en pausa) y expone
 // __setT(ms). No usa azar: el MP4 se renderiza igual en cada ejecución.
@@ -226,10 +227,17 @@ async function stitchClips(inputs, out, dir, W, H, fps) {
   return out;
 }
 
+function bumperRef(card, field) {
+  if (card[field]) return card[field];
+  const b = (cfg.templateBumpers || {})[card.template] || {};
+  return field === 'videoIntro' ? b.intro : b.outro;
+}
+
 function bumperPath(card, field, label) {
-  if (!card[field]) return null;
-  const p = abs(card[field]);
-  if (!fs.existsSync(p)) throw new Error(`cortinilla ${label} no encontrada: ${card[field]}`);
+  const ref = bumperRef(card, field);
+  if (!ref) return null;
+  const p = abs(ref);
+  if (!fs.existsSync(p)) throw new Error(`cortinilla ${label} no encontrada: ${ref}`);
   return p;
 }
 
@@ -248,6 +256,7 @@ async function renderVideoToFile(card) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pantalla-vid-'));
   try {
     return await withPage(async (page) => {
+    log.info('video', `Capturando ${card.id}: ${frames} fotogramas a ${fps} fps`);
     await page.setViewport({ width: W, height: H, deviceScaleFactor: 1 });
     await page.setContent(html, { waitUntil: 'load' });
     try { await page.evaluate('document.fonts.ready'); } catch {}
@@ -263,6 +272,9 @@ async function renderVideoToFile(card) {
     for (let i = 0; i < frames; i++) {
       await page.evaluate((ms) => window.__setT(ms), (i / fps) * 1000);
       await page.screenshot({ path: path.join(dir, 'f' + String(i).padStart(5, '0') + '.jpg'), type: 'jpeg', quality: 92, clip: { x: 0, y: 0, width: W, height: H } });
+      if (i > 0 && i % Math.max(1, Math.floor(frames / 4)) === 0) {
+        log.info('video', `Captura ${card.id}: ${Math.round((i / frames) * 100)}%`);
+      }
     }
     fs.mkdirSync(paths.output, { recursive: true });
     const posterFrame = Math.min(frames - 1, Math.max(0, Math.round(fps * Math.min(1.2, duration * 0.35))));
@@ -272,10 +284,13 @@ async function renderVideoToFile(card) {
     }
     const out = path.join(paths.output, card.id + '.mp4');
     const main = path.join(dir, 'main.mp4');
+    log.info('video', `Codificando ${card.id}`);
     await encode(dir, fps, main);
     const intro = bumperPath(card, 'videoIntro', 'de entrada');
     const outro = bumperPath(card, 'videoOutro', 'de salida');
+    if (intro || outro) log.info('video', `Uniendo cortinillas ${card.id}: ${intro ? 'entrada' : ''}${intro && outro ? ' + ' : ''}${outro ? 'salida' : ''}`);
     await stitchClips([intro, main, outro].filter(Boolean), out, dir, W, H, fps);
+    log.info('video', `MP4 listo ${card.id}: ${path.basename(out)}`);
     return { file: out, ext: 'mp4' };
     });
   } finally {
