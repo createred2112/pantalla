@@ -269,18 +269,18 @@
   details.adv summary{cursor:pointer;color:var(--muted);font-size:13px}
   details.adv[open] summary{color:var(--txt);margin-bottom:2px}
 
-  /* Publicación automática */
-  .pilot{display:flex;align-items:center;gap:11px;background:var(--card);border:1px solid var(--line);
-    border-radius:var(--r);padding:11px 14px;margin-bottom:4px;box-shadow:var(--shadow)}
-  .pilot.on{border-color:rgba(43,182,115,.55);background:linear-gradient(135deg,rgba(43,182,115,.14),var(--card) 60%)}
-  .pilot-ico{font-size:20px;line-height:1;color:var(--muted)}
-  .pilot.on .pilot-ico{color:var(--ok)}
-  .pilot-txt{flex:1;min-width:0}
-  .pilot-txt b{display:block;font-size:14px}
-  .pilot-txt small{display:block;color:var(--muted);font-size:11.5px;margin-top:2px;line-height:1.35}
-  .pilot input[type=time]{width:auto;padding:8px 9px;font-size:13px}
-  .pilot button{flex:none}
-  @media (max-width:640px){ .pilot{flex-wrap:wrap} .pilot-txt{flex-basis:calc(100% - 70px)} }
+  /* Piloto de emisión */
+  .pilot{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;margin-bottom:10px;box-shadow:var(--shadow)}
+  .pilot.on{border-color:rgba(43,182,115,.55);background:linear-gradient(135deg,rgba(43,182,115,.14),var(--card) 62%)}
+  .pilot-top{display:flex;align-items:center;gap:10px}
+  .pilot-ico{width:16px;height:16px;border-radius:50%;border:2px solid var(--muted);flex:none}
+  .pilot.on .pilot-ico{background:var(--ok);border-color:var(--ok);box-shadow:0 0 12px rgba(43,182,115,.55)}
+  .pilot-txt{flex:1;min-width:0}.pilot-txt b{display:block;font-size:14px}.pilot-txt small{display:block;color:var(--muted);font-size:11.5px;margin-top:2px;line-height:1.35}
+  .pilot-grid{display:grid;grid-template-columns:110px 1fr 120px;gap:8px;margin-top:10px}
+  .pilot-grid label{margin:0}.pilot-grid input,.pilot-grid select{padding:8px 9px;font-size:13px}
+  .pilot-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.pilot-actions button{flex:1;min-width:132px}
+  .pilot-checks{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}
+  @media (max-width:640px){ .pilot-grid{grid-template-columns:1fr}.pilot-actions button{min-width:0} }
 </style>
 </head>
 <body>
@@ -313,14 +313,41 @@
     <button class="tool sq" id="btnRefresh" title="Refrescar la lista">↻</button>
   </div>
   <div class="pilot" id="pilotBar" style="display:none">
-    <span class="pilot-ico" id="pilotIco">○</span>
-    <div class="pilot-txt">
-      <b id="pilotTitle">Piloto automático</b>
-      <small id="pilotInfo">cargando…</small>
+    <div class="pilot-top">
+      <span class="pilot-ico" id="pilotIco"></span>
+      <div class="pilot-txt">
+        <b id="pilotTitle">Piloto de emisión</b>
+        <small id="pilotInfo">cargando...</small>
+      </div>
+      <button class="ghost" id="pilotToggle">Activar</button>
     </div>
-    <input type="time" id="pilotTime" value="08:00" title="Hora de publicación diaria">
-    <button class="ghost" id="pilotToggle">Activar</button>
-    <button class="ghost" id="pilotRun" title="Actualiza los datos y genera las cartelas de hoy para revisión. No publica.">Preparar hoy</button>
+    <div class="pilot-grid">
+      <label>Primer pase
+        <input type="time" id="pilotTime" value="08:00" title="Hora del primer pase diario">
+      </label>
+      <label>Modo
+        <select id="pilotMode">
+          <option value="review">Preparar y revisar</option>
+          <option value="publish">Publicar al FTP</option>
+        </select>
+      </label>
+      <label>Vigilar cambios
+        <select id="pilotSync">
+          <option value="0">Solo a la hora</option>
+          <option value="5">Cada 5 min</option>
+          <option value="10">Cada 10 min</option>
+          <option value="15">Cada 15 min</option>
+          <option value="30">Cada 30 min</option>
+          <option value="60">Cada 60 min</option>
+        </select>
+      </label>
+    </div>
+    <div class="pilot-checks" id="pilotChecks"></div>
+    <div class="pilot-actions">
+      <button class="ghost" id="pilotRun" title="Actualiza datos, escaleta y MP4 sin subir al FTP.">Preparar ahora</button>
+      <button class="ghost" id="pilotPublishNow" title="Genera y sube los ocho MP4 al FTP ahora.">Publicar ahora</button>
+      <button class="ghost" id="pilotReview" title="Abrir vista previa de la pantalla.">Vista previa</button>
+    </div>
   </div>
   <div class="list-head">
     <h2>Secuencia en pantalla</h2>

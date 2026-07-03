@@ -591,20 +591,25 @@ const autopilot = require('./autopilot');
 const workers = require('./workers');
 
 app.get('/api/autopilot', (req, res) => {
-  res.json({ ...autopilot.conf(), last: autopilot.state(), workers: workers.state() });
+  const st = status.read().stages || {};
+  res.json({ ...autopilot.conf(), last: autopilot.state(), sync: st['autopilot-sync'] || null, preflight: autopilot.preflight(), workers: workers.state() });
 });
 
 app.put('/api/autopilot', (req, res) => {
   const c = autopilot.setConf(req.body || {});
-  log.info('autopilot', `Configuración: ${c.enabled ? 'ACTIVO a las ' + c.time : 'apagado'}${c.publish ? ' (con publicación)' : ''}`);
-  res.json({ ...c, last: autopilot.state(), workers: workers.state() });
+  log.info('autopilot', `Configuración: ${c.enabled ? 'ACTIVO a las ' + c.time : 'apagado'} · modo=${c.mode} · sync=${c.liveSync ? c.syncEveryMinutes + 'min' : 'off'}`);
+  const st = status.read().stages || {};
+  res.json({ ...c, last: autopilot.state(), sync: st['autopilot-sync'] || null, preflight: autopilot.preflight(), workers: workers.state() });
 });
 
 // Preparar el día AHORA: workers + escaleta + render. NO publica por defecto
 // (la publicación pasa por revisión humana con el botón Publicar de siempre).
 app.post('/api/autopilot/run', async (req, res) => {
   try {
-    const r = await autopilot.runNow({ publish: Boolean(req.body && req.body.publish === true) });
+    const r = await autopilot.runNow({
+      publish: Boolean(req.body && req.body.publish === true),
+      sync: Boolean(req.body && req.body.sync === true),
+    });
     res.json({ ok: true, ...r });
   } catch (e) {
     res.status(500).json({ error: e.message });

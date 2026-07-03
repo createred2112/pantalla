@@ -752,24 +752,47 @@ let PILOT = null;
 function fmtLastRun(last) {
   if (!last) return 'todavía no se ha ejecutado';
   const when = last.ts ? new Date(last.ts).toLocaleString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : last.day;
-  if (last.ok === false) return `última: ${when} · ⚠ falló (mira Estado)`;
-  return `última: ${when} · ${last.cards || 0} cartelas${last.published ? ' publicadas ✓' : ''}`;
+  if (last.ok === false) return `última: ${when} · falló (mira Estado)`;
+  return `última: ${when} · ${last.cards || 0} cartelas${last.published ? ' publicadas' : ' preparadas'}`;
+}
+
+function pilotTag(text, ok) {
+  return `<span class="tag ${ok ? 'ok' : 'warn'}">${esc(text)}</span>`;
+}
+
+function syncLabel(minutes) {
+  const n = Number(minutes || 0);
+  return n > 0 ? `vigila cada ${n} min` : 'solo pase diario';
 }
 
 function renderPilot() {
   if (!PILOT) return;
   const bar = $('#pilotBar');
-  bar.style.display = 'flex';
+  bar.style.display = 'block';
   bar.classList.toggle('on', PILOT.enabled);
-  $('#pilotIco').textContent = PILOT.enabled ? '●' : '○';
-  $('#pilotTitle').textContent = PILOT.enabled ? 'Publicación automática · activa' : 'Publicación automática · desactivada';
+  $('#pilotTitle').textContent = PILOT.enabled ? 'Piloto de emisión · activo' : 'Piloto de emisión · apagado';
   const workersTxt = (PILOT.workers || []).filter((w) => w.fresh).map((w) => w.preview).filter(Boolean).join(' · ');
-  $('#pilotInfo').textContent = PILOT.enabled
-    ? `Guion y publicación diarios a las ${PILOT.time} · ${fmtLastRun(PILOT.last)}${workersTxt ? ' · ' + workersTxt : ''}`
-    : `Programe la hora y active para publicar cada día sin intervención${workersTxt ? ' · Datos: ' + workersTxt : ''}`;
+  const modeTxt = PILOT.mode === 'publish' ? 'publica al FTP' : 'prepara para revisar';
+  const syncTxt = syncLabel(PILOT.liveSync ? PILOT.syncEveryMinutes : 0);
+  $('#pilotInfo').textContent = `${modeTxt} · primer pase ${PILOT.time || '08:00'} · ${syncTxt} · ${fmtLastRun(PILOT.last)}${workersTxt ? ' · ' + workersTxt : ''}`;
   $('#pilotTime').value = PILOT.time || '08:00';
+  $('#pilotMode').value = PILOT.mode === 'publish' ? 'publish' : 'review';
+  const syncMinutes = PILOT.liveSync === false ? 0 : Number(PILOT.syncEveryMinutes || 10);
+  $('#pilotSync').value = String([0, 5, 10, 15, 30, 60].includes(syncMinutes) ? syncMinutes : 10);
   $('#pilotToggle').textContent = PILOT.enabled ? 'Apagar' : 'Activar';
   $('#pilotToggle').classList.toggle('primary', !PILOT.enabled);
+  const p = PILOT.preflight || {};
+  const required = Number(p.requiredCount || 8);
+  const selected = Number(p.selectedCount || 0);
+  const rendered = Number(p.renderedCount || 0);
+  const sync = PILOT.sync;
+  const checks = [
+    pilotTag(`${selected}/${required} vídeos`, selected >= required),
+    pilotTag(PILOT.mode === 'publish' ? (p.ftpConfigured ? 'FTP listo' : 'FTP sin configurar') : 'revisión manual', PILOT.mode !== 'publish' || p.ftpConfigured),
+    pilotTag(rendered >= Math.min(required, selected) ? 'MP4 cacheados' : `${rendered}/${Math.min(required, selected)} MP4 cacheados`, rendered >= Math.min(required, selected)),
+  ];
+  if (sync && sync.ts) checks.push(pilotTag(`última vigilancia ${new Date(sync.ts).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}`, sync.ok !== false));
+  $('#pilotChecks').innerHTML = checks.join('');
 }
 
 async function loadPilot() {
@@ -777,7 +800,18 @@ async function loadPilot() {
 }
 
 async function savePilot(patch) {
-  PILOT = await api('/autopilot', { method: 'PUT', body: JSON.stringify({ enabled: PILOT.enabled, time: $('#pilotTime').value || '08:00', publish: true, ...patch }) });
+  const syncEveryMinutes = Number($('#pilotSync').value || 0);
+  PILOT = await api('/autopilot', {
+    method: 'PUT',
+    body: JSON.stringify({
+      enabled: PILOT.enabled,
+      time: $('#pilotTime').value || '08:00',
+      mode: $('#pilotMode').value || 'review',
+      liveSync: syncEveryMinutes > 0,
+      syncEveryMinutes,
+      ...patch,
+    })
+  });
   renderPilot();
 }
 
@@ -789,26 +823,52 @@ $('#pilotToggle').addEventListener('click', async () => {
 $('#pilotTime').addEventListener('change', async () => {
   if (!PILOT) return;
   await savePilot({});
-  toast('Hora del piloto: ' + PILOT.time);
+  toast('Primer pase: ' + PILOT.time);
+});
+$('#pilotMode').addEventListener('change', async () => {
+  if (!PILOT) return;
+  await savePilot({});
+  toast(PILOT.mode === 'publish' ? 'El piloto publicará al FTP' : 'El piloto preparará para revisar');
+});
+$('#pilotSync').addEventListener('change', async () => {
+  if (!PILOT) return;
+  await savePilot({});
+  toast(syncLabel(PILOT.liveSync ? PILOT.syncEveryMinutes : 0));
 });
 $('#pilotRun').addEventListener('click', async (e) => {
   const b = e.target;
   b.disabled = true;
-  b.textContent = '⏳ Preparando…';
+  b.textContent = 'Preparando...';
   try {
-    // Prepara el día (datos + escaleta + render) SIN publicar: se revisa abajo
-    // y se publica con el botón de siempre, que enseña el plan antes de subir.
-    const r = await api('/autopilot/run', { method: 'POST', body: JSON.stringify({ publish: false }) });
-    toast(`Escaleta de hoy lista: ${r.cards} cartela(s). Revisa abajo y pulsa Publicar.`);
+    const r = await api('/autopilot/run', { method: 'POST', body: JSON.stringify({ publish: false, sync: true }) });
+    toast(`Listo para revisar: ${r.cards} cartela(s).`);
     load();
     loadPilot();
   } catch (err) {
     toast('Error: ' + err.message);
   } finally {
     b.disabled = false;
-    b.textContent = 'Preparar hoy';
+    b.textContent = 'Preparar ahora';
   }
 });
+$('#pilotPublishNow').addEventListener('click', async (e) => {
+  const b = e.target;
+  if (!confirm('¿Generar y subir ahora los 8 MP4 al FTP?')) return;
+  b.disabled = true;
+  b.textContent = 'Publicando...';
+  try {
+    const r = await api('/autopilot/run', { method: 'POST', body: JSON.stringify({ publish: true, sync: true }) });
+    toast(r.published ? `Publicado: ${r.cards} cartela(s).` : 'No se pudo publicar. Mira Estado.');
+    load();
+    loadPilot();
+  } catch (err) {
+    toast('Error: ' + err.message);
+  } finally {
+    b.disabled = false;
+    b.textContent = 'Publicar ahora';
+  }
+});
+$('#pilotReview').addEventListener('click', () => { location.href = '/review.html'; });
 
 // --- Barra de acciones ---
 $('#btnAdd').addEventListener('click', () => openEditor(null));

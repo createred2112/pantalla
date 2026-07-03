@@ -1,23 +1,45 @@
 'use strict';
-// PILOTO AUTOMÁTICO: cada día, a la hora configurada, genera la escaleta del
-// día y publica a la pantalla. Sin intervención humana: la persona solo entra
-// al panel cuando hay última hora o quiere retocar contenido.
-const { cfg, saveConfig } = require('./config');
+// PILOTO DE EMISIÓN: prepara/publica la pantalla con el contrato real
+// (8 MP4 fijos), usando caché y repitiendo solo cuando la escaleta viva cambia.
+const crypto = require('crypto');
+const { cfg, saveConfig, ftpConfig } = require('./config');
 const log = require('./util/logger');
 const status = require('./util/status');
+const store = require('./store');
+const renderMeta = require('./util/renderMeta');
 
 let _timer = null;
 let _running = false;
 
 function conf() {
-  return Object.assign({ enabled: false, time: '08:00', publish: true }, cfg.autopilot || {});
+  const raw = Object.assign({
+    enabled: false,
+    time: '08:00',
+    mode: 'review', // review | publish
+    liveSync: true,
+    syncEveryMinutes: 10,
+    retryMinutes: 30,
+    maxAttempts: 3,
+  }, cfg.autopilot || {});
+  raw.mode = raw.mode === 'publish' || raw.mode === 'review' ? raw.mode : (raw.publish === true ? 'publish' : 'review');
+  raw.publish = raw.mode === 'publish';
+  return raw;
 }
 
 function setConf(partial) {
   const next = Object.assign(conf(), partial || {});
   if (!/^\d{1,2}:\d{2}$/.test(String(next.time))) next.time = '08:00';
   next.enabled = next.enabled === true;
-  next.publish = next.publish !== false;
+  if (partial && Object.prototype.hasOwnProperty.call(partial, 'mode')) {
+    next.mode = partial.mode === 'publish' ? 'publish' : 'review';
+  } else {
+    next.mode = next.publish === true ? 'publish' : 'review';
+  }
+  next.publish = next.mode === 'publish';
+  next.liveSync = next.liveSync !== false;
+  next.syncEveryMinutes = Math.max(0, Math.min(120, Number(next.syncEveryMinutes) || 0));
+  next.retryMinutes = Math.max(5, Math.min(240, Number(next.retryMinutes) || 30));
+  next.maxAttempts = Math.max(1, Math.min(10, Number(next.maxAttempts) || 3));
   saveConfig({ autopilot: next });
   return conf();
 }
@@ -32,13 +54,60 @@ function localDay(d = new Date()) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+function requiredCount() {
+  const fixed = cfg.naming && Array.isArray(cfg.naming.fixedFiles) ? cfg.naming.fixedFiles.filter(Boolean) : [];
+  return fixed.length || Number(cfg.screenProfile && cfg.screenProfile.requiredCount) || 0;
+}
+
+function sequenceSignature(cards = store.active()) {
+  const required = requiredCount();
+  const selected = required ? cards.slice(0, required) : cards;
+  const sig = selected.map((c) => c.type === 'generated'
+    ? `${c.id}:${renderMeta.renderHash(c)}`
+    : `${c.id}:${c.file || ''}:${c.updatedAt || ''}`
+  ).join('|');
+  return crypto.createHash('sha1').update(sig + JSON.stringify({
+    fixed: cfg.naming && cfg.naming.fixedFiles,
+    profile: cfg.screenProfile,
+  })).digest('hex');
+}
+
+function preflight() {
+  const cards = store.active();
+  const required = requiredCount();
+  const selected = required ? cards.slice(0, required) : cards;
+  const rendered = selected.filter((c) => c.type !== 'generated' || renderMeta.isFresh({ ...c, video: true }, { wantVideo: true })).length;
+  const ftp = ftpConfig();
+  return {
+    requiredCount: required,
+    activeCount: cards.length,
+    selectedCount: selected.length,
+    renderedCount: rendered,
+    okCount: !required || cards.length >= required,
+    okRendered: !required || rendered >= Math.min(required, selected.length),
+    ftpConfigured: Boolean(ftp.host && ftp.user),
+    outputFiles: (cfg.naming && cfg.naming.fixedFiles) || [],
+  };
+}
+
 async function run(day, c, opts = {}) {
   const publishNow = opts.publish === true;
-  const mode = opts.scheduled ? 'Pase diario' : (opts.hourly ? 'Pase horario' : 'Preparación manual');
-  log.info('autopilot', `${mode}: escaleta del ${day}${publishNow ? '' : ' (sin publicar: revisar antes)'}`);
+  const mode = opts.scheduled ? 'Pase diario' : (opts.sync ? 'Sincronización viva' : (opts.hourly ? 'Pase horario' : 'Preparación manual'));
+  log.info('autopilot', `${mode}: escaleta del ${day}${publishNow ? ' + FTP' : ' (sin publicar: revisar antes)'}`);
   // Datos frescos de los workers ANTES de materializar (tiempo, luz...).
   try { await require('./workers').refreshAll(); } catch {}
   const r = require('./rundown').materialize({ date: day });
+  const sig = sequenceSignature();
+  if (opts.skipIfUnchanged) {
+    const prevSync = (status.read().stages || {})['autopilot-sync'] || null;
+    if (prevSync && prevSync.signature === sig && prevSync.ok !== false) {
+      log.info('autopilot', `${mode}: sin cambios; no se regenera ni se sube`);
+      if (opts.sync) {
+        status.set('autopilot-sync', { ok: true, day, cards: r.count, published: false, prepared: !publishNow, mode: publishNow ? 'publish' : 'review', signature: sig, unchanged: true });
+      }
+      return { ok: true, day, cards: r.count, unchanged: true, published: false, prepared: !publishNow };
+    }
+  }
   let pub = null;
   if (publishNow) {
     pub = await require('./pipeline/publish').publish({ dryRun: false, skipImport: false });
@@ -52,7 +121,10 @@ async function run(day, c, opts = {}) {
   if (opts.scheduled) {
     const prev = state();
     const attempts = ok ? 0 : ((prev && prev.day === day ? Number(prev.attempts || 0) : 0) + 1);
-    status.set('autopilot', { ok, day, cards: r.count, published: Boolean(pub && pub.ok), attempts });
+    status.set('autopilot', { ok, day, cards: r.count, published: Boolean(pub && pub.ok), prepared: !publishNow, mode: publishNow ? 'publish' : 'review', attempts, signature: sig });
+  }
+  if (opts.sync) {
+    status.set('autopilot-sync', { ok, day, cards: r.count, published: Boolean(pub && pub.ok), prepared: !publishNow, mode: publishNow ? 'publish' : 'review', signature: sig });
   }
   log[ok ? 'info' : 'warn']('autopilot',
     `${mode} ${ok ? 'OK' : 'con fallos'}: ${r.count} cartela(s)` +
@@ -73,8 +145,8 @@ async function tick() {
   if (!dailyDone) {
     if (last && last.day === day) {
       // Falló (p. ej. FTP caído): reintenta cada 30 min, máximo 3 intentos.
-      if (Number(last.attempts || 1) >= 3) return;
-      if (Date.now() - Date.parse(last.ts || 0) < 30 * 60000) return;
+      if (Number(last.attempts || 1) >= c.maxAttempts) return;
+      if (Date.now() - Date.parse(last.ts || 0) < c.retryMinutes * 60000) return;
     }
     _running = true;
     try {
@@ -83,11 +155,25 @@ async function tick() {
       const prev = state();
       const attempts = (prev && prev.day === day ? Number(prev.attempts || 0) : 0) + 1;
       status.set('autopilot', { ok: false, day, error: e.message, attempts });
-      log.error('autopilot', `Fallo del pase diario (intento ${attempts}/3): ` + e.message);
+      log.error('autopilot', `Fallo del pase diario (intento ${attempts}/${c.maxAttempts}): ` + e.message);
     } finally {
       _running = false;
     }
     return;
+  }
+
+  if (c.liveSync && Number(c.syncEveryMinutes || 0) > 0) {
+    const st = status.read().stages || {};
+    const sync = st['autopilot-sync'] || null;
+    if (!sync || Date.now() - Date.parse(sync.ts || 0) >= Number(c.syncEveryMinutes) * 60000) {
+      _running = true;
+      try {
+        await run(day, c, { publish: c.publish !== false, sync: true, skipIfUnchanged: true });
+      } finally {
+        _running = false;
+      }
+      return;
+    }
   }
 
   // Pase HORARIO: si el guion tiene bloques de carrusel con cadencia horaria,
@@ -117,7 +203,7 @@ async function tick() {
 async function runNow(opts = {}) {
   if (_running) throw new Error('el piloto ya está ejecutándose');
   _running = true;
-  try { return await run(localDay(), conf(), { publish: opts.publish === true }); }
+  try { return await run(localDay(), conf(), { publish: opts.publish === true, sync: opts.sync === true }); }
   finally { _running = false; }
 }
 
@@ -127,8 +213,8 @@ function start() {
   if (_timer.unref) _timer.unref();
   const c = conf();
   log.info('autopilot', c.enabled
-    ? `Piloto automático ACTIVO: escaleta + publicación cada día a las ${c.time}`
-    : 'Piloto automático apagado (actívalo desde el panel)');
+    ? `Piloto de emisión ACTIVO: ${c.mode === 'publish' ? 'publica' : 'prepara'} cada día a las ${c.time}${c.liveSync ? ` y vigila cada ${c.syncEveryMinutes} min` : ''}`
+    : 'Piloto de emisión apagado (actívalo desde el panel)');
 }
 
-module.exports = { start, conf, setConf, state, tick, runNow };
+module.exports = { start, conf, setConf, state, tick, runNow, preflight };
