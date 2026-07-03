@@ -1638,16 +1638,25 @@ async function saveAllRundown(opts = {}) {
   const lib = RUNDOWN.library;
   await api('/rundown?date=' + encodeURIComponent(date), { method: 'PUT', body: JSON.stringify(rd) });
   RUNDOWN = await api('/rundown/library?date=' + encodeURIComponent(date), { method: 'PUT', body: JSON.stringify(lib) });
+  // Re-materializa las cartelas del día visible para que los cambios de tema/
+  // plantilla/contenido se reflejen: la cartela afectada queda marcada como
+  // "cambios sin aplicar" (⟳) en el panel. Si se está planificando otro día,
+  // NO se tocan las cartelas en emisión (para eso está "Aplicar escaleta").
+  const today = new Date().toISOString().slice(0, 10);
+  if (opts.materialize !== false && date === today) {
+    await api('/rundown/materialize', { method: 'POST', body: JSON.stringify({ date }) });
+    load();
+  }
   rdSetDirty(false);
   renderRundown();
-  if (!opts.silent) toast('Escaleta y contenido guardados');
+  if (!opts.silent) toast('Guardado. Las cartelas con cambios quedan marcadas para regenerar (⟳)');
 }
 
 async function makeRundown() {
   const btn = $('#btnRundownMake');
   btn.disabled = true;
   try {
-    await saveAllRundown({ silent: true });
+    await saveAllRundown({ silent: true, materialize: false });
     const date = $('#rundownDate').value || new Date().toISOString().slice(0, 10);
     const r = await api('/rundown/materialize', { method: 'POST', body: JSON.stringify({ date }) });
     toast(`Escaleta aplicada: ${r.count} cartela(s). Revisa y pulsa Publicar.`);
