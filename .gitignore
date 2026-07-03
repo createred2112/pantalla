@@ -9,6 +9,7 @@ preview/
 data/cards.json
 data/rundown.json
 data/content-library.json
+data/worker-data.json
 data/uploads/
 data/worker-inbox/
 !data/.gitkeep
