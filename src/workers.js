@@ -52,12 +52,14 @@ async function weather() {
   const t = Math.round(j.current.temperature_2m);
   const max = Math.round(j.daily.temperature_2m_max[0]);
   const min = Math.round(j.daily.temperature_2m_min[0]);
+  const updated = j.current.time ? new Date(j.current.time).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) : '';
   return {
     template: 'clima',
     title: `${t}º`,
     subtitle: wmoLabel(Number(j.current.weather_code)),
-    body: `Máx ${max}º · Mín ${min}º`,
-    date: 'Vitoria-Gasteiz',
+    body: '',
+    date: updated ? `AHORA · ${updated}` : 'AHORA',
+    extra: { max, min, nowLabel: updated },
   };
 }
 

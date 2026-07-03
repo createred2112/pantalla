@@ -348,7 +348,7 @@ const SAMPLE_DATA = {
   alerta: { title: 'Corte de tráfico en la Avenida', subtitle: 'Tráfico', body: 'Desvíos por la calle Dato', date: 'Hoy' },
   evento: { title: 'Kaldearte: Ballet Aéreo', subtitle: 'Espectáculo', body: 'Plaza de la Virgen Blanca', date: 'Sáb 28 · 21:30' },
   cita: { title: 'Volar sobre la ciudad cambia tu mirada', subtitle: 'Iñigo Naya' },
-  clima: { title: '24ºC', subtitle: 'Soleado', body: 'Máx 28º · Mín 14º', date: 'Hoy' },
+  clima: { title: '24º', subtitle: 'Soleado', body: '', date: 'AHORA · 13:45', data: { max: 28, min: 14 } },
   foto: { title: 'Atardecer sobre la Catedral', subtitle: 'Postal', date: '22:00' },
   agenda: { title: 'Agenda', body: '19:30 | Los Chunguitos Live | Jimmy Jazz\n20:00 | La Tremenda Pasarela | Teatro Félix Petite' },
   mensaje: { title: 'Vitoria en verde.' },

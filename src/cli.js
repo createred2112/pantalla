@@ -52,7 +52,7 @@ async function main() {
           { template: 'alerta', title: 'Corte de tráfico en la Avenida', subtitle: 'Tráfico', body: 'Desvíos por la calle Dato hasta las 18:00', date: 'Hoy' },
           { template: 'evento', title: 'Kaldearte: Ballet Aéreo Zenit', subtitle: 'Espectáculo', body: 'Plaza de la Virgen Blanca', date: 'Sábado 28 · 21:30 h' },
           { template: 'cita', title: 'Volar sobre la ciudad cambia para siempre tu mirada', subtitle: 'Iñigo Naya, Zenit Aerial' },
-          { template: 'clima', title: '24ºC', subtitle: 'Soleado', body: 'Máx 28º · Mín 14º', date: 'Hoy' },
+          { template: 'clima', title: '24º', subtitle: 'Soleado', body: '', date: 'Ahora' },
           { template: 'agenda', title: 'Agenda', body: '19:30 | Los Chunguitos Live | Jimmy Jazz\n20:00 | La Tremenda Pasarela Real | Teatro Félix Petite', date: 'Miércoles 24' },
           { template: 'foto', title: 'Atardecer sobre la Catedral', subtitle: 'Postal', date: '22:00' },
           { template: 'mensaje', title: 'Vitoria en verde.' },

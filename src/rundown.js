@@ -55,7 +55,7 @@ const DEFAULT_RUNDOWN = {
     fixed('intro', 'Intro', 'mensaje', 'carbon', 'GASTEIZBERRI', '', '', 5, true),
     fixed('subintro', 'Subintro', 'mensaje', 'azul', 'Gasteiz en claro', 'Titulares, datos útiles y vida local', '', 5, true),
     fixed('ultima_hora', 'Última hora', 'alerta', 'rojo', 'Última hora pendiente', 'Añade titular', 'Completa este bloque si hay urgencia.', 8, true),
-    worker('temperatura', 'Temperatura', 'clima', 'azul', 'weather', '24ºC', 'SOLEADO', 'Máx 28º · Mín 14º'),
+    worker('temperatura', 'Tiempo ahora', 'clima', 'azul', 'weather', '24º', 'SOLEADO', ''),
     library('dato_util', 'Dato útil', 'datosUtiles'),
     library('cita_historica', 'Cita histórica', 'citasHistoricas'),
     library('dato_curioso', 'Dato curioso', 'datosCuriosos'),

@@ -856,7 +856,7 @@ let RD_PLAN_DAYS = 7;      // días que enseña el planificador (lo fija el asis
 
 // Catálogo del asistente "Planificar días": tipos de cartela predeterminados.
 const PLAN_TYPES = [
-  { id: 'tiempo', label: 'Tiempo de hoy · automático', def: true, slot: { source: 'worker', workerKey: 'weather', template: 'clima', label: 'Tiempo' } },
+  { id: 'tiempo', label: 'Tiempo ahora · automático', def: true, slot: { source: 'worker', workerKey: 'weather', template: 'clima', label: 'Tiempo ahora' } },
   { id: 'prevision', label: 'Previsión 3 días · automático', def: true, slot: { source: 'worker', workerKey: 'forecast', template: 'prevision', label: 'Previsión' } },
   { id: 'agenda', label: 'Agenda · manual', def: true, duration: 10, slot: { source: 'fixed', template: 'agenda', label: 'Agenda', title: 'Agenda', body: '' } },
   { id: 'curioso', label: 'Dato curioso · carrusel', def: true, slot: { source: 'library', libraryKey: 'datosCuriosos', label: 'Dato curioso' } },

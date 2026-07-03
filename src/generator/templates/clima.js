@@ -39,8 +39,8 @@ function iconSvg(key, c) {
 module.exports = {
   iconSvg, keyOf, // reutilizados por la plantilla "prevision"
   id: 'clima',
-  label: 'Clima / Tiempo (temperatura + icono)',
-  hint: { title: 'Temperatura (p. ej. 24ºC)', subtitle: 'Condición: SOLEADO, LLUVIA…', body: 'Máx/Mín (opcional)', date: 'Cuándo: HOY, MAÑANA…' },
+  label: 'Tiempo ahora (temperatura + icono)',
+  hint: { title: 'Temperatura ahora (p. ej. 24º)', subtitle: 'Condición actual: SOLEADO, LLUVIA…', body: 'Nota secundaria opcional', date: 'Momento: AHORA, 13:45…' },
   defaultTheme: 'azul',
   logoPos: 'bl',
   build(card, ctx) {
@@ -76,8 +76,8 @@ module.exports = {
       x: icoX, y: icoY, w: icoS, h: icoS, svg: iconSvg(icoKey, theme.accent),
     });
 
-    // Banda de acento a sangre (firma de la casa) con la condición y máx/mín.
-    const bandTxt = [card.subtitle, card.body].filter(Boolean).join('  ·  ');
+    // Banda de acento a sangre (firma de la casa) con la condición ACTUAL.
+    const bandTxt = card.subtitle || '';
     if (bandTxt) {
       const bandY = Math.round(H * 0.67);
       const bandH = Math.round(H * 0.14);
@@ -87,6 +87,14 @@ module.exports = {
         text: bandTxt.toUpperCase(), font: 'display', weight: 800, color: theme.accentText,
         align: 'center', valign: 'center', lineHeight: 1, letterSpacingEm: 0.02,
         autofit: { min: Math.round(H * 0.04), max: Math.round(H * 0.072), lines: 1 },
+      });
+    }
+    const dayRange = card.body || (card.data && card.data.max != null && card.data.min != null ? `Hoy: máx ${card.data.max}º · mín ${card.data.min}º` : '');
+    if (dayRange) {
+      els.push({
+        type: 'text', x: Math.round(W * 0.54), y: Math.round(H * 0.84), w: Math.round(W * 0.41), h: Math.round(H * 0.07),
+        text: dayRange.toUpperCase(), font: 'text', weight: 800, color: theme.textMuted,
+        align: 'right', valign: 'center', size: Math.round(H * 0.04), lineHeight: 1,
       });
     }
 

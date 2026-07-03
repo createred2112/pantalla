@@ -141,7 +141,7 @@ según la plantilla (el panel muestra una pista por campo). El color lo pone el 
 | `alerta`   | Avisos (tráfico, meteo) máx. contraste | El aviso | Tipo (AVISO…) | Detalle | Cuándo |
 | `evento`   | Evento con fecha protagonista | Nombre | Tipo (chip) | Lugar | Fecha/hora |
 | `cita`     | Frase entrecomillada editorial | La frase | Autor | — | — |
-| `clima`    | Temperatura + icono del tiempo | Temperatura | Condición (define el icono) | Máx/Mín | Lugar/momento |
+| `clima`    | Tiempo ahora + icono | Temperatura actual | Condición actual (define el icono) | Nota secundaria | Momento: AHORA |
 | `foto`     | Foto a sangre, casi sin texto | Pie (opcional) | Etiqueta (chip) | — | Hora |
 | `agenda`   | Lista del día con bandas (hasta 3) | Etiqueta banda | — | `HORA \| Nombre \| Lugar` por línea | — |
 | `mensaje`  | Lema/impacto a pantalla | El mensaje | Etiqueta (chip) | — | — |
