@@ -63,11 +63,16 @@ module.exports = {
       autofit: { min: Math.round(H * 0.22), max: Math.round(H * 0.44), lines: 1 },
     });
     const icoKey = keyOf(card.subtitle);
-    const icoS = Math.min(Math.round(H * 0.5), Math.round(W * 0.32));
+    // Ajustable desde el panel (Ajustes → Icono del tiempo): tamaño y posición.
+    const conf = (ctx.brand && ctx.brand.climaIcon) || {};
+    const scale = Math.max(40, Math.min(140, Number(conf.scale) || 100)) / 100;
+    // Nunca más alto que su zona (antes desbordaba 540px en 513px: descolgado).
+    const icoS = Math.round(Math.min(zoneH, Math.round(W * 0.32)) * scale);
+    const icoX = Math.round(W - pad - icoS - W * 0.03 + W * ((Number(conf.dx) || 0) / 100));
+    const icoY = Math.round(zoneY + (zoneH - icoS) / 2 + H * ((Number(conf.dy) || 0) / 100));
     els.push({
       type: 'svg', anim: icoKey === 'sol' ? 'spin' : 'float', // el sol gira, el resto flota
-      x: W - pad - icoS - Math.round(W * 0.03), y: Math.round(zoneY + (zoneH - icoS) / 2),
-      w: icoS, h: icoS, svg: iconSvg(icoKey, theme.accent),
+      x: icoX, y: icoY, w: icoS, h: icoS, svg: iconSvg(icoKey, theme.accent),
     });
 
     // Banda de acento a sangre (firma de la casa) con la condición y máx/mín.

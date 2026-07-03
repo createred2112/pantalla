@@ -80,6 +80,10 @@ async function openSettings() {
   $('#setLogoMode').value = b.logoMode === 'none' ? 'none' : 'image';
   $('#setLogoW').value = b.logoWidth || 12; $('#setLogoWVal').textContent = $('#setLogoW').value;
   $('#setScale').value = b.textScale || 1.15; $('#setScaleVal').textContent = (b.textScale || 1.15);
+  const ci = b.climaIcon || {};
+  $('#setClimaScale').value = ci.scale || 100; $('#setClimaScaleVal').textContent = $('#setClimaScale').value;
+  $('#setClimaDx').value = ci.dx || 0; $('#setClimaDxVal').textContent = $('#setClimaDx').value;
+  $('#setClimaDy').value = ci.dy || 0; $('#setClimaDyVal').textContent = $('#setClimaDy').value;
   const fams = SETTINGS.fonts || [];
   const opts = fams.map((f) => `<option value="'${f}', sans-serif">${f}</option>`).join('');
   $('#setFontDisplay').innerHTML = opts; $('#setFontText').innerHTML = opts;
@@ -141,6 +145,9 @@ function hex(c) { return (c && c[0] === '#') ? c.slice(0, 7) : '#000000'; }
 
 $('#setLogoW').addEventListener('input', (e) => $('#setLogoWVal').textContent = e.target.value);
 $('#setScale').addEventListener('input', (e) => $('#setScaleVal').textContent = e.target.value);
+$('#setClimaScale').addEventListener('input', (e) => $('#setClimaScaleVal').textContent = e.target.value);
+$('#setClimaDx').addEventListener('input', (e) => $('#setClimaDxVal').textContent = e.target.value);
+$('#setClimaDy').addEventListener('input', (e) => $('#setClimaDyVal').textContent = e.target.value);
 
 $('#setLogoLight').addEventListener('change', async (e) => {
   if (e.target.files[0]) { toast('Subiendo logo…'); const p = await uploadFile(e.target); SETTINGS.brand.logoLight = p; showLogoPrev('setLogoLightPrev', p); toast('Logo claro listo'); }
@@ -156,6 +163,7 @@ function collectSettings() {
   b.textScale = Number($('#setScale').value);
   b.fontDisplay = $('#setFontDisplay').value;
   b.fontFamily = $('#setFontText').value;
+  b.climaIcon = { scale: Number($('#setClimaScale').value) || 100, dx: Number($('#setClimaDx').value) || 0, dy: Number($('#setClimaDy').value) || 0 };
   const palette = SETTINGS.palette;
   $('#setColors').querySelectorAll('input[type=color]').forEach((inp) => {
     palette[inp.dataset.th][inp.dataset.key] = inp.value;
