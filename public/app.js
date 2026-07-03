@@ -1112,13 +1112,29 @@ function blankLibraryItem(meta) {
 function blankAgendaLibraryItem() {
   const meta = (RUNDOWN.libraryKeys || []).find((k) => k.key === 'agendaEventos') || { template: 'agenda', theme: 'blanco' };
   const active = RUNDOWN.activeDate || new Date().toISOString().slice(0, 10);
-  const arr = ((RUNDOWN.library || {}).agendaEventos || [])
-    .filter((it) => it && it.enabled !== false)
-    .slice()
-    .sort((a, b) => String(a.startAt || '').localeCompare(String(b.startAt || '')));
-  const prev = arr[arr.length - 1] || null;
-  const startAt = (prev && (prev.endAt || prev.startAt)) || dtLocal(active, '08:00');
-  const endAt = addMinutesLocal(startAt, 60);
+  const blocks = ((RUNDOWN.library || {}).agendaEventos || [])
+    .map((item, idx) => agendaRangeForDay(item, active, idx))
+    .filter(Boolean)
+    .sort((a, b) => a.start - b.start);
+  let startMin = 8 * 60;
+  let endMin = 9 * 60;
+  let cursor = 8 * 60;
+  let placed = false;
+  for (const b of blocks) {
+    if (b.start - cursor >= 30) {
+      startMin = cursor;
+      endMin = Math.min(cursor + 60, b.start);
+      placed = true;
+      break;
+    }
+    cursor = Math.max(cursor, b.end);
+  }
+  if (!placed && blocks.length) {
+    startMin = cursor < 22 * 60 ? cursor : blocks[blocks.length - 1].end;
+    endMin = Math.min(startMin + 60, 24 * 60);
+  }
+  const startAt = dtLocal(active, inputTimeLabel(startMin));
+  const endAt = dtLocal(active, inputTimeLabel(endMin));
   return {
     ...blankLibraryItem(meta),
     title: '',
@@ -1207,6 +1223,55 @@ function dtLocal(date, time) {
   return `${date}T${time}`;
 }
 
+function minuteOf(v) {
+  const d = new Date(v);
+  return Number.isNaN(d.getTime()) ? null : d.getHours() * 60 + d.getMinutes();
+}
+
+function minLabel(min) {
+  const m = Math.max(0, Math.min(24 * 60, Math.round(min)));
+  return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+}
+
+function inputTimeLabel(min) {
+  return min >= 24 * 60 ? '23:59' : minLabel(min);
+}
+
+function itemCanAppearOnDate(item, date) {
+  const d = String(date || '').slice(0, 10);
+  if (item.enabled === false) return false;
+  if (Array.isArray(item.dates) && item.dates.length && !item.dates.includes(d)) return false;
+  if (item.start && d < item.start) return false;
+  if (item.end && d > item.end) return false;
+  const weekdays = Array.isArray(item.weekdays) ? item.weekdays.map(Number) : [];
+  if (weekdays.length && !weekdays.includes(clientDayNumber(d))) return false;
+  const dayStart = new Date(`${d}T00:00:00`);
+  const dayEnd = new Date(`${d}T23:59:59`);
+  if (item.startAt) {
+    const startAt = new Date(item.startAt);
+    if (!Number.isNaN(startAt.getTime()) && dayEnd < startAt) return false;
+  }
+  if (item.endAt) {
+    const endAt = new Date(item.endAt);
+    if (!Number.isNaN(endAt.getTime()) && dayStart > endAt) return false;
+  }
+  return true;
+}
+
+function agendaRangeForDay(item, date, idx) {
+  if (!itemCanAppearOnDate(item, date)) return null;
+  let start = item.startAt ? minuteOf(item.startAt) : null;
+  let end = item.endAt ? minuteOf(item.endAt) : null;
+  if (item.startAt && String(item.startAt).slice(0, 10) < date) start = 0;
+  if (item.endAt && String(item.endAt).slice(0, 10) > date) end = 24 * 60;
+  if (start == null) start = 8 * 60;
+  if (end == null) end = start + 60;
+  if (end <= start) end = Math.min(24 * 60, start + 60);
+  start = Math.max(0, Math.min(24 * 60, start));
+  end = Math.max(start + 1, Math.min(24 * 60, end));
+  return { idx, item, start, end, lane: 0 };
+}
+
 // Réplica exacta de la rotación del servidor: ciclo secuencial sin repetir.
 function clientPickDaily(items, key, date) {
   if (!Array.isArray(items) || !items.length) return null;
@@ -1249,6 +1314,62 @@ function renderPlanner() {
   box.innerHTML = html + '</div>';
 }
 
+function renderAgendaTimeline(items, date) {
+  const box = $('#libraryPlanner');
+  if (!box) return;
+  const blocks = (items || [])
+    .map((item, idx) => agendaRangeForDay(item, date, idx))
+    .filter(Boolean)
+    .sort((a, b) => a.start - b.start || a.end - b.end);
+  if (!blocks.length) {
+    box.innerHTML = `<div class="agenda-timeline"><div class="status"><b>Sin bloques visibles para ${esc(fmtShortDate(date))}.</b> Añade un bloque de agenda para ver la línea de tiempo.</div></div>`;
+    return;
+  }
+  const minStart = Math.min(...blocks.map((b) => b.start));
+  const maxEnd = Math.max(...blocks.map((b) => b.end));
+  let start = Math.max(0, Math.floor((minStart - 60) / 60) * 60);
+  let end = Math.min(24 * 60, Math.ceil((maxEnd + 60) / 60) * 60);
+  if (end - start < 4 * 60) end = Math.min(24 * 60, start + 4 * 60);
+  const span = Math.max(1, end - start);
+  const lanes = [];
+  blocks.forEach((b) => {
+    let lane = lanes.findIndex((until) => until <= b.start);
+    if (lane < 0) { lane = lanes.length; lanes.push(0); }
+    b.lane = lane;
+    lanes[lane] = b.end;
+  });
+  const markerStep = span <= 6 * 60 ? 60 : (span <= 12 * 60 ? 120 : 180);
+  const markers = [];
+  for (let m = Math.ceil(start / markerStep) * markerStep; m <= end; m += markerStep) {
+    markers.push(`<span class="agenda-time-mark" style="left:${((m - start) / span) * 100}%">${minLabel(m)}</span>`);
+  }
+  const gaps = [];
+  let cursor = start;
+  blocks.forEach((b) => {
+    if (b.start - cursor >= 15) {
+      gaps.push({ start: cursor, end: b.start });
+    }
+    cursor = Math.max(cursor, b.end);
+  });
+  if (end - cursor >= 15) gaps.push({ start: cursor, end });
+  const gapHtml = gaps.map((g) => `<div class="agenda-gap" style="left:${((g.start - start) / span) * 100}%;width:${((g.end - g.start) / span) * 100}%"><span>hueco ${minLabel(g.start)}-${minLabel(g.end)}</span></div>`).join('');
+  const blockHtml = blocks.map((b) => {
+    const left = ((b.start - start) / span) * 100;
+    const width = Math.max(3, ((b.end - b.start) / span) * 100);
+    const label = (b.item.title || b.item.body || '(sin rellenar)').split(/\r?\n/)[0];
+    return `<button type="button" class="agenda-time-block ${b.idx === LIB_OPEN ? 'open' : ''} ${String(b.item.body || b.item.title || '').trim() ? '' : 'empty'}" data-agenda-time-open="${b.idx}" style="left:${left}%;width:${width}%;top:${8 + b.lane * 54}px">
+      <b>${minLabel(b.start)}-${minLabel(b.end)}</b><span>${esc(label)}</span>
+    </button>`;
+  }).join('');
+  box.innerHTML = `<div class="agenda-timeline">
+    <div class="agenda-timeline-head"><b>Línea de tiempo</b><span>${esc(fmtShortDate(date))} · los huecos quedan marcados en amarillo</span></div>
+    <div class="agenda-time-scroll">
+      <div class="agenda-time-scale">${markers.join('')}</div>
+      <div class="agenda-time-track" style="height:${Math.max(70, lanes.length * 54 + 8)}px">${gapHtml}${blockHtml}</div>
+    </div>
+  </div>`;
+}
+
 function renderLibraryPanel() {
   const keys = RUNDOWN.libraryKeys || [];
   if (!keys.some((x) => x.key === LIBRARY_CATEGORY) && keys[0]) LIBRARY_CATEGORY = keys[0].key;
@@ -1266,7 +1387,8 @@ function renderLibraryPanel() {
     isAgenda
       ? `<b>${items.length}</b> bloque(s) de agenda · <b style="color:${eligible ? '#bff0d5' : '#ffd98a'}">${eligible}</b> pueden salir el ${esc(fmtShortDate(activeDate))}`
       : `<b>${items.length}</b> pieza(s) en esta categoría · <b style="color:${eligible ? '#bff0d5' : '#ffd98a'}">${eligible}</b> pueden salir el ${esc(fmtShortDate(activeDate))}`;
-  renderPlanner();
+  if (isAgenda) renderAgendaTimeline(items, activeDate);
+  else renderPlanner();
   $('#libraryList').innerHTML = items.length ? items.map((item, i) => libraryItemHtml(meta, item, i)).join('') :
     `<div class="empty">Esta categoría está vacía. ${isAgenda ? 'Añade un bloque de agenda.' : 'Añade una pieza o importa un lote.'}</div>`;
 }
@@ -1949,6 +2071,15 @@ $('#libraryCategory').addEventListener('change', () => {
   LIBRARY_CATEGORY = $('#libraryCategory').value;
   LIB_OPEN = -1;
   renderLibraryPanel();
+});
+$('#libraryPlanner').addEventListener('click', (e) => {
+  const block = e.target.closest('[data-agenda-time-open]');
+  if (!block || !RUNDOWN) return;
+  collectLibraryCategory();
+  LIB_OPEN = Number(block.dataset.agendaTimeOpen);
+  renderLibraryPanel();
+  const item = $('#libraryList').querySelector(`[data-lib-item="${LIB_OPEN}"]`);
+  if (item) item.scrollIntoView({ behavior: 'smooth', block: 'center' });
 });
 $('#libraryList').addEventListener('input', () => { if (RUNDOWN) { collectLibraryCategory(); rdSetDirty(true); } });
 $('#libraryList').addEventListener('change', (e) => {
