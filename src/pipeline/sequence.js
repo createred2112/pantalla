@@ -1,7 +1,7 @@
 'use strict';
-// Etapa SEQUENCE: ordena las cartelas activas y las copia a publish/ con el
-// esquema de renombrado (NN_slug.ext) para que la pantalla las lea por orden
-// alfanumérico. Valida todo antes de tocar publish/ y lo sustituye al final.
+// Etapa SEQUENCE: ordena las cartelas activas y las copia a publish/ con los
+// nombres finales que exige la pantalla. Valida todo antes de tocar publish/
+// y lo sustituye al final para no dejar tandas parciales.
 const fs = require('fs');
 const path = require('path');
 const { active } = require('../store');
@@ -9,6 +9,7 @@ const { cfg, paths, abs } = require('../config');
 const { slugify } = require('../util/slugify');
 const log = require('../util/logger');
 const status = require('../util/status');
+const renderMeta = require('../util/renderMeta');
 
 function pad(n) {
   return String(n).padStart(cfg.naming.padStart || 2, '0');
@@ -48,12 +49,53 @@ function fileBase(card, pos) {
   return safeName(name, base || card.id);
 }
 
+function fixedPublishFiles() {
+  const naming = cfg.naming || {};
+  const files = Array.isArray(naming.fixedFiles) ? naming.fixedFiles : [];
+  return files
+    .map((f) => String(f || '').trim())
+    .filter(Boolean)
+    .map((f) => path.basename(f).replace(/[^A-Za-z0-9_.-]+/g, ''))
+    .filter(Boolean)
+    .map((f) => (cfg.naming && cfg.naming.lowercase !== false ? f.toLowerCase() : f));
+}
+
+function requiredCount() {
+  const fixed = fixedPublishFiles();
+  if (fixed.length) return fixed.length;
+  const n = Number(cfg.screenProfile && cfg.screenProfile.requiredCount);
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+}
+
+function outputFormat() {
+  const p = cfg.screenProfile || {};
+  return String(p.outputFormat || cfg.screen.format || 'jpg').toLowerCase().replace('jpeg', 'jpg');
+}
+
+function wantsMp4Only() {
+  const profile = cfg.screenProfile || {};
+  return profile.forceVideo === true || outputFormat() === 'mp4' || profile.acceptImage === false;
+}
+
+function targetFile(card, pos, srcExt) {
+  const fixed = fixedPublishFiles();
+  if (fixed.length) return fixed[pos - 1];
+  const ext = wantsMp4Only() ? outputFormat() : srcExt;
+  return `${fileBase(card, pos)}.${ext}`;
+}
+
 // Resuelve el archivo de origen de una card según su tipo.
 function sourceFile(card) {
   if (card.type === 'generated') {
-    if (card.video) {
-      const mp4 = path.join(paths.output, `${card.id}.mp4`);
-      if (fs.existsSync(mp4)) return mp4;
+    if (card.video || wantsMp4Only()) {
+      const fresh = renderMeta.isFresh({ ...card, video: true }, { wantVideo: true });
+      if (fresh) return fresh.file;
+      return null;
+    }
+    const fresh = renderMeta.isFresh(card);
+    if (fresh) {
+      const ext = path.extname(fresh.file).replace('.', '').toLowerCase();
+      if (allowedByProfile(ext)) return fresh.file;
     }
     const ext = (cfg.screen.format || 'jpg').toLowerCase().replace('jpeg', 'jpg');
     return path.join(paths.output, `${card.id}.${ext}`);
@@ -70,6 +112,7 @@ function writePlaylist(dir, manifest) {
 }
 
 function includePlaylist() {
+  if (fixedPublishFiles().length) return false;
   return !(cfg.screenProfile && cfg.screenProfile.includePlaylist === false);
 }
 
@@ -103,9 +146,26 @@ function swapPublishDir(stagingDir) {
 }
 
 function sequence({ dryRun } = {}) {
-  const cards = active();
-  if (!cards.length) {
+  const allCards = active();
+  const countNeeded = requiredCount();
+  const cards = countNeeded ? allCards.slice(0, countNeeded) : allCards;
+  const omitted = countNeeded && allCards.length > countNeeded
+    ? allCards.slice(countNeeded).map((c) => ({ id: c.id, title: c.title || '' }))
+    : [];
+  if (!allCards.length) {
     const r = { ok: false, error: 'No hay cartelas activas para publicar', count: 0, manifest: [] };
+    status.set('sequence', r);
+    log.warn('sequence', r.error);
+    return r;
+  }
+  if (countNeeded && allCards.length < countNeeded) {
+    const r = {
+      ok: false,
+      error: `La pantalla exige ${countNeeded} vídeo(s) y solo hay ${allCards.length} cartela(s) activa(s); no se toca publish/ ni FTP`,
+      count: allCards.length,
+      requiredCount: countNeeded,
+      manifest: [],
+    };
     status.set('sequence', r);
     log.warn('sequence', r.error);
     return r;
@@ -128,8 +188,17 @@ function sequence({ dryRun } = {}) {
       unsupported.push({ id: card.id, type: card.type, ext, title: card.title || '' });
       continue;
     }
-    const name = fileBase(card, pos);
-    const dest = path.join(paths.publish, `${name}.${ext}`);
+    const file = targetFile(card, pos, ext);
+    const targetExt = path.extname(file).replace('.', '').toLowerCase();
+    if (wantsMp4Only() && targetExt !== 'mp4') {
+      unsupported.push({ id: card.id, type: card.type, ext: targetExt || ext, title: card.title || '' });
+      continue;
+    }
+    if (wantsMp4Only() && ext !== 'mp4') {
+      unsupported.push({ id: card.id, type: card.type, ext, title: card.title || '' });
+      continue;
+    }
+    const dest = path.join(paths.publish, file);
     manifest.push({
       order: pos,
       id: card.id,
@@ -143,7 +212,7 @@ function sequence({ dryRun } = {}) {
   }
 
   if (unsupported.length) {
-    const r = { ok: false, error: `El perfil de pantalla no acepta ${unsupported.length} archivo(s) de ese formato`, count: manifest.length, manifest, unsupported };
+    const r = { ok: false, error: `El perfil de pantalla exige MP4 y hay ${unsupported.length} archivo(s) de otro formato`, count: manifest.length, manifest, unsupported };
     status.set('sequence', r);
     for (const u of unsupported) log.warn('sequence', `Formato no permitido para ${u.id}: .${u.ext}`);
     return r;
@@ -164,7 +233,7 @@ function sequence({ dryRun } = {}) {
   }
 
   if (dryRun) {
-    const r = { ok: true, dryRun: true, count: manifest.length, manifest, files: filesForPublish(copies.map((c) => c.file)) };
+    const r = { ok: true, dryRun: true, count: manifest.length, requiredCount: countNeeded || undefined, manifest, files: filesForPublish(copies.map((c) => c.file)), omitted };
     status.set('sequence', r);
     log.info('sequence', `Prueba de secuencia OK: ${manifest.length} archivo(s); publish/ no se modifica`);
     return r;
@@ -184,9 +253,10 @@ function sequence({ dryRun } = {}) {
     return r;
   }
 
-  status.set('sequence', { ok: true, count: manifest.length, manifest, files: filesForPublish(copies.map((c) => c.file)) });
+  status.set('sequence', { ok: true, count: manifest.length, requiredCount: countNeeded || undefined, manifest, files: filesForPublish(copies.map((c) => c.file)), omitted });
   log.info('sequence', `Secuencia lista: ${manifest.length} archivo(s) en publish/`);
-  return { ok: true, manifest, files: filesForPublish(copies.map((c) => c.file)) };
+  if (omitted.length) log.warn('sequence', `${omitted.length} cartela(s) activa(s) quedan fuera porque la pantalla solo admite ${countNeeded}`);
+  return { ok: true, manifest, files: filesForPublish(copies.map((c) => c.file)), omitted };
 }
 
 module.exports = { sequence };

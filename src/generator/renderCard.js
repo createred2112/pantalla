@@ -158,12 +158,13 @@ async function renderToBuffer(card) {
   }
 
   let pipeline = sharp(baseBuf).composite(layers);
-  const ext = (cfg.screen.format || 'jpg').toLowerCase();
+  const requested = (cfg.screen.format || 'jpg').toLowerCase();
+  const ext = requested === 'png' ? 'png' : 'jpg';
   if (ext === 'png') pipeline = pipeline.png();
   else pipeline = pipeline.jpeg({ quality: cfg.screen.quality || 88, mozjpeg: true });
 
   const buffer = await pipeline.toBuffer();
-  return { buffer, ext: ext === 'jpeg' ? 'jpg' : ext };
+  return { buffer, ext };
 }
 
 async function renderToFile(card) {

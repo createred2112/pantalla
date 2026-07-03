@@ -2,10 +2,10 @@
 
 Motor en Node.js que:
 
-1. **Genera** JPGs con texto + foto variables (plantilla `noticia`, ampliable).
+1. **Genera** MP4 con texto + foto variables (plantillas ampliables).
 2. **Importa** JPGs/MP4s que deja otro worker (el de codex) en `data/worker-inbox/`.
-3. **Secuencia y renombra** las cartelas activas a `publish/` con el esquema
-   `NN_slug.ext` (`01_…`, `02_…`) para que la pantalla las lea por **orden alfanumérico**.
+3. **Secuencia y renombra** las cartelas activas a `publish/` como ocho vídeos fijos:
+   `berri-1.mp4` ... `berri-8.mp4`. Si no hay ocho piezas válidas, no se toca `publish/`.
 4. **Sube por FTP** el contenido de `publish/`, sobreescribiendo lo anterior.
 5. **Panel móvil** de admin para editar noticias y subir fotos desde la calle.
 6. **Logs** (`logs/pantalla.log`, JSON-lines) y **status** (`logs/status.json`).
@@ -28,8 +28,19 @@ npm start                # arranca el panel en http://localhost:8080
 ```
 
 El panel es **móvil-first**: añadir/editar/ordenar cartelas, subir foto con la
-cámara, previsualizar el JPG en vivo, y botón **Publicar** (con modo "Probar"
+cámara, previsualizar el vídeo en vivo, y botón **Publicar** (con modo "Probar"
 que no sube nada).
+
+## Contrato de pantalla en producción
+
+La pantalla espera **exactamente ocho MP4** y siempre con los mismos nombres:
+`berri-1.mp4`, `berri-2.mp4`, `berri-3.mp4`, `berri-4.mp4`, `berri-5.mp4`,
+`berri-6.mp4`, `berri-7.mp4`, `berri-8.mp4`.
+
+El sistema fuerza la salida a MP4, no sube `playlist.json` y no limpia la carpeta
+remota antes de subir. La etapa `sequence` valida la tanda completa antes de
+tocar `publish/`: con menos de ocho cartelas activas o con algún archivo que no
+sea MP4, la publicación se detiene y el FTP no recibe una tanda parcial.
 
 ### Crear una cartela desde una URL
 
@@ -64,8 +75,8 @@ npm run admin:remove -- usuario            # elimina un admin
 
 ```bash
 node src/cli.js import            # registra lo que dejó el worker
-node src/cli.js generate          # renderiza los JPG
-node src/cli.js sequence          # ordena + renombra a publish/
+node src/cli.js generate          # renderiza los MP4
+node src/cli.js sequence          # ordena + renombra los 8 MP4 a publish/
 node src/cli.js upload            # sube por FTP (dry-run si no hay credenciales)
 node src/cli.js publish           # pipeline completo
 node src/cli.js publish --dry-run # todo menos la subida real
@@ -130,7 +141,7 @@ fondo sólido/degradado, y colocar el logo en cualquier esquina (`logoPos`).
 ## Configuración
 
 - **`config/pantalla.config.json`** — resolución de pantalla, calidad, marca
-  (logo/colores), esquema de renombrado (`padStart`, `separator`, `prefixWithOrder`),
+  (logo/colores), esquema de renombrado (`fixedFiles`, `padStart`, `separator`, `prefixWithOrder`),
   rutas y opciones de FTP (`remoteDir`, `clearRemoteFirst`).
 - **`.env`** — credenciales FTP, puerto del panel y token opcional.
 

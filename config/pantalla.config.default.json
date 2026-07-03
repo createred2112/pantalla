@@ -2,7 +2,7 @@
   "screen": {
     "width": 1920,
     "height": 1080,
-    "format": "jpg",
+    "format": "mp4",
     "quality": 90,
     "background": "#0E0E0E"
   },
@@ -19,7 +19,17 @@
     "logoWidth": 12
   },
   "naming": {
-    "pattern": "{nn}_{slug}",
+    "pattern": "berri-{n}",
+    "fixedFiles": [
+      "berri-1.mp4",
+      "berri-2.mp4",
+      "berri-3.mp4",
+      "berri-4.mp4",
+      "berri-5.mp4",
+      "berri-6.mp4",
+      "berri-7.mp4",
+      "berri-8.mp4"
+    ],
     "padStart": 2,
     "separator": "_",
     "lowercase": true,
@@ -27,9 +37,12 @@
   },
   "screenProfile": {
     "name": "Pantalla principal",
-    "acceptImage": true,
+    "acceptImage": false,
     "acceptVideo": true,
-    "includePlaylist": true,
+    "includePlaylist": false,
+    "forceVideo": true,
+    "outputFormat": "mp4",
+    "requiredCount": 8,
     "notes": ""
   },
   "defaults": {

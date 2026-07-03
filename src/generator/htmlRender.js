@@ -304,9 +304,10 @@ async function renderFrame(card, ctx, tpl, frame) {
     await page.setContent(html, { waitUntil: 'load' });
     try { await page.evaluate('document.fonts.ready'); } catch {}
     await page.evaluate(AUTOFIT);
-    const ext = (cfg.screen.format || 'jpg').toLowerCase();
+    const requested = (cfg.screen.format || 'jpg').toLowerCase();
+    const ext = requested === 'png' ? 'png' : 'jpg';
     const buffer = await page.screenshot({ type: ext === 'png' ? 'png' : 'jpeg', quality: ext === 'png' ? undefined : (cfg.screen.quality || 90), clip: { x: 0, y: 0, width: W, height: H } });
-    return { buffer, ext: ext === 'jpeg' ? 'jpg' : ext };
+    return { buffer, ext };
   });
 }
 

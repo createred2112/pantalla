@@ -13,7 +13,7 @@ let loadStarted = 0;
 
 const stepNames = [
   ['import', 'Importar', 'Solo si se solicita'],
-  ['generate', 'Generar', 'Creando JPG/MP4'],
+  ['generate', 'Generar', 'Creando MP4'],
   ['sequence', 'Ordenar', 'Nombres finales'],
   ['upload', 'FTP', 'Simulación sin subir'],
 ];
@@ -244,8 +244,7 @@ function showResult(result, cards, note) {
   const manifest = (result.steps.sequence && result.steps.sequence.manifest) || [];
   renderPlayer(manifest, new Map(cards.map((c) => [c.id, c])));
   const files = (result.steps.sequence && result.steps.sequence.files) || manifest.map((m) => m.file);
-  const playlistText = files.includes('playlist.json') ? ', incluyendo <b>playlist.json</b>' : '';
-  $('#status').innerHTML = `${note} <b>${manifest.length}</b> cartela(s); al publicar se subirían <b>${files.length}</b> archivo(s)${playlistText}.`;
+  $('#status').innerHTML = `${note} <b>${manifest.length}</b> vídeo(s); al publicar se subirían <b>${files.length}</b> archivo(s).`;
 }
 
 // Con memoria: si nada cambió desde la última simulación, se muestra al

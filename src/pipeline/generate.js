@@ -10,32 +10,51 @@ const status = require('../util/status');
 const renderGuard = require('../util/renderGuard');
 const renderMeta = require('../util/renderMeta');
 
+function forceVideoOutput() {
+  const profile = require('../config').cfg.screenProfile || {};
+  return profile.forceVideo === true || String(profile.outputFormat || '').toLowerCase() === 'mp4';
+}
+
+function publishableCards() {
+  const cards = active();
+  const { cfg } = require('../config');
+  const fixed = Array.isArray(cfg.naming && cfg.naming.fixedFiles) ? cfg.naming.fixedFiles.filter(Boolean) : [];
+  const required = fixed.length || Number(cfg.screenProfile && cfg.screenProfile.requiredCount) || 0;
+  return required > 0 ? cards.slice(0, required) : cards;
+}
+
 // Devuelve { file, reused }. force=true regenera siempre.
 async function renderOne(card, opts = {}) {
-  const wantVideo = card.video === true && renderGuard.videoAllowed();
+  const forcedVideo = card.type === 'generated' && forceVideoOutput();
+  const effectiveCard = forcedVideo ? { ...card, video: true } : card;
+  const canVideo = renderGuard.videoAllowed();
+  const wantVideo = effectiveCard.video === true && canVideo;
 
   if (opts.force !== true) {
-    // Para cartelas animadas: reutiliza el MP4 fresco; si el modo seguro está
-    // activo y solo hay JPG fresco, también vale (no podemos hacer MP4 igual).
-    const fresh = renderMeta.isFresh(card, { wantVideo }) || (card.video && !wantVideo ? renderMeta.isFresh(card) : null);
+    // En producción MP4 se exige un MP4 fresco. Fuera de ese modo, una cartela
+    // animada puede caer a JPG si el modo seguro impide renderizar vídeo.
+    const fresh = renderMeta.isFresh(effectiveCard, { wantVideo: forcedVideo || wantVideo }) ||
+      (!forcedVideo && effectiveCard.video && !wantVideo ? renderMeta.isFresh(effectiveCard) : null);
     if (fresh) return { file: fresh.file, reused: true };
   }
 
   let file;
   if (wantVideo) {
-    file = (await require('../generator/video').renderVideoToFile(card)).file;
-  } else if (card.video) {
-    log.warn('generate', `MP4 omitido por modo seguro; se genera JPG para ${card.id}`);
-    file = await renderToFile({ ...card, video: false });
+    file = (await require('../generator/video').renderVideoToFile(effectiveCard)).file;
+  } else if (forcedVideo) {
+    renderGuard.assertCanUseChrome('video');
+  } else if (effectiveCard.video) {
+    log.warn('generate', `MP4 omitido por modo seguro; se genera JPG para ${effectiveCard.id}`);
+    file = await renderToFile({ ...effectiveCard, video: false });
   } else {
-    file = await renderToFile(card);
+    file = await renderToFile(effectiveCard);
   }
-  renderMeta.set(card.id, { hash: renderMeta.renderHash(card), file: path.basename(file) });
+  renderMeta.set(effectiveCard.id, { hash: renderMeta.renderHash(effectiveCard), file: path.basename(file) });
   return { file, reused: false };
 }
 
 async function generate(opts = {}) {
-  const cards = active().filter((c) => c.type === 'generated');
+  const cards = publishableCards().filter((c) => c.type === 'generated');
   const results = [];
   let reused = 0;
   for (const card of cards) {

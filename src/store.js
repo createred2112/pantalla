@@ -35,16 +35,20 @@ function active() {
 }
 
 function normalize(card) {
+  const type = card.type || 'generated';
+  const forceVideo = type === 'generated' && (
+    cfg.screenProfile && (cfg.screenProfile.forceVideo === true || String(cfg.screenProfile.outputFormat || '').toLowerCase() === 'mp4')
+  );
   return {
     id: card.id || id(),
     order: card.order != null ? Number(card.order) : 999,
     enabled: card.enabled !== false,
     // type: generated (se renderiza) | image (jpg/png ya listo) | video (mp4)
-    type: card.type || 'generated',
+    type,
     template: card.template || cfg.defaults.template,
     theme: card.theme || null,   // clave de paleta; null = la que trae la plantilla
     layout: card.layout || null, // diseño editado (elementos) de esta cartela; null = el de la plantilla
-    video: card.video === true,  // si true, se genera MP4 animado en vez de JPG
+    video: card.video === true || forceVideo,  // si true, se genera MP4 animado en vez de JPG
     videoIntro: card.videoIntro || null, // MP4 opcional antes de la cartela animada
     videoOutro: card.videoOutro || null, // MP4 opcional después de la cartela animada
     title: card.title || '',

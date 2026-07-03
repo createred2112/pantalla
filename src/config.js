@@ -16,7 +16,38 @@ if (!fs.existsSync(CONFIG_PATH) && fs.existsSync(CONFIG_DEFAULT)) {
 
 function load() {
   const cfg = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
-  return cfg;
+  return migrateProductionContract(cfg);
+}
+
+const FIXED_SCREEN_FILES = [
+  'berri-1.mp4',
+  'berri-2.mp4',
+  'berri-3.mp4',
+  'berri-4.mp4',
+  'berri-5.mp4',
+  'berri-6.mp4',
+  'berri-7.mp4',
+  'berri-8.mp4',
+];
+
+function migrateProductionContract(c) {
+  c.screen = { ...(c.screen || {}), format: 'mp4' };
+  c.naming = {
+    ...(c.naming || {}),
+    pattern: 'berri-{n}',
+    fixedFiles: FIXED_SCREEN_FILES,
+    lowercase: true,
+  };
+  c.screenProfile = {
+    ...(c.screenProfile || {}),
+    acceptImage: false,
+    acceptVideo: true,
+    includePlaylist: false,
+    forceVideo: true,
+    outputFormat: 'mp4',
+    requiredCount: FIXED_SCREEN_FILES.length,
+  };
+  return c;
 }
 
 const cfg = load();

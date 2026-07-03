@@ -177,6 +177,8 @@ function collectSettings() {
     secure: $('#setFtpSecure').checked,
     clearRemoteFirst: $('#setFtpClear').checked,
   };
+  const fixedFiles = SETTINGS.naming && Array.isArray(SETTINGS.naming.fixedFiles) ? SETTINGS.naming.fixedFiles : [];
+  const screenFormat = $('#setScreenFormat').value || 'jpg';
   return {
     brand: b,
     palette,
@@ -184,17 +186,21 @@ function collectSettings() {
       ...(SETTINGS.screen || {}),
       width: Number($('#setScreenW').value) || 1920,
       height: Number($('#setScreenH').value) || 1080,
-      format: $('#setScreenFormat').value || 'jpg',
+      format: screenFormat,
     },
     screenProfile: {
       name: $('#setProfileName').value.trim() || 'Pantalla principal',
       acceptImage: $('#setAcceptImage').checked,
       acceptVideo: $('#setAcceptVideo').checked,
       includePlaylist: $('#setIncludePlaylist').checked,
+      forceVideo: fixedFiles.length > 0 || screenFormat === 'mp4',
+      outputFormat: fixedFiles.length > 0 ? 'mp4' : screenFormat,
+      requiredCount: fixedFiles.length || (SETTINGS.screenProfile && SETTINGS.screenProfile.requiredCount) || 0,
       notes: $('#setProfileNotes').value.trim(),
     },
     naming: {
-      pattern: $('#setNamePattern').value.trim() || '{nn}_{slug}',
+      pattern: $('#setNamePattern').value.trim() || (fixedFiles.length ? 'berri-{n}' : '{nn}_{slug}'),
+      fixedFiles,
       padStart: Number($('#setPadStart').value) || 2,
       separator: $('#setSeparator').value || '_',
       lowercase: $('#setLowercase').checked,
@@ -1611,7 +1617,7 @@ function plannedFiles(r) {
   const up = r && r.steps && r.steps.upload;
   const seq = r && r.steps && r.steps.sequence;
   if (up && Array.isArray(up.files)) return up.files;
-  if (seq && Array.isArray(seq.files)) return [...seq.files, 'playlist.json'];
+  if (seq && Array.isArray(seq.files)) return seq.files;
   return [];
 }
 
