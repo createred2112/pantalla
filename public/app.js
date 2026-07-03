@@ -1156,7 +1156,146 @@ function confirmDiscard() {
   return !RD_DIRTY || confirm('Hay cambios sin guardar en la escaleta. ¿Salir sin guardarlos?');
 }
 
-$('#btnRundown').addEventListener('click', openRundown);
+// ====== ASISTENTE EN 3 PASOS: la puerta principal de la escaleta ======
+// 1) elegir tipos y días · 2) revisar/rellenar contenido · 3) guardar + vista previa
+const wizardDlg = $('#wizardDlg');
+let WZ = null;
+
+async function openWizard() {
+  RUNDOWN = await api('/rundown'); // trae almacén, workers y claves
+  WZ = { step: 1, days: 3, sel: new Set(PLAN_TYPES.filter((t) => t.def).map((t) => t.id)), manual: {}, adds: {} };
+  renderWizard();
+  wizardDlg.showModal();
+}
+
+function wzWorkerLine(key) {
+  const w = (RUNDOWN.workers || []).find((x) => x.key === key);
+  if (!w) return 'automático';
+  return w.fresh && w.preview ? `✓ dato en vivo: ${w.preview}` : '⏳ aún sin datos (se traen solos)';
+}
+
+function renderWizard() {
+  const total = 3;
+  $('#wzTitle').textContent = `Escaleta · paso ${WZ.step} de ${total}`;
+  $('#wzBack').hidden = WZ.step === 1;
+  $('#wzNext').textContent = WZ.step === 3 ? '✅ Guardar y ver vista previa' : 'Siguiente →';
+  const chosen = PLAN_TYPES.filter((t) => WZ.sel.has(t.id));
+
+  if (WZ.step === 1) {
+    $('#wzBody').innerHTML = `
+      <p class="hint" style="margin-top:0"><b>¿Qué cartelas quieres en pantalla?</b> Marca los tipos y cuántos días cubrir. En el siguiente paso rellenas lo que sea tuyo y revisas lo que rota.</p>
+      <label>Días a cubrir</label>
+      <input id="wzDays" type="number" min="1" max="14" value="${WZ.days}">
+      <label>Tipos de cartela</label>
+      <div style="display:grid;gap:2px">${PLAN_TYPES.map((t) =>
+        `<label class="chk"><input type="checkbox" data-wz-type="${t.id}" ${WZ.sel.has(t.id) ? 'checked' : ''}>${t.label}</label>`).join('')}</div>`;
+    return;
+  }
+
+  if (WZ.step === 2) {
+    const sections = chosen.map((t) => {
+      const head = `<h3 style="margin:14px 0 4px;font-size:14px">${t.label}</h3>`;
+      if (t.slot.source === 'worker' && t.slot.workerKey !== 'poolCapacity') {
+        return head + `<div class="status">${esc(wzWorkerLine(t.slot.workerKey))} · nada que hacer aquí</div>`;
+      }
+      if (t.id === 'piscinas') {
+        return head + `<label>Aforo actual (lo escribes tú)</label>
+          <input data-wz-manual="piscinas:title" value="${esc((WZ.manual.piscinas || {}).title || '')}" placeholder="p. ej. 1.240">`;
+      }
+      if (t.id === 'agenda') {
+        return head + `<label>Planes del día · una línea por evento: HORA | Nombre | Lugar</label>
+          <textarea data-wz-manual="agenda:body" placeholder="19:30 | Concierto en la Virgen Blanca | Casco Viejo">${esc((WZ.manual.agenda || {}).body || '')}</textarea>`;
+      }
+      if (t.id === 'ultima') {
+        return head + `<div class="status">Queda como hueco APAGADO. Cuando pase algo, botón 🚨 del panel y listo.</div>`;
+      }
+      if (t.slot.source === 'library') {
+        const key = t.slot.libraryKey;
+        const items = (RUNDOWN.library && RUNDOWN.library[key]) || [];
+        const preview = items.slice(0, 5).map((p) => `· ${esc(p.title || p.body || '')}`).join('<br>');
+        return head + `<div class="status"><b>${items.length}</b> actualización(es) cargadas — irán rotando SIN repetirse${items.length ? ':<br>' + preview + (items.length > 5 ? '<br>…' : '') : ''}</div>
+          <label>Añadir nuevas (una por línea: Título | firma | texto)</label>
+          <textarea data-wz-add="${esc(key)}" placeholder="El casco medieval tiene forma de almendra | Dato curioso |">${esc(WZ.adds[key] || '')}</textarea>`;
+      }
+      return head + '<div class="status">Listo.</div>';
+    }).join('');
+    $('#wzBody').innerHTML = `<p class="hint" style="margin-top:0"><b>Revisa y rellena.</b> Lo automático ya viene con datos; lo que rota enseña su almacén; lo tuyo lo escribes aquí.</p>` + sections;
+    return;
+  }
+
+  // Paso 3: confirmación
+  const newPieces = Object.values(WZ.adds).reduce((n, txt) => n + String(txt || '').split(/\r?\n/).filter((l) => l.trim()).length, 0);
+  $('#wzBody').innerHTML = `
+    <p class="hint" style="margin-top:0"><b>Todo listo.</b> Esto es lo que va a pasar al confirmar:</p>
+    <div class="status" style="line-height:1.7">
+      📺 Guion con <b>${chosen.length}</b> cartelas: ${chosen.map((t) => esc(t.slot.label)).join(' → ')}<br>
+      📆 Cubre <b>${WZ.days}</b> día(s); el contenido rota solo cada día sin repetirse<br>
+      ${newPieces ? `🧊 Se añaden <b>${newPieces}</b> actualización(es) nuevas al almacén<br>` : ''}
+      🖼 Se crean las cartelas y se abre la <b>vista previa</b> (el bucle tal cual se verá)<br>
+      📤 Publicar sigue siendo decisión tuya — o del piloto automático cada mañana
+    </div>`;
+}
+
+// Recoger lo tecleado antes de cambiar de paso
+function wzCollect() {
+  const d = $('#wzDays');
+  if (d) WZ.days = Math.max(1, Math.min(14, Number(d.value) || 3));
+  $('#wzBody').querySelectorAll('[data-wz-type]').forEach((el) => {
+    if (el.checked) WZ.sel.add(el.dataset.wzType); else WZ.sel.delete(el.dataset.wzType);
+  });
+  $('#wzBody').querySelectorAll('[data-wz-manual]').forEach((el) => {
+    const [id, field] = el.dataset.wzManual.split(':');
+    WZ.manual[id] = WZ.manual[id] || {};
+    WZ.manual[id][field] = el.value;
+  });
+  $('#wzBody').querySelectorAll('[data-wz-add]').forEach((el) => { WZ.adds[el.dataset.wzAdd] = el.value; });
+}
+
+async function wizardFinish() {
+  const btn = $('#wzNext');
+  btn.disabled = true;
+  btn.textContent = '⏳ Guardando y creando cartelas…';
+  try {
+    const stamp = Date.now().toString(36);
+    const chosen = PLAN_TYPES.filter((t) => WZ.sel.has(t.id));
+    const slots = chosen.map((t) => {
+      const s = { id: `plan_${t.id}_${stamp}`, enabled: t.enabled !== false, duration: t.duration || 8, video: false, theme: '', title: '', subtitle: '', body: '', date: '', template: '', libraryKey: '', workerKey: '', ...t.slot };
+      return Object.assign(s, WZ.manual[t.id] || {});
+    });
+    const lib = RUNDOWN.library || {};
+    for (const [key, text] of Object.entries(WZ.adds)) {
+      const meta = (RUNDOWN.libraryKeys || []).find((k) => k.key === key) || { key, template: 'noticia', theme: '' };
+      const items = parseBulkItems(text || '', meta);
+      if (items.length) { if (!Array.isArray(lib[key])) lib[key] = []; lib[key].push(...items); }
+    }
+    await api('/rundown', { method: 'PUT', body: JSON.stringify({ title: `Guion (${WZ.days} días)`, slots, days: {} }) });
+    await api('/rundown/library', { method: 'PUT', body: JSON.stringify(lib) });
+    await api('/workers/refresh', { method: 'POST' }).catch(() => {});
+    await api('/rundown/materialize', { method: 'POST', body: JSON.stringify({}) });
+    RD_PLAN_DAYS = WZ.days;
+    wizardDlg.close();
+    toast('Guion guardado y cartelas creadas · abriendo la vista previa');
+    load();
+    window.open('/review.html', '_blank');
+  } catch (e) {
+    toast('Error: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    if (WZ) renderWizard();
+  }
+}
+
+$('#btnRundown').addEventListener('click', openWizard);
+$('#wzClose').addEventListener('click', () => wizardDlg.close());
+$('#wzAdvanced').addEventListener('click', () => { wizardDlg.close(); openRundown(); });
+$('#wzBack').addEventListener('click', () => { wzCollect(); WZ.step = Math.max(1, WZ.step - 1); renderWizard(); });
+$('#wzNext').addEventListener('click', () => {
+  wzCollect();
+  if (WZ.step === 1 && !WZ.sel.size) { toast('Marca al menos un tipo de cartela'); return; }
+  if (WZ.step < 3) { WZ.step++; renderWizard(); return; }
+  wizardFinish();
+});
+
 // --- 🪄 Asistente Planificar días: días + tipos → guion generado ---
 const planDlg = $('#planDlg');
 $('#btnPlanWizard').addEventListener('click', () => {

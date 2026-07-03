@@ -299,7 +299,7 @@
   <div class="bar">
     <button class="tool featured" id="btnRundown">
       <span class="ico">🗓</span>
-      <span class="tool-txt"><b>Escaleta</b><small>Orden del día y contenido programado</small></span>
+      <span class="tool-txt"><b>Escaleta</b><small>Elegir cartelas · rellenar · vista previa</small></span>
     </button>
     <button class="tool danger" id="btnBreaking">
       <span class="ico">🚨</span>
@@ -513,6 +513,18 @@
   <div class="dlg-b">
     <div id="statusBox" class="status"></div>
     <div id="log"></div>
+  </div>
+</dialog>
+
+<!-- Asistente de escaleta en 3 pasos (la puerta principal) -->
+<dialog id="wizardDlg">
+  <div class="dlg-h"><h2 id="wzTitle">Escaleta</h2><button class="ghost" id="wzClose">✕</button></div>
+  <div class="dlg-b" id="wzBody"></div>
+  <div class="dlg-f">
+    <button class="ghost" id="wzAdvanced" title="Storyboard completo: bloques sueltos, orden, saltos por día, almacén…">⚙️ Modo avanzado</button>
+    <span class="spacer"></span>
+    <button class="ghost" id="wzBack" hidden>← Atrás</button>
+    <button class="primary" id="wzNext">Siguiente →</button>
   </div>
 </dialog>
 
