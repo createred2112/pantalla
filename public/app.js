@@ -1109,6 +1109,28 @@ function blankLibraryItem(meta) {
   return { title: '', subtitle: '', body: '', template: meta.template || 'noticia', theme: meta.theme || '', enabled: true, start: '', end: '', startAt: '', endAt: '', dates: [], weekdays: [] };
 }
 
+function blankAgendaLibraryItem() {
+  const meta = (RUNDOWN.libraryKeys || []).find((k) => k.key === 'agendaEventos') || { template: 'agenda', theme: 'blanco' };
+  const active = RUNDOWN.activeDate || new Date().toISOString().slice(0, 10);
+  const arr = ((RUNDOWN.library || {}).agendaEventos || [])
+    .filter((it) => it && it.enabled !== false)
+    .slice()
+    .sort((a, b) => String(a.startAt || '').localeCompare(String(b.startAt || '')));
+  const prev = arr[arr.length - 1] || null;
+  const startAt = (prev && (prev.endAt || prev.startAt)) || dtLocal(active, '08:00');
+  const endAt = addMinutesLocal(startAt, 60);
+  return {
+    ...blankLibraryItem(meta),
+    title: '',
+    subtitle: 'Hoy',
+    body: '',
+    template: 'agenda',
+    theme: 'blanco',
+    startAt,
+    endAt,
+  };
+}
+
 function clientDayNumber(date) {
   const jsDay = new Date(`${date}T12:00:00`).getDay();
   return jsDay === 0 ? 7 : jsDay;
@@ -1232,14 +1254,21 @@ function renderLibraryPanel() {
   if (!keys.some((x) => x.key === LIBRARY_CATEGORY) && keys[0]) LIBRARY_CATEGORY = keys[0].key;
   $('#libraryCategory').innerHTML = keys.map((meta) => `<option value="${esc(meta.key)}" ${meta.key === LIBRARY_CATEGORY ? 'selected' : ''}>${esc(meta.label)}</option>`).join('');
   const meta = currentLibraryMeta();
+  const isAgenda = meta.key === 'agendaEventos';
   const items = (RUNDOWN.library && Array.isArray(RUNDOWN.library[meta.key])) ? RUNDOWN.library[meta.key] : [];
   const activeDate = RUNDOWN.activeDate || new Date().toISOString().slice(0, 10);
   const eligible = items.filter((item) => clientItemApplies(item, activeDate)).length;
+  const libTitle = document.querySelector('#rdTabLib .library-head h3');
+  if (libTitle) libTitle.textContent = isAgenda ? 'Agenda viva' : 'Carrusel';
+  $('#btnLibraryAdd').textContent = isAgenda ? '＋ Añadir bloque de agenda' : '＋ Añadir pieza';
+  $('#btnLibraryAdd').title = isAgenda ? 'Crea una tarjeta nueva de Agenda viva con horario propio.' : 'Añade una pieza a este carrusel.';
   $('#librarySummary').innerHTML =
-    `<b>${items.length}</b> pieza(s) en esta categoría · <b style="color:${eligible ? '#bff0d5' : '#ffd98a'}">${eligible}</b> pueden salir el ${esc(fmtShortDate(activeDate))}`;
+    isAgenda
+      ? `<b>${items.length}</b> bloque(s) de agenda · <b style="color:${eligible ? '#bff0d5' : '#ffd98a'}">${eligible}</b> pueden salir el ${esc(fmtShortDate(activeDate))}`
+      : `<b>${items.length}</b> pieza(s) en esta categoría · <b style="color:${eligible ? '#bff0d5' : '#ffd98a'}">${eligible}</b> pueden salir el ${esc(fmtShortDate(activeDate))}`;
   renderPlanner();
   $('#libraryList').innerHTML = items.length ? items.map((item, i) => libraryItemHtml(meta, item, i)).join('') :
-    '<div class="empty">Esta categoría está vacía. Añade una pieza o importa un lote.</div>';
+    `<div class="empty">Esta categoría está vacía. ${isAgenda ? 'Añade un bloque de agenda.' : 'Añade una pieza o importa un lote.'}</div>`;
 }
 
 function weekdayBox(item, n, label) {
@@ -1248,9 +1277,10 @@ function weekdayBox(item, n, label) {
 }
 
 function libraryItemHtml(meta, item, i) {
+  const isAgenda = meta.key === 'agendaEventos';
   const head = `<button type="button" class="lib-row" data-lib-open="${i}">
       <span class="lib-dot ${item.enabled !== false ? 'on' : ''}"></span>
-      <span class="lib-title">${esc(item.title || item.body || '(sin título)')}</span>
+      <span class="lib-title">${esc(item.title || item.body || (isAgenda ? '(bloque de agenda sin rellenar)' : '(sin título)'))}</span>
       <span class="lib-when">${esc(scheduleSummary(item))}</span>
     </button>`;
   if (i !== LIB_OPEN) {
@@ -1261,10 +1291,10 @@ function libraryItemHtml(meta, item, i) {
     ${head}
     <div class="lib-edit">
       <div class="mini">
-        <label>Título<input data-lib-field="title" value="${esc(item.title || '')}"></label>
-        <label>Firma/sección<input data-lib-field="subtitle" value="${esc(item.subtitle || '')}"></label>
+        <label>${isAgenda ? 'Cabecera' : 'Título'}<input data-lib-field="title" value="${esc(item.title || '')}" placeholder="${isAgenda ? 'Agenda, Ahora en..., Mañana...' : ''}"></label>
+        <label>${isAgenda ? 'Etiqueta' : 'Firma/sección'}<input data-lib-field="subtitle" value="${esc(item.subtitle || '')}" placeholder="${isAgenda ? 'Hoy, Mañana, Festival...' : ''}"></label>
       </div>
-      <label>Texto<textarea data-lib-field="body">${esc(item.body || '')}</textarea></label>
+      <label>${isAgenda ? 'Eventos del bloque' : 'Texto'}<textarea data-lib-field="body" placeholder="${isAgenda ? '21:00 | Concierto | Plaza Nueva\\n22:30 | DJ set | Casco Viejo' : ''}">${esc(item.body || '')}</textarea></label>
       <label>¿Cuándo sale?
         <select data-lib-mode>
           <option value="always" ${!sched ? 'selected' : ''}>Siempre (en el carrusel con las demás)</option>
@@ -1282,7 +1312,7 @@ function libraryItemHtml(meta, item, i) {
           <label>Empieza a salir<input type="datetime-local" data-lib-field="startAt" value="${esc(item.startAt || '')}"></label>
           <label>Deja de salir<input type="datetime-local" data-lib-field="endAt" value="${esc(item.endAt || '')}"></label>
         </div>
-        <div class="hint">Para agenda: pon “deja de salir” cuando el evento ya no tenga sentido. Puedes dejar preparado mañana desde ahora.</div>
+        <div class="hint">${isAgenda ? 'Este bloque sale solo dentro de esta ventana. Si añades otro después, evita solaparlos.' : 'Para agenda: pon “deja de salir” cuando el evento ya no tenga sentido. Puedes dejar preparado mañana desde ahora.'}</div>
         <div class="mini">
           <label>Desde<input type="date" data-lib-field="start" value="${esc(item.start || '')}"></label>
           <label>Hasta<input type="date" data-lib-field="end" value="${esc(item.end || '')}"></label>
@@ -1791,10 +1821,15 @@ $('#btnLibraryAdd').addEventListener('click', () => {
   collectLibraryCategory();
   const meta = currentLibraryMeta();
   if (!Array.isArray(RUNDOWN.library[meta.key])) RUNDOWN.library[meta.key] = [];
-  RUNDOWN.library[meta.key].push(blankLibraryItem(meta));
+  RUNDOWN.library[meta.key].push(meta.key === 'agendaEventos' ? blankAgendaLibraryItem() : blankLibraryItem(meta));
   LIB_OPEN = RUNDOWN.library[meta.key].length - 1;
   rdSetDirty(true);
   renderLibraryPanel();
+  if (meta.key === 'agendaEventos') {
+    toast('Bloque de agenda añadido: rellena eventos y guarda cambios');
+    const open = $('#libraryList').querySelector(`[data-lib-item="${LIB_OPEN}"]`);
+    if (open) open.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
 });
 $('#btnBulkImport').addEventListener('click', () => {
   if (!RUNDOWN) return;
