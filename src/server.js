@@ -348,7 +348,8 @@ const SAMPLE_DATA = {
   alerta: { title: 'Corte de tráfico en la Avenida', subtitle: 'Tráfico', body: 'Desvíos por la calle Dato', date: 'Hoy' },
   evento: { title: 'Kaldearte: Ballet Aéreo', subtitle: 'Espectáculo', body: 'Plaza de la Virgen Blanca', date: 'Sáb 28 · 21:30' },
   cita: { title: 'Volar sobre la ciudad cambia tu mirada', subtitle: 'Iñigo Naya' },
-  clima: { title: '24º', subtitle: 'Soleado', body: '', date: 'AHORA · 13:45', data: { max: 28, min: 14 } },
+  clima: { title: '24º', subtitle: 'Soleado', body: '', date: 'AHORA', data: { max: 28, min: 14 } },
+  aire: { title: 'MUY BUENA', subtitle: 'Calidad del aire', body: 'Índice europeo: 19', date: 'Vitoria-Gasteiz · Open-Meteo' },
   foto: { title: 'Atardecer sobre la Catedral', subtitle: 'Postal', date: '22:00' },
   agenda: { title: 'Agenda', body: '19:30 | Los Chunguitos Live | Jimmy Jazz\n20:00 | La Tremenda Pasarela | Teatro Félix Petite' },
   mensaje: { title: 'Vitoria en verde.' },
@@ -384,7 +385,7 @@ const SAMPLES_META = path.join(SAMPLES_DIR, 'meta.json');
 function samplesHash() {
   const crypto = require('crypto');
   return crypto.createHash('sha1').update(JSON.stringify({
-    v: 9, // subir al cambiar el diseño de las plantillas en código
+    v: 10, // subir al cambiar el diseño de las plantillas en código
     brand: cfg.brand, palette: cfg.palette, screen: cfg.screen,
     tpls: templates.list().map((t) => t.id), data: SAMPLE_DATA,
   })).digest('hex');

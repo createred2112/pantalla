@@ -52,14 +52,13 @@ async function weather() {
   const t = Math.round(j.current.temperature_2m);
   const max = Math.round(j.daily.temperature_2m_max[0]);
   const min = Math.round(j.daily.temperature_2m_min[0]);
-  const updated = j.current.time ? new Date(j.current.time).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) : '';
   return {
     template: 'clima',
     title: `${t}º`,
     subtitle: wmoLabel(Number(j.current.weather_code)),
     body: '',
-    date: updated ? `AHORA · ${updated}` : 'AHORA',
-    extra: { max, min, nowLabel: updated },
+    date: 'AHORA',
+    extra: { max, min },
   };
 }
 
@@ -95,7 +94,7 @@ async function airQuality() {
   const v = Math.round(j.current.european_aqi);
   const label = v <= 20 ? 'MUY BUENA' : v <= 40 ? 'BUENA' : v <= 60 ? 'MODERADA' : v <= 80 ? 'MALA' : 'MUY MALA';
   return {
-    template: 'dato',
+    template: 'aire',
     title: label,
     subtitle: 'Calidad del aire',
     body: `Índice europeo: ${v}`,

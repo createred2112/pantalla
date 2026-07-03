@@ -16,6 +16,7 @@ module.exports = {
     const els = [];
     const title = String(card.title || '');
     const isFigure = title.replace(/\s+/g, '').length <= 9;
+    const hasBody = Boolean(String(card.body || '').trim());
 
     // La cifra (o frase) domina el lienzo superior.
     els.push({
@@ -26,6 +27,15 @@ module.exports = {
         ? { min: Math.round(H * 0.16), max: Math.round(H * 0.5), lines: 1 }
         : { min: Math.round(H * 0.07), max: Math.round(H * 0.16), lines: 3 },
     });
+
+    if (!isFigure && hasBody) {
+      els.push({
+        type: 'text', x: pad, y: Math.round(H * 0.47), w, h: Math.round(H * 0.16),
+        text: String(card.body || '').toUpperCase(), font: 'text', weight: 800, color: theme.text,
+        align: 'center', valign: 'center', lineHeight: 1.08,
+        autofit: { min: Math.round(H * 0.035), max: Math.round(H * 0.07), lines: 2 },
+      });
+    }
 
     // Banda de acento a sangre: la etiqueta vive dentro. Firma visual de la casa.
     if (card.subtitle) {
@@ -41,7 +51,7 @@ module.exports = {
     }
 
     // Pie: contexto + actualización, abajo a la derecha (el logo va a la izquierda).
-    const foot = [card.body, card.date].filter(Boolean).join('  ·  ');
+    const foot = [isFigure ? card.body : '', card.date].filter(Boolean).join('  ·  ');
     if (foot) {
       els.push({
         type: 'text', x: Math.round(W * 0.3), y: Math.round(H * 0.875), w: Math.round(W * 0.7) - pad, h: Math.round(H * 0.07),

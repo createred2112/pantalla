@@ -431,6 +431,7 @@ async function loadEditorRundown(card) {
       const keys = RUNDOWN.libraryKeys || [];
       const catLabel = (keys.find((k) => k.key === slot.libraryKey) || {}).label || slot.libraryKey;
       const items = (RUNDOWN.library && RUNDOWN.library[slot.libraryKey]) || [];
+      const isAgendaLib = slot.libraryKey === 'agendaEventos';
       box.innerHTML = `
         <div class="status">Producida por el bloque <b>«${esc(slot.label)}»</b> · carrusel: <b>${esc(catLabel)}</b>.
           La plantilla y el tema elegidos abajo se aplican a TODO el bloque (vacío = cada pieza con el suyo).</div>
@@ -440,9 +441,9 @@ async function loadEditorRundown(card) {
         </select></label>
         <label>Piezas del carrusel (marcadas = en emisión)</label>
         <div style="max-height:220px;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:6px 10px">
-          ${items.map((p, i) => `<label class="chk"><input type="checkbox" data-ed-lib="${i}" ${p.enabled !== false ? 'checked' : ''}>${esc(p.title || p.body || '(sin título)')}</label>`).join('') || '<div class="hint">Sin piezas. Añádalas en Escaleta → Carrusel.</div>'}
+          ${items.map((p, i) => `<label class="chk"><input type="checkbox" data-ed-lib="${i}" ${p.enabled !== false ? 'checked' : ''}>${esc(p.title || p.body || '(sin título)')} <span class="hint">${esc(scheduleSummary(p))}</span></label>`).join('') || '<div class="hint">Sin piezas. Añádalas en Escaleta → Carrusel.</div>'}
         </div>
-        <button type="button" class="ghost" id="edOpenRundown" style="margin-top:8px;width:100%">Abrir el guion (modo avanzado)</button>`;
+        <button type="button" class="ghost" id="edOpenRundown" style="margin-top:8px;width:100%">${isAgendaLib ? 'Editar Agenda viva' : 'Abrir carrusel en modo avanzado'}</button>`;
     } else {
       box.innerHTML = `
         <div class="status">Producida por el bloque <b>«${esc(slot.label)}»</b> del guion${slot.source === 'worker' ? ' (dato automático)' : ''}.
@@ -453,6 +454,15 @@ async function loadEditorRundown(card) {
       editor.close();
       await openRundown();
       const idx = ((RUNDOWN.rundown || {}).slots || []).findIndex((s) => s.id === card.rundownSlot);
+      if (slot.source === 'library' && slot.libraryKey) {
+        LIBRARY_CATEGORY = slot.libraryKey;
+        LIB_OPEN = 0;
+        setRundownTab('lib');
+        renderLibraryPanel();
+        const lib = $('#rdTabLib');
+        if (lib) lib.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        return;
+      }
       if (idx >= 0) {
         RUNDOWN_SELECTED = idx;
         renderRundown();
@@ -924,7 +934,7 @@ const PLAN_TYPES = [
   { id: 'consejo', label: 'Consejo informático (Fast2Computer) · carrusel', slot: { source: 'library', libraryKey: 'consejosInformaticos', label: 'Consejo informático' } },
   { id: 'luz', label: 'Precio de la luz · automático', slot: { source: 'worker', workerKey: 'powerPrice', label: 'Precio de la luz' } },
   { id: 'gasolina', label: 'Gasolineras más baratas · automático', slot: { source: 'worker', workerKey: 'fuel', label: 'Gasolina más barata' } },
-  { id: 'aire', label: 'Calidad del aire · automático', slot: { source: 'worker', workerKey: 'airQuality', template: 'dato', label: 'Calidad del aire' } },
+  { id: 'aire', label: 'Calidad del aire · automático', slot: { source: 'worker', workerKey: 'airQuality', template: 'aire', label: 'Calidad del aire' } },
   { id: 'piscinas', label: 'Aforo piscinas · manual', slot: { source: 'worker', workerKey: 'poolCapacity', template: 'dato', label: 'Aforo piscinas', subtitle: 'Personas en las piscinas' } },
   { id: 'ultima', label: 'Última hora · reservado (desactivado)', enabled: false, slot: { source: 'fixed', template: 'alerta', label: 'Última hora', subtitle: 'ÚLTIMA HORA' } },
 ];
@@ -1450,13 +1460,24 @@ function dateAtTime(date, time) {
   return `${date}T${time}`;
 }
 
+function addMinutesLocal(dt, minutes) {
+  const d = new Date(dt || `${agendaBaseDate()}T08:00`);
+  if (Number.isNaN(d.getTime())) return '';
+  d.setMinutes(d.getMinutes() + minutes);
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+}
+
 function agendaBaseDate() {
   return (RUNDOWN && RUNDOWN.activeDate) || localDatePart();
 }
 
-function blankAgendaMoment() {
+function blankAgendaMoment(afterIndex = -1) {
   const today = agendaBaseDate();
-  return { title: 'Agenda', subtitle: 'Hoy', body: '', startAt: dateAtTime(today, '08:00'), endAt: dateAtTime(today, '22:00') };
+  const prev = afterIndex >= 0 ? (WZ.agenda || [])[afterIndex] : (WZ && WZ.agenda && WZ.agenda.length ? WZ.agenda[WZ.agenda.length - 1] : null);
+  const next = afterIndex >= 0 ? (WZ.agenda || [])[afterIndex + 1] : null;
+  const startAt = (prev && (prev.endAt || prev.startAt)) || dateAtTime(today, '08:00');
+  const endAt = (next && next.startAt && next.startAt > startAt) ? next.startAt : addMinutesLocal(startAt, 60);
+  return { title: 'Agenda', subtitle: 'Hoy', body: '', startAt, endAt };
 }
 
 function initialAgendaMoments() {
@@ -1514,6 +1535,26 @@ function renderAgendaWizard() {
   return `<div class="status"><b>Agenda viva:</b> crea tantos mensajes como necesites y decide cuándo empieza y cuándo desaparece cada uno.</div>
     <div class="agenda-wizard">${(WZ.agenda || []).map(agendaMomentHtml).join('')}</div>
     <button type="button" class="ghost agenda-add" data-wz-agenda-add>Añadir otro momento de agenda</button>`;
+}
+
+function orderedAgendaMoments(items) {
+  return (items || [])
+    .map((m) => ({ ...m }))
+    .sort((a, b) => String(a.startAt || '').localeCompare(String(b.startAt || '')));
+}
+
+function normalizeAgendaMoments(items) {
+  const out = orderedAgendaMoments(items);
+  for (let i = 0; i < out.length; i++) {
+    const cur = out[i];
+    const next = out[i + 1];
+    if (cur.startAt) {
+      if (!cur.endAt) cur.endAt = next && next.startAt ? next.startAt : addMinutesLocal(cur.startAt, 60);
+      if (next && next.startAt && cur.endAt > next.startAt) cur.endAt = next.startAt;
+      if (cur.endAt && cur.endAt <= cur.startAt) cur.endAt = next && next.startAt && next.startAt > cur.startAt ? next.startAt : addMinutesLocal(cur.startAt, 60);
+    }
+  }
+  return out;
 }
 
 function renderWizard() {
@@ -1618,7 +1659,7 @@ async function wizardFinish() {
     const lib = RUNDOWN.library || {};
     if (WZ.sel.has('agenda')) {
       const meta = (RUNDOWN.libraryKeys || []).find((k) => k.key === 'agendaEventos') || { key: 'agendaEventos', template: 'agenda', theme: 'blanco' };
-      lib.agendaEventos = (WZ.agenda || [])
+      lib.agendaEventos = normalizeAgendaMoments(WZ.agenda || [])
         .filter((m) => String(m.body || '').trim() || (String(m.title || '').trim() && String(m.title || '').trim() !== 'Agenda'))
         .map((m) => ({
           ...blankLibraryItem(meta),
@@ -1673,6 +1714,7 @@ function applyAgendaQuick(i, kind) {
     m.startAt = dateAtTime(tomorrow, '13:42');
     m.endAt = '';
   }
+  WZ.agenda = normalizeAgendaMoments(WZ.agenda);
   renderWizard();
 }
 
@@ -1689,15 +1731,18 @@ $('#wzBody').addEventListener('click', (e) => {
   const add = e.target.closest('[data-wz-agenda-add]');
   if (add) {
     wzCollect();
-    WZ.agenda.push(blankAgendaMoment());
+    WZ.agenda.push(blankAgendaMoment(WZ.agenda.length - 1));
+    WZ.agenda = normalizeAgendaMoments(WZ.agenda);
     renderWizard();
     return;
   }
   const copy = e.target.closest('[data-wz-agenda-copy]');
   if (copy) {
     wzCollect();
-    const src = WZ.agenda[Number(copy.dataset.wzAgendaCopy)];
-    WZ.agenda.splice(Number(copy.dataset.wzAgendaCopy) + 1, 0, { ...src });
+    const i = Number(copy.dataset.wzAgendaCopy);
+    const src = WZ.agenda[i];
+    WZ.agenda.splice(i + 1, 0, { ...src, startAt: (src && (src.endAt || src.startAt)) || '', endAt: '', body: '' });
+    WZ.agenda = normalizeAgendaMoments(WZ.agenda);
     renderWizard();
     return;
   }

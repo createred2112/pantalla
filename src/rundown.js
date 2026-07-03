@@ -325,13 +325,16 @@ function slotPayload(slot, library, date) {
     // Dato automático REAL desde la caché de workers internos (si está vigente).
     const rec = require('./workers').get(s.workerKey);
     if (rec && rec.data) {
+      const workerTemplate = s.workerKey === 'airQuality'
+        ? 'aire'
+        : (rec.data.template || s.template || 'dato');
       return {
         title: rec.data.title,
         subtitle: rec.data.subtitle || s.subtitle || '',
         body: rec.data.body || '',
         date: rec.data.date || '',
         // El worker sabe cuál es su mejor presentación (luz→curva, fuel→lista).
-        template: rec.data.template || s.template || 'dato',
+        template: workerTemplate,
         theme: s.theme || '',
         data: rec.data.extra || null,
         missing: false,
