@@ -522,7 +522,7 @@
   <div class="dlg-h"><h2 id="wzTitle">Escaleta</h2><button class="ghost" id="wzClose">✕</button></div>
   <div class="dlg-b" id="wzBody"></div>
   <div class="dlg-f">
-    <button class="ghost" id="wzAdvanced" title="Storyboard completo: bloques sueltos, orden, saltos por día, contenido rotativo">Modo avanzado</button>
+    <button class="ghost" id="wzAdvanced" title="Storyboard completo: bloques sueltos, orden, saltos por día, carrusel">Modo avanzado</button>
     <span class="spacer"></span>
     <button class="ghost" id="wzBack" hidden>← Atrás</button>
     <button class="primary" id="wzNext">Siguiente →</button>
@@ -562,7 +562,7 @@
     <h2 style="flex:0 0 auto">Escaleta</h2>
     <div class="rd-tabs">
       <button type="button" class="rd-tab sel" data-rd-tab="seq">Guion</button>
-      <button type="button" class="rd-tab" data-rd-tab="lib">Contenido rotativo</button>
+      <button type="button" class="rd-tab" data-rd-tab="lib">Carrusel</button>
     </div>
     <button class="ghost" id="btnRundownClose">✕</button>
   </div>
@@ -573,7 +573,7 @@
         <label>Día<input id="rundownDate" type="date"></label>
         <div class="status" id="rundownSummary" style="margin:0"></div>
       </div>
-      <div class="hint" style="margin:8px 2px 0">✍️ manual &nbsp;·&nbsp; 🔁 rotación diaria &nbsp;·&nbsp; ⚙️ dato automático &nbsp;·&nbsp; seleccione una miniatura para editar</div>
+      <div class="hint" style="margin:8px 2px 0">✍️ manual &nbsp;·&nbsp; 🔁 carrusel &nbsp;·&nbsp; ⚙️ dato automático &nbsp;·&nbsp; seleccione una miniatura para editar</div>
       <div id="slotList" class="storyboard"></div>
       <div class="slot-tools" style="margin-top:10px">
         <button class="ghost" id="btnRundownAdd">＋ Añadir bloque</button>
@@ -583,11 +583,11 @@
     </section>
     <section id="rdTabLib" hidden>
       <div class="library-head">
-        <h3>Contenido rotativo</h3>
+        <h3>Carrusel</h3>
         <button class="ghost" id="btnLibraryAdd">＋ Añadir pieza</button>
       </div>
-      <p class="hint" style="margin:0 0 10px">Fondo de piezas para los bloques 🔁 del guion. Cada día se emite una distinta, en ciclo,
-        sin repetir hasta agotar el fondo. Una pieza puede entrar en rotación permanente o limitarse a fechas y días concretos.</p>
+      <p class="hint" style="margin:0 0 10px">Fondo de piezas para los bloques 🔁 del guion. Se emite una distinta cada día (u hora),
+        en ciclo, sin repetir hasta agotar el fondo. Una pieza puede estar siempre en el carrusel o limitarse a fechas y días concretos.</p>
       <div class="library-tools">
         <label>Categoría<select id="libraryCategory"></select></label>
         <div class="status" id="librarySummary"></div>
@@ -603,7 +603,7 @@
     </section>
   </div>
   <div class="dlg-f">
-    <button class="ghost" id="btnRundownReset" title="Vuelve al guion de ejemplo (el contenido rotativo no se toca)">Restaurar ejemplo</button>
+    <button class="ghost" id="btnRundownReset" title="Vuelve al guion de ejemplo (el carrusel no se toca)">Restaurar ejemplo</button>
     <button class="ghost" id="btnRundownSave">Guardar cambios</button>
     <button class="primary" id="btnRundownMake" title="Convierte el guion en cartelas listas para revisar y publicar">Crear las cartelas →</button>
   </div>

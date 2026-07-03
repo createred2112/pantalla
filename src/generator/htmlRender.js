@@ -98,6 +98,41 @@ function invalidateFonts() { _fontCss = null; }
 function esc(s) {
   return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
+
+// --- Guardia de contraste: ningún texto invisible sobre fondo plano ---
+function parseColor(c) {
+  const s = String(c || '').trim().toLowerCase();
+  let m = s.match(/^#([0-9a-f]{3})$/);
+  if (m) return [...m[1]].map((h) => parseInt(h + h, 16)).concat(1);
+  m = s.match(/^#([0-9a-f]{6})$/);
+  if (m) return [0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16)).concat(1);
+  m = s.match(/^rgba?\(([^)]+)\)$/);
+  if (m) {
+    const p = m[1].split(',').map((x) => parseFloat(x));
+    if (p.length >= 3 && p.slice(0, 3).every((v) => isFinite(v))) return [p[0], p[1], p[2], p.length > 3 && isFinite(p[3]) ? p[3] : 1];
+  }
+  return null;
+}
+function luminance(rgb) {
+  const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+  return 0.2126 * f(rgb[0]) + 0.7152 * f(rgb[1]) + 0.0722 * f(rgb[2]);
+}
+function contrastRatio(a, b) {
+  const l1 = luminance(a), l2 = luminance(b);
+  return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
+}
+// Si el color de un texto queda (casi) invisible sobre el fondo plano de la
+// cartela —tema mal combinado, plantilla con color fijo…— se sustituye por
+// carbón o blanco roto según la luminosidad del fondo. Umbral 1.9: solo
+// rescata lo realmente ilegible, sin tocar los apagados intencionados.
+function ensureContrast(color, bg) {
+  const b = parseColor(bg);
+  const f = parseColor(color);
+  if (!b || !f) return color;
+  const fx = f[3] < 1 ? f.slice(0, 3).map((v, i) => Math.round(v * f[3] + b[i] * (1 - f[3]))) : f.slice(0, 3);
+  if (contrastRatio(fx, b.slice(0, 3)) >= 1.9) return color;
+  return luminance(b.slice(0, 3)) > 0.4 ? '#0E0E0E' : '#F2F1ED';
+}
 function famOf(font) {
   return font === 'display' ? (cfg.brand.fontDisplay || 'sans-serif') : (cfg.brand.fontFamily || 'sans-serif');
 }
@@ -137,6 +172,7 @@ async function elHtml(el, ctx) {
   }
   if (el.type === 'text') {
     const fam = famOf(el.font);
+    const color = ctx._solidBg ? ensureContrast(el.color || '#fff', ctx._solidBg) : (el.color || '#fff');
     const align = el.align || 'left';
     const valign = el.valign === 'center' ? 'center' : el.valign === 'bottom' ? 'flex-end' : 'flex-start';
     const just = align === 'center' ? 'center' : align === 'right' ? 'flex-end' : 'flex-start';
@@ -149,7 +185,7 @@ async function elHtml(el, ctx) {
       : '';
     const size = el.autofit ? Math.round(el.autofit.max * scale) : Math.round((el.size || 40) * scale);
     return `<div ${attrs} style="${box}display:flex;justify-content:${just};align-items:${valign};text-align:${align};">` +
-      `<div ${fit} style="font-family:${fam};font-weight:${el.weight || 700};font-size:${size}px;line-height:${lh};color:${el.color || '#fff'};${ls}${tt}${nowrap}max-width:100%;">${esc(el.text)}</div></div>`;
+      `<div ${fit} style="font-family:${fam};font-weight:${el.weight || 700};font-size:${size}px;line-height:${lh};color:${color};${ls}${tt}${nowrap}max-width:100%;">${esc(el.text)}</div></div>`;
   }
   if (el.type === 'chip') {
     const fam = famOf(el.font || 'text');
@@ -223,6 +259,8 @@ async function buildHtml(card, ctx, tpl, frame, opts = {}) {
   } else {
     bodyBg = bg.color || ctx.theme.bg;
   }
+  // Fondo plano visible → activa la guardia de contraste para los textos.
+  ctx._solidBg = bgHtml ? null : bodyBg;
 
   const parts = [];
   for (const el of (frame.elements || [])) parts.push(await elHtml(el, ctx));

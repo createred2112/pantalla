@@ -713,9 +713,9 @@ const PLAN_TYPES = [
   { id: 'tiempo', label: 'Tiempo de hoy · automático', def: true, slot: { source: 'worker', workerKey: 'weather', template: 'clima', label: 'Tiempo' } },
   { id: 'prevision', label: 'Previsión 3 días · automático', def: true, slot: { source: 'worker', workerKey: 'forecast', template: 'prevision', label: 'Previsión' } },
   { id: 'agenda', label: 'Agenda · manual', def: true, duration: 10, slot: { source: 'fixed', template: 'agenda', label: 'Agenda', title: 'Agenda', body: '' } },
-  { id: 'curioso', label: 'Dato curioso · rotación', def: true, slot: { source: 'library', libraryKey: 'datosCuriosos', label: 'Dato curioso' } },
-  { id: 'utiles', label: 'Aviso útil · rotación', slot: { source: 'library', libraryKey: 'datosUtiles', label: 'Aviso útil' } },
-  { id: 'consejo', label: 'Consejo informático (Fast2Computer) · rotación', slot: { source: 'library', libraryKey: 'consejosInformaticos', label: 'Consejo informático' } },
+  { id: 'curioso', label: 'Dato curioso · carrusel', def: true, slot: { source: 'library', libraryKey: 'datosCuriosos', label: 'Dato curioso' } },
+  { id: 'utiles', label: 'Aviso útil · carrusel', slot: { source: 'library', libraryKey: 'datosUtiles', label: 'Aviso útil' } },
+  { id: 'consejo', label: 'Consejo informático (Fast2Computer) · carrusel', slot: { source: 'library', libraryKey: 'consejosInformaticos', label: 'Consejo informático' } },
   { id: 'luz', label: 'Precio de la luz · automático', slot: { source: 'worker', workerKey: 'powerPrice', label: 'Precio de la luz' } },
   { id: 'gasolina', label: 'Gasolineras más baratas · automático', slot: { source: 'worker', workerKey: 'fuel', label: 'Gasolina más barata' } },
   { id: 'aire', label: 'Calidad del aire · automático', slot: { source: 'worker', workerKey: 'airQuality', template: 'dato', label: 'Calidad del aire' } },
@@ -785,7 +785,7 @@ function sbCardHtml(s, i) {
   const keys = RUNDOWN.libraryKeys || [];
   const libLabel = (k) => (keys.find((x) => x.key === k) || {}).label || k;
   const srcIco = s.source === 'library' ? '🔁' : (s.source === 'worker' ? '⚙️' : '✍️');
-  const srcTitle = s.source === 'library' ? `Rota: cada día una pieza de «${libLabel(s.libraryKey)}»`
+  const srcTitle = s.source === 'library' ? `Carrusel de «${libLabel(s.libraryKey)}»: cambia cada ${s.rotation === 'hora' ? 'hora' : 'día'}`
     : (s.source === 'worker' ? 'Automático: se rellena solo con datos reales' : 'Escrito por ti');
   const say = rep.skippedToday ? 'no se emite este día'
     : (rep.missing ? (rep.note || 'sin contenido todavía') : (rep.title || s.title || '—'));
@@ -831,11 +831,15 @@ function slotEditHtml(s, i) {
       <label>Nombre del bloque<input data-rd-current="label" value="${esc(s.label)}"></label>
       <label>Origen del contenido<select data-rd-current="source">
         <option value="fixed" ${s.source === 'fixed' ? 'selected' : ''}>✍️ Manual</option>
-        <option value="library" ${isLib ? 'selected' : ''}>🔁 Rotación diaria</option>
+        <option value="library" ${isLib ? 'selected' : ''}>🔁 Carrusel</option>
         <option value="worker" ${isWorker ? 'selected' : ''}>⚙️ Dato automático</option>
       </select></label>
-      ${isLib ? `<label>Tipo de contenido rotativo<select data-rd-current="libraryKey">
+      ${isLib ? `<label>Tipo de carrusel<select data-rd-current="libraryKey">
         ${keys.map((k) => `<option value="${esc(k.key)}" ${k.key === s.libraryKey ? 'selected' : ''}>${esc(k.label)}</option>`).join('')}
+      </select></label>
+      <label>Cambia de pieza<select data-rd-current="rotation">
+        <option value="dia" ${s.rotation !== 'hora' ? 'selected' : ''}>Cada día</option>
+        <option value="hora" ${s.rotation === 'hora' ? 'selected' : ''}>Cada hora</option>
       </select></label>` : ''}
       ${isWorker ? (() => {
         const ws = RUNDOWN.workers || [];
@@ -848,7 +852,16 @@ function slotEditHtml(s, i) {
       })() : ''}
       ${!isLib && !isWorker ? tplSelect : ''}
       ${isLib
-        ? `<div class="slot-wide hint" style="align-self:center">Emite cada día una pieza distinta de este tipo. Las piezas se gestionan en la pestaña «Contenido rotativo».</div>`
+        ? (() => {
+          const items = (RUNDOWN.library && RUNDOWN.library[s.libraryKey]) || [];
+          const list = items.map((p, idx) =>
+            `<label class="chk"><input type="checkbox" data-lib-enable="${esc(s.libraryKey)}:${idx}" ${p.enabled !== false ? 'checked' : ''}>${esc(p.title || p.body || '(sin título)')}</label>`).join('');
+          return `<div class="slot-wide">
+            <label>Piezas del carrusel (marcadas = en emisión)</label>
+            <div style="max-height:200px;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:6px 10px">${list || '<div class="hint">Sin piezas. Añádalas en la pestaña «Carrusel».</div>'}</div>
+            <div class="hint" style="margin-top:4px">${s.rotation === 'hora' ? 'Cambia de pieza cada hora; con la publicación automática activa se emite un pase horario.' : 'Cambia de pieza cada día, en ciclo, sin repetir.'} Crear o programar piezas: pestaña «Carrusel».</div>
+          </div>`;
+        })()
         : (isWorker
           ? `<div class="slot-wide hint" style="align-self:center">Contenido automático: se actualiza cada 30 minutos y antes de cada publicación.</div>`
           : `<label>Título<input data-rd-current="title" value="${esc(s.title || '')}"></label>
@@ -1010,7 +1023,7 @@ function libraryItemHtml(meta, item, i) {
       <label>Texto<textarea data-lib-field="body">${esc(item.body || '')}</textarea></label>
       <label>¿Cuándo sale?
         <select data-lib-mode>
-          <option value="always" ${!sched ? 'selected' : ''}>Siempre (rota con las demás piezas)</option>
+          <option value="always" ${!sched ? 'selected' : ''}>Siempre (en el carrusel con las demás)</option>
           <option value="scheduled" ${sched ? 'selected' : ''}>Solo cuando lo programe</option>
         </select>
       </label>
@@ -1022,7 +1035,7 @@ function libraryItemHtml(meta, item, i) {
         <label>Días de la semana (vacío = todos)</label>
         <div class="weekdays">${weekdayBox(item, 1, 'L')}${weekdayBox(item, 2, 'M')}${weekdayBox(item, 3, 'X')}${weekdayBox(item, 4, 'J')}${weekdayBox(item, 5, 'V')}${weekdayBox(item, 6, 'S')}${weekdayBox(item, 7, 'D')}</div>
         <label>Solo fechas concretas<input data-lib-field="dates" value="${esc((item.dates || []).join(', '))}" placeholder="2026-07-15, 2026-08-04"></label>
-        <div class="hint">Si pones fechas concretas, la pieza sale SOLO esos días y desplaza a las piezas de rotación normal.</div>
+        <div class="hint">Con fechas concretas, la pieza sale SOLO esos días y desplaza al resto del carrusel.</div>
       </div>
       <div class="mini">
         <label>Plantilla<select data-lib-field="template">
@@ -1213,7 +1226,7 @@ function renderWizard() {
         const key = t.slot.libraryKey;
         const items = (RUNDOWN.library && RUNDOWN.library[key]) || [];
         const preview = items.slice(0, 5).map((p) => `· ${esc(p.title || p.body || '')}`).join('<br>');
-        return head + `<div class="status"><b>${items.length}</b> pieza(s) en rotación${items.length ? ':<br>' + preview + (items.length > 5 ? '<br>…' : '') : ''}</div>
+        return head + `<div class="status"><b>${items.length}</b> pieza(s) en el carrusel${items.length ? ':<br>' + preview + (items.length > 5 ? '<br>…' : '') : ''}</div>
           <label>Añadir piezas (una por línea: Título | firma | texto)</label>
           <textarea data-wz-add="${esc(key)}" placeholder="El casco medieval tiene forma de almendra | Dato curioso |">${esc(WZ.adds[key] || '')}</textarea>`;
       }
@@ -1229,8 +1242,8 @@ function renderWizard() {
     <p class="hint" style="margin-top:0">Resumen antes de confirmar:</p>
     <div class="status" style="line-height:1.7">
       Guion de <b>${chosen.length}</b> cartelas: ${chosen.map((t) => esc(t.slot.label)).join(' → ')}<br>
-      Cobertura: <b>${WZ.days}</b> día(s), con rotación diaria sin repetición<br>
-      ${newPieces ? `Se incorporan <b>${newPieces}</b> pieza(s) nuevas a la rotación<br>` : ''}
+      Cobertura: <b>${WZ.days}</b> día(s); el carrusel cambia a diario sin repetir<br>
+      ${newPieces ? `Se incorporan <b>${newPieces}</b> pieza(s) nuevas al carrusel<br>` : ''}
       Se generan las cartelas y se abre la vista previa del bucle<br>
       La publicación requiere confirmación manual o la publicación automática programada
     </div>`;
@@ -1432,7 +1445,18 @@ $('#slotEditor').addEventListener('click', (e) => {
   }
 });
 $('#slotEditor').addEventListener('input', () => { if (RUNDOWN) { collectRundown(); rdSetDirty(true); } });
-$('#slotEditor').addEventListener('change', () => { if (RUNDOWN) { collectRundown(); rdSetDirty(true); renderRundown(); } });
+$('#slotEditor').addEventListener('change', (e) => {
+  if (!RUNDOWN) return;
+  // Casillas de piezas del carrusel: activan/desactivan la pieza en su fondo.
+  if (e.target && e.target.dataset && e.target.dataset.libEnable) {
+    const [key, idx] = e.target.dataset.libEnable.split(':');
+    const arr = RUNDOWN.library && RUNDOWN.library[key];
+    if (arr && arr[Number(idx)]) arr[Number(idx)].enabled = e.target.checked;
+  }
+  collectRundown();
+  rdSetDirty(true);
+  renderRundown();
+});
 $('#rundownTitle').addEventListener('input', () => { if (RUNDOWN) rdSetDirty(true); });
 $('#libraryCategory').addEventListener('change', () => {
   collectLibraryCategory();

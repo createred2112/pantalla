@@ -34,7 +34,8 @@ function localDay(d = new Date()) {
 
 async function run(day, c, opts = {}) {
   const publishNow = opts.publish === true;
-  log.info('autopilot', `${opts.scheduled ? 'Piloto automático' : 'Preparación manual'}: escaleta del ${day}${publishNow ? '' : ' (sin publicar: revisar antes)'}`);
+  const mode = opts.scheduled ? 'Pase diario' : (opts.hourly ? 'Pase horario' : 'Preparación manual');
+  log.info('autopilot', `${mode}: escaleta del ${day}${publishNow ? '' : ' (sin publicar: revisar antes)'}`);
   // Datos frescos de los workers ANTES de materializar (tiempo, luz...).
   try { await require('./workers').refreshAll(); } catch {}
   const r = require('./rundown').materialize({ date: day });
@@ -54,7 +55,7 @@ async function run(day, c, opts = {}) {
     status.set('autopilot', { ok, day, cards: r.count, published: Boolean(pub && pub.ok), attempts });
   }
   log[ok ? 'info' : 'warn']('autopilot',
-    `${opts.scheduled ? 'Piloto automático' : 'Preparación'} ${ok ? 'OK' : 'con fallos'}: ${r.count} cartela(s)` +
+    `${mode} ${ok ? 'OK' : 'con fallos'}: ${r.count} cartela(s)` +
     (pub ? (pub.ok ? ' · publicado en pantalla' : ' · FALLO al publicar (mira el log)') : ' · pendiente de revisión y publicación manual'));
   return { ok, day, cards: r.count, published: Boolean(pub && pub.ok), prepared: !publishNow };
 }
@@ -64,25 +65,50 @@ async function tick() {
   if (!c.enabled || _running) return;
   const now = new Date();
   const day = localDay(now);
-  const last = state();
-  if (last && last.day === day) {
-    if (last.ok !== false) return; // hoy ya se ejecutó bien
-    // Falló (p. ej. FTP caído): reintenta cada 30 min, máximo 3 intentos.
-    if (Number(last.attempts || 1) >= 3) return;
-    if (Date.now() - Date.parse(last.ts || 0) < 30 * 60000) return;
-  }
   const [hh, mm] = String(c.time).split(':').map(Number);
   if (now.getHours() * 60 + now.getMinutes() < hh * 60 + mm) return; // aún no es la hora
-  _running = true;
+  const last = state();
+  const dailyDone = Boolean(last && last.day === day && last.ok !== false);
+
+  if (!dailyDone) {
+    if (last && last.day === day) {
+      // Falló (p. ej. FTP caído): reintenta cada 30 min, máximo 3 intentos.
+      if (Number(last.attempts || 1) >= 3) return;
+      if (Date.now() - Date.parse(last.ts || 0) < 30 * 60000) return;
+    }
+    _running = true;
+    try {
+      await run(day, c, { publish: c.publish !== false, scheduled: true });
+    } catch (e) {
+      const prev = state();
+      const attempts = (prev && prev.day === day ? Number(prev.attempts || 0) : 0) + 1;
+      status.set('autopilot', { ok: false, day, error: e.message, attempts });
+      log.error('autopilot', `Fallo del pase diario (intento ${attempts}/3): ` + e.message);
+    } finally {
+      _running = false;
+    }
+    return;
+  }
+
+  // Pase HORARIO: si el guion tiene bloques de carrusel con cadencia horaria,
+  // se regenera y publica al cambiar la hora (el caché evita trabajo de más).
   try {
-    await run(day, c, { publish: c.publish !== false, scheduled: true });
+    const rd = require('./rundown').read({ date: day });
+    const hasHourly = (rd.rundown.slots || []).some((s) => s.enabled !== false && s.rotation === 'hora');
+    if (!hasHourly) return;
+    const hourKey = `${day}T${String(now.getHours()).padStart(2, '0')}`;
+    const st = status.read().stages || {};
+    const hs = st['autopilot-hora'] || null;
+    if (hs && hs.hourKey === hourKey) return; // esta hora ya está emitida
+    _running = true;
+    try {
+      const r = await run(day, c, { publish: c.publish !== false, hourly: true });
+      status.set('autopilot-hora', { ok: r.ok, hourKey });
+    } finally {
+      _running = false;
+    }
   } catch (e) {
-    const prev = state();
-    const attempts = (prev && prev.day === day ? Number(prev.attempts || 0) : 0) + 1;
-    status.set('autopilot', { ok: false, day, error: e.message, attempts });
-    log.error('autopilot', `Fallo del piloto automático (intento ${attempts}/3): ` + e.message);
-  } finally {
-    _running = false;
+    log.warn('autopilot', 'Pase horario: ' + e.message);
   }
 }
 
