@@ -693,19 +693,30 @@ $('#btnPreview').addEventListener('click', async () => {
   }
 });
 
-$('#btnSave').addEventListener('click', async () => {
+async function saveEditor({ renderAfter = false } = {}) {
   const id = $('#edId').value;
   const data = collect();
-  const renderSavedCard = async () => {
-    if (!id) return;
-    try { await api('/cards/' + id + '/render', { method: 'POST' }); }
-    catch (e) { toast('Guardado; no se pudo regenerar ahora: ' + e.message); }
+  const actionBtn = renderAfter ? $('#btnSaveRender') : $('#btnSave');
+  const buttons = [$('#btnSave'), $('#btnSaveRender')].filter(Boolean);
+  const originalText = actionBtn.textContent;
+  const setBusy = (text) => {
+    buttons.forEach((b) => { b.disabled = true; });
+    actionBtn.textContent = text;
   };
+  const clearBusy = () => {
+    buttons.forEach((b) => { b.disabled = false; });
+    actionBtn.textContent = originalText;
+  };
+  const renderSavedCard = async (cardId) => {
+    if (!renderAfter || !cardId) return;
+    setBusy('Generando archivo...');
+    toast('Generando archivo; puede tardar si es MP4');
+    await api('/cards/' + cardId + '/render', { method: 'POST' });
+  };
+  setBusy(renderAfter ? 'Guardando...' : 'Guardando...');
   // Cartela de carrusel: se guarda el BLOQUE (cadencia, piezas, duración) y se
-  // regeneran las cartelas; editar la copia materializada sería pan para hoy.
+  // se materializa de nuevo; editar la copia materializada sería pan para hoy.
   if (ED_SLOT && ED_SLOT.source === 'library') {
-    const b = $('#btnSave');
-    b.disabled = true;
     try {
       const rot = $('#edSlotRotation');
       if (rot) ED_SLOT.rotation = rot.value === 'hora' ? 'hora' : 'dia';
@@ -725,17 +736,15 @@ $('#btnSave').addEventListener('click', async () => {
       await api('/rundown', { method: 'PUT', body: JSON.stringify(RUNDOWN.rundown) });
       await api('/rundown/library', { method: 'PUT', body: JSON.stringify(RUNDOWN.library) });
       await api('/rundown/materialize', { method: 'POST', body: '{}' });
-      await renderSavedCard();
+      await renderSavedCard(id);
       editor.close();
-      toast('Bloque actualizado; cartelas regeneradas');
+      toast(renderAfter ? 'Bloque actualizado y archivo generado' : 'Bloque guardado sin generar');
       load();
     } catch (e) { toast('Error: ' + e.message); }
-    finally { b.disabled = false; }
+    finally { clearBusy(); }
     return;
   }
   if (ED_SLOT && ED_SLOT.source !== 'library') {
-    const b = $('#btnSave');
-    b.disabled = true;
     try {
       ED_SLOT.template = data.template || ED_SLOT.template || 'noticia';
       ED_SLOT.theme = data.theme || '';
@@ -756,24 +765,30 @@ $('#btnSave').addEventListener('click', async () => {
       }
       await api('/rundown', { method: 'PUT', body: JSON.stringify(RUNDOWN.rundown) });
       await api('/rundown/materialize', { method: 'POST', body: '{}' });
-      if (ED_SLOT.source !== 'file') await renderSavedCard();
+      if (ED_SLOT.source !== 'file') await renderSavedCard(id);
       editor.close();
-      toast(ED_SLOT.source === 'file' ? 'Bloque de archivo actualizado' : 'Tema guardado en el bloque; cartela regenerada');
+      toast(ED_SLOT.source === 'file'
+        ? 'Bloque de archivo actualizado'
+        : (renderAfter ? 'Bloque guardado y archivo generado' : 'Bloque guardado sin generar'));
       load();
     } catch (e) { toast('Error: ' + e.message); }
-    finally { b.disabled = false; }
+    finally { clearBusy(); }
     return;
   }
   try {
     const saved = id
       ? await api('/cards/' + id, { method: 'PUT', body: JSON.stringify(data) })
       : await api('/cards', { method: 'POST', body: JSON.stringify(data) });
-    if ((saved && saved.type) === 'generated') {
-      await api('/cards/' + saved.id + '/render', { method: 'POST' });
-    }
-    editor.close(); toast('Guardado y regenerado'); load();
+    if ((saved && saved.type) === 'generated') await renderSavedCard(saved.id);
+    editor.close();
+    toast(renderAfter && saved && saved.type === 'generated' ? 'Guardado y archivo generado' : 'Guardado sin generar');
+    load();
   } catch (e) { toast('Error: ' + e.message); }
-});
+  finally { clearBusy(); }
+}
+
+$('#btnSave').addEventListener('click', () => saveEditor({ renderAfter: false }));
+$('#btnSaveRender').addEventListener('click', () => saveEditor({ renderAfter: true }));
 
 // --- Delegación de eventos de la lista ---
 $('#list').addEventListener('click', async (e) => {
