@@ -813,8 +813,12 @@ function fmtStamp(ts) {
   catch { return String(ts); }
 }
 
-function stateCard(title, main, detail, ok) {
-  return `<div class="pilot-state ${ok ? 'ok' : 'warn'}"><b>${esc(title)}: ${esc(main)}</b><span>${esc(detail)}</span></div>`;
+function stateCard(title, main, detail, ok, badge) {
+  return `<div class="pilot-state ${ok ? 'ok' : 'warn'}">
+    <div class="k"><span>${esc(title)}</span><span>${esc(badge || (ok ? 'OK' : 'Revisar'))}</span></div>
+    <span class="v">${esc(main)}</span>
+    <span class="d">${esc(detail)}</span>
+  </div>`;
 }
 
 function syncLabel(minutes) {
@@ -829,8 +833,8 @@ function renderPilotMatrix() {
   const first = PILOT.enabled ? `primer pase ${PILOT.time || '08:00'}` : 'apagada';
   const syncEvery = syncOn ? `cada ${PILOT.syncEveryMinutes} min` : 'sin vigilancia continua';
   $('#pilotMatrix').innerHTML = [
-    stateCard('Auto actualización', updateOn ? 'ACTIVA' : 'INACTIVA', PILOT.enabled ? `${first}; ${syncEvery}` : 'Activa el piloto para actualizar datos, escaleta y MP4 automáticamente.', updateOn),
-    stateCard('Auto subida', uploadOn ? 'ACTIVA' : 'INACTIVA', uploadOn ? `${first}; sube al FTP cuando detecta cambios` : 'Modo revisar: prepara los MP4, pero no los sube solo.', uploadOn),
+    stateCard('Auto actualización', updateOn ? 'ACTIVA' : 'INACTIVA', PILOT.enabled ? `${first}; ${syncEvery}` : 'Activa el piloto para actualizar datos, escaleta y MP4 automáticamente.', updateOn, updateOn ? 'ACTIVA' : 'INACTIVA'),
+    stateCard('Auto subida', uploadOn ? 'ACTIVA' : 'INACTIVA', uploadOn ? `${first}; sube al FTP cuando detecta cambios` : 'Modo revisar: prepara los MP4, pero no los sube solo.', uploadOn, uploadOn ? 'ACTIVA' : 'MANUAL'),
   ].join('');
 }
 
@@ -845,8 +849,8 @@ function renderPilotHistory() {
     : 'Sin resultado todavía';
   const uploadOk = upload && upload.ok !== false;
   $('#pilotHistory').innerHTML = [
-    stateCard('Última actualización', fmtStamp(lastUpdate && lastUpdate.ts), updateOk ? updateDetail : (lastUpdate.error || 'Falló; mira Estado'), updateOk),
-    stateCard('Última subida', fmtStamp(upload && upload.ts), upload ? (uploadOk ? `${(upload.files || []).length} archivo(s) · ${upload.dryRun ? 'simulada' : 'FTP OK'}` : (upload.error || 'Falló FTP')) : 'Aún no se ha subido desde el panel.', uploadOk),
+    stateCard('Última actualización', fmtStamp(lastUpdate && lastUpdate.ts), updateOk ? updateDetail : (lastUpdate.error || 'Falló; mira Estado'), updateOk, updateOk ? 'OK' : 'ERROR'),
+    stateCard('Última subida', fmtStamp(upload && upload.ts), upload ? (uploadOk ? `${(upload.files || []).length} archivo(s) · ${upload.dryRun ? 'simulada' : 'FTP OK'}` : (upload.error || 'Falló FTP')) : 'Aún no se ha subido desde el panel.', uploadOk, upload ? (uploadOk ? 'OK' : 'ERROR') : 'SIN SUBIDA'),
   ].join('');
 }
 
@@ -859,15 +863,26 @@ function renderPilotPlan() {
     const nextIndex = chosen ? (r.choices.findIndex((c) => c.chosen) + 1) % r.choices.length : 0;
     const next = r.choices[nextIndex] || chosen;
     const buttons = r.choices.slice(0, 6).map((c) =>
-      `<button type="button" data-pilot-pick="${esc(r.id)}:${c.index}" class="${c.chosen ? 'on' : (c === next ? 'next' : '')}" title="${esc(c.subtitle || '')}">${esc(c.title)}</button>`
+      `<button type="button" data-pilot-pick="${esc(r.id)}:${c.index}" class="${c.chosen ? 'on' : (c === next ? 'next' : '')}" title="${esc(c.subtitle || '')}">
+        <span>${esc(c.title)}</span>
+        <small>${c.chosen ? 'En uso ahora' : (c === next ? 'Siguiente si no cambias nada' : 'Elegir esta pieza')}</small>
+      </button>`
     ).join('');
     return `<div class="pilot-plan-card">
-      <div class="pilot-plan-head"><b>${esc(r.label)}</b><span>${r.chosenIndex != null && r.chosenIndex >= 0 ? 'usando #' + (r.chosenIndex + 1) : 'sin pieza'}</span></div>
-      <div class="hint2">Ahora: <b>${esc(chosen ? chosen.title : (r.title || 'sin contenido'))}</b>${next && next !== chosen ? ` · Siguiente: <b>${esc(next.title)}</b>` : ''}</div>
-      <div class="pilot-choice">${buttons}</div>
+      <div class="pilot-plan-head">
+        <b>${esc(r.label)}</b>
+        <span>${r.chosenIndex != null && r.chosenIndex >= 0 ? 'Pieza #' + (r.chosenIndex + 1) : 'Sin pieza activa'}</span>
+      </div>
+      <div>
+        <div class="pilot-plan-now">
+          <div><small>En pantalla</small><b>${esc(chosen ? chosen.title : (r.title || 'sin contenido'))}</b></div>
+          <div><small>Siguiente</small><b>${esc(next ? next.title : 'sin contenido')}</b></div>
+        </div>
+        <div class="pilot-choice">${buttons}</div>
+      </div>
     </div>`;
   }).join('');
-  $('#pilotPlan').innerHTML = `<div class="pilot-plan-title">Carruseles programados · usado / siguiente / elegir</div>${html}`;
+  $('#pilotPlan').innerHTML = `<div class="pilot-plan-title"><b>Carruseles de hoy</b><span>${rows.length} bloque(s) con elección manual</span></div>${html}`;
 }
 
 function renderPilot() {
