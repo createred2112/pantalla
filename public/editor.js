@@ -23,6 +23,7 @@ async function load() {
   FONT_DISPLAY = FRAME.fontDisplay || FONT_DISPLAY;
   FONT_TEXT = FRAME.fontText || FONT_TEXT;
   $('#hint').textContent = FRAME.template + ' · ' + FRAME.W + '×' + FRAME.H;
+  $('#scope').innerHTML = `Editando <b>${FRAME.hasOwnLayout ? 'esta cartela' : 'plantilla base'}</b> · tema <b>${FRAME.theme && FRAME.theme.key ? FRAME.theme.key : 'auto'}</b>`;
   if (FRAME.template === 'agenda') {
     $('#btnDefault').disabled = true;
     $('#btnDefault').title = 'Agenda cambia mucho segun tenga horas o solo frases. Guarda el diseno solo en esta cartela.';
@@ -135,21 +136,28 @@ canvas.addEventListener('mousedown', (e) => { if (e.target === canvas) { SEL = -
 
 // --- Panel de propiedades ---
 function num(label, val, on) { return `<label>${label}</label><input type="number" value="${Math.round(val || 0)}" data-k="${on}">`; }
+function colorInput(label, val, key) { return `<label>${label}</label><input type="color" data-k="${key}" value="${hex(val)}">`; }
 function panel() {
   const p = $('#panel');
-  if (SEL < 0) { p.innerHTML = '<div class="empty">Haz clic en un elemento para editarlo.</div>'; return; }
+  if (SEL < 0) {
+    const bg = FRAME.background || {};
+    p.innerHTML = `<h2>Fondo</h2>${colorInput('Color de fondo', bg.color || '#000000', 'backgroundColor')}<div class="empty" style="margin-top:18px">Haz clic en un elemento para editarlo.</div>`;
+    p.querySelectorAll('[data-k]').forEach((inp) => inp.addEventListener('input', () => apply(inp)));
+    return;
+  }
   const el = ELS[SEL];
   let h = `<h2>${el.type}${el.bind ? ' · ' + el.bind : ''}</h2>`;
   if (el.type === 'text' || el.type === 'chip') {
     h += `<label>Texto</label><input data-k="text" value="${(el.text || '').replace(/"/g, '&quot;')}">`;
     if (el.bind) h += `<div style="font-size:10px;color:#6f86ad;margin-top:3px">Vinculado a "${el.bind}": se actualiza con el dato de la cartela.</div>`;
     h += `<label>Fuente</label><select data-k="font"><option value="display"${el.font === 'display' ? ' selected' : ''}>Titular (Anton)</option><option value="text"${el.font !== 'display' ? ' selected' : ''}>Texto (Oswald)</option></select>`;
-    h += `<div class="row"><div><label>Color</label><input type="color" data-k="color" value="${hex(el.color)}"></div><div><label>Peso</label><select data-k="weight"><option ${el.weight == 400 ? 'selected' : ''}>400</option><option ${el.weight == 600 ? 'selected' : ''}>600</option><option ${el.weight == 700 ? 'selected' : ''}>700</option><option ${el.weight == 800 ? 'selected' : ''}>800</option></select></div></div>`;
+    h += `<div class="row"><div>${colorInput('Color texto', el.color, 'color')}</div><div><label>Peso</label><select data-k="weight"><option ${el.weight == 400 ? 'selected' : ''}>400</option><option ${el.weight == 600 ? 'selected' : ''}>600</option><option ${el.weight == 700 ? 'selected' : ''}>700</option><option ${el.weight == 800 ? 'selected' : ''}>800</option></select></div></div>`;
+    if (el.type === 'chip') h += colorInput('Color de caja', el.bg || '#000000', 'bg');
     h += `<div class="row"><div><label>Alineación</label><select data-k="align"><option value="left"${el.align === 'left' ? ' selected' : ''}>Izq</option><option value="center"${el.align === 'center' ? ' selected' : ''}>Centro</option><option value="right"${el.align === 'right' ? ' selected' : ''}>Der</option></select></div><div><label>Interletra (em)</label><input type="number" step="0.01" value="${el.letterSpacingEm || 0}" data-k="letterSpacingEm"></div></div>`;
     if (el.autofit) h += `<div class="row"><div>${num('Tamaño mín', el.autofit.min, 'afmin')}</div><div>${num('Tamaño máx', el.autofit.max, 'afmax')}</div></div>`;
     else h += num('Tamaño', el.size, 'size');
   }
-  if (el.type === 'rect' || el.type === 'band') h += `<label>Color</label><input type="color" data-k="color" value="${hex(el.color)}">`;
+  if (el.type === 'rect' || el.type === 'band') h += colorInput('Color', el.color, 'color');
   h += `<h2 style="margin-top:16px">Posición y tamaño</h2><div class="row"><div>${num('X', el.x, 'x')}</div><div>${num('Y', el.y, 'y')}</div></div>`;
   if (el.type !== 'chip') h += `<div class="row"><div>${num('Ancho', el.w, 'w')}</div><div>${num('Alto', el.h, 'h')}</div></div>`;
   h += `<button class="ghost" id="btnHide" style="margin-top:14px;width:100%">${el.hidden ? 'Mostrar' : 'Ocultar'} elemento</button>`;
@@ -159,6 +167,14 @@ function panel() {
 }
 function hex(c) { return (c && c[0] === '#') ? c.slice(0, 7) : '#ffffff'; }
 function apply(inp) {
+  if (inp.dataset.k === 'backgroundColor') {
+    FRAME.background = FRAME.background || { type: 'solid' };
+    FRAME.background.color = inp.value;
+    FRAME.background.colorFixed = true;
+    delete FRAME.background.colorTheme;
+    build();
+    return;
+  }
   const el = ELS[SEL], k = inp.dataset.k, v = inp.value;
   if (k === 'afmin') el.autofit.min = +v;
   else if (k === 'afmax') el.autofit.max = +v;
@@ -166,7 +182,8 @@ function apply(inp) {
   else if (k === 'letterSpacingEm') el.letterSpacingEm = +v;
   else {
     el[k] = v;
-    if (k === 'color') delete el.colorTheme;
+    if (k === 'color') { delete el.colorTheme; el.colorFixed = true; }
+    if (k === 'bg') { delete el.bgTheme; el.bgFixed = true; }
   }
   const div = canvas.querySelector(`.el[data-idx="${SEL}"]`);
   if (div) div.replaceWith(renderEl(el, SEL));
@@ -189,30 +206,34 @@ function layoutPayload() {
   const bg = FRAME.background ? { type: FRAME.background.type, color: FRAME.background.color } : undefined;
   if (bg) {
     const bgToken = themeTokenFor(bg.color);
-    if (bgToken) bg.colorTheme = bgToken;
+    if (FRAME.background.colorFixed) bg.colorFixed = true;
+    else if (bgToken) bg.colorTheme = bgToken;
   }
   const elements = ELS.map((src) => {
     const el = { ...src };
     const colorToken = themeTokenFor(el.color);
     const bgToken = themeTokenFor(el.bg);
-    if (colorToken) el.colorTheme = colorToken;
-    if (bgToken) el.bgTheme = bgToken;
+    if (el.colorFixed) delete el.colorTheme;
+    else if (colorToken) el.colorTheme = colorToken;
+    if (el.bgFixed) delete el.bgTheme;
+    else if (bgToken) el.bgTheme = bgToken;
     return el;
   });
   return { background: bg, elements };
 }
 $('#btnSave').addEventListener('click', async () => {
   const r = await fetch('/api/cards/' + ID + '/layout', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ layout: layoutPayload() }) });
-  toast(r.ok ? 'Diseño guardado ✓' : 'Error al guardar');
+  toast(r.ok ? 'Diseño guardado SOLO en esta cartela ✓' : 'Error al guardar');
 });
 $('#btnDefault').addEventListener('click', async () => {
   if (FRAME.template === 'agenda') {
     toast('En Agenda usa Guardar diseño: el predeterminado global esta bloqueado');
     return;
   }
-  if (!confirm('¿Aplicar este diseño como PREDETERMINADO de la plantilla "' + FRAME.template + '"? Afectará a todas sus cartelas que no tengan diseño propio.')) return;
-  const r = await fetch('/api/templates/' + FRAME.template + '/layout', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ layout: layoutPayload() }) });
-  toast(r.ok ? 'Guardado como predeterminado ✓' : 'Error');
+  const theme = FRAME.theme && FRAME.theme.key ? FRAME.theme.key : '';
+  if (!confirm('¿Aplicar este diseño como PREDETERMINADO de la plantilla "' + FRAME.template + '" SOLO para el tema "' + theme + '"?')) return;
+  const r = await fetch('/api/templates/' + FRAME.template + '/layout', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ theme, layout: layoutPayload() }) });
+  toast(r.ok ? 'Guardado como plantilla + color ✓' : 'Error');
 });
 $('#btnReset').addEventListener('click', async () => {
   if (!confirm('¿Volver al diseño por defecto de la plantilla? Se perderán los cambios de esta cartela.')) return;

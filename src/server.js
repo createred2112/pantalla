@@ -266,8 +266,9 @@ app.put('/api/templates/:id/layout', (req, res) => {
   if (req.params.id === 'agenda') {
     return res.status(400).json({ error: 'La plantilla Agenda no permite predeterminado global: usa diseño propio por cartela.' });
   }
-  require('./templateLayouts').set(req.params.id, req.body && req.body.layout ? req.body.layout : null);
-  log.info('editor', `Layout predeterminado guardado en plantilla ${req.params.id}`);
+  const theme = String((req.body && req.body.theme) || req.query.theme || '').trim();
+  require('./templateLayouts').set(req.params.id, theme, req.body && req.body.layout ? req.body.layout : null);
+  log.info('editor', `Layout predeterminado guardado en plantilla ${req.params.id}${theme ? ' / tema ' + theme : ''}`);
   res.json({ ok: true });
 });
 

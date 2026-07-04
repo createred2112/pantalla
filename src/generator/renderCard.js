@@ -104,10 +104,10 @@ function norm(color) {
 // Mapa color->rol del tema de la paleta que mejor explica los colores usados.
 function legacyTokenMap(layout) {
   const used = new Set();
-  if (layout.background && layout.background.color && !layout.background.colorTheme) used.add(norm(layout.background.color));
+  if (layout.background && layout.background.color && !layout.background.colorTheme && !layout.background.colorFixed) used.add(norm(layout.background.color));
   for (const e of layout.elements || []) {
-    if (e.color && !e.colorTheme) used.add(norm(e.color));
-    if (e.bg && !e.bgTheme) used.add(norm(e.bg));
+    if (e.color && !e.colorTheme && !e.colorFixed) used.add(norm(e.color));
+    if (e.bg && !e.bgTheme && !e.bgFixed) used.add(norm(e.bg));
   }
   used.delete('');
   if (!used.size) return {};
@@ -132,17 +132,17 @@ function legacyTokenMap(layout) {
 // y mantiene vivos los colores ligados al tema cuando el editor los guardó así).
 function applyLayout(layout, card, ctx) {
   const legacy = legacyTokenMap(layout);
-  const live = (explicitToken, rawColor) => {
-    const token = explicitToken || legacy[norm(rawColor)];
+  const live = (explicitToken, rawColor, fixed) => {
+    const token = explicitToken || (fixed ? null : legacy[norm(rawColor)]);
     return (token && themeValue(ctx, token)) || rawColor;
   };
   const bg = layout.background ? { ...layout.background } : undefined;
-  if (bg && bg.color) bg.color = live(bg.colorTheme, bg.color);
+  if (bg && bg.color) bg.color = live(bg.colorTheme, bg.color, bg.colorFixed);
   const elements = (layout.elements || []).map((e) => {
     const el = { ...e };
     if (el.bind && card[el.bind] != null) el.text = el.transform === 'upper' ? String(card[el.bind]).toUpperCase() : String(card[el.bind]);
-    if (el.color) el.color = live(el.colorTheme, el.color);
-    if (el.bg) el.bg = live(el.bgTheme, el.bg);
+    if (el.color) el.color = live(el.colorTheme, el.color, el.colorFixed);
+    if (el.bg) el.bg = live(el.bgTheme, el.bg, el.bgFixed);
     return el;
   });
   return { background: bg, elements };
@@ -152,7 +152,7 @@ function applyLayout(layout, card, ctx) {
 // de la plantilla > el que genera la plantilla en código.
 function resolveFrame(card, ctx, tpl) {
   if (card.layout && Array.isArray(card.layout.elements)) return applyLayout(card.layout, card, ctx);
-  const tl = require('../templateLayouts').get(card.template);
+  const tl = require('../templateLayouts').get(card.template, ctx.theme && ctx.theme.key);
   if (tl && Array.isArray(tl.elements)) return applyLayout(tl, card, ctx);
   const frame = tpl.build(card, ctx) || { elements: [] };
   frame.elements = (frame.elements || []).map((e, i) => Object.assign({ id: 'el' + i, bind: inferBind(e, card) }, e));
@@ -165,7 +165,7 @@ function resolveForEditor(card) {
   if (typeof tpl.build !== 'function') return null;
   const ctx = buildCtx(card, tpl);
   const frame = resolveFrame(card, ctx, tpl);
-  return { W: ctx.W, H: ctx.H, template: tpl.id, photo: card.photo || null, fontDisplay: ctx.fontDisplay, fontText: ctx.font, theme: ctx.theme, background: frame.background || { type: 'solid', color: ctx.theme.bg }, elements: frame.elements };
+  return { W: ctx.W, H: ctx.H, template: tpl.id, photo: card.photo || null, fontDisplay: ctx.fontDisplay, fontText: ctx.font, theme: ctx.theme, hasOwnLayout: Boolean(card.layout && Array.isArray(card.layout.elements)), background: frame.background || { type: 'solid', color: ctx.theme.bg }, elements: frame.elements };
 }
 
 async function renderToBuffer(card) {

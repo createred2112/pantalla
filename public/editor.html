@@ -32,6 +32,8 @@
   .handle{position:absolute;width:22px;height:22px;background:#2bb6ff;border:2px solid #fff;border-radius:50%;right:-11px;bottom:-11px;cursor:nwse-resize}
   .panel{width:300px;background:#081729;border-left:1px solid var(--line);padding:14px;overflow:auto}
   .panel h2{font-size:13px;margin:0 0 10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px}
+  .scope{font-size:12px;color:var(--muted);border:1px solid var(--line);border-radius:9px;padding:7px 9px;background:#0a1a30}
+  .scope b{color:var(--txt)}
   label{display:block;font-size:11px;color:var(--muted);margin:10px 0 3px}
   input,select{width:100%;background:#0a1a30;border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:8px;font:inherit;font-size:13px}
   .row{display:flex;gap:6px}.row>div{flex:1}
@@ -44,10 +46,11 @@
 <header>
   <h1>Editor de cartela</h1>
   <span id="hint" style="font-size:12px;color:var(--muted)">cargando…</span>
+  <span id="scope" class="scope">cargando…</span>
   <button class="ghost" id="btnReset">Restablecer</button>
   <button class="ghost" onclick="location.href='/'">← Volver</button>
-  <button class="ghost" id="btnDefault" title="Aplicar este diseño a TODAS las cartelas de esta plantilla">Guardar como predeterminado</button>
-  <button class="primary" id="btnSave">Guardar diseño</button>
+  <button class="ghost" id="btnDefault" title="Aplicar este diseño a las cartelas de esta plantilla con este esquema de color">Guardar plantilla + color</button>
+  <button class="primary" id="btnSave">Guardar esta cartela</button>
 </header>
 <div class="wrap">
   <div class="stage" id="stage">
