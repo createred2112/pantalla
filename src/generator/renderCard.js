@@ -261,9 +261,15 @@ function weatherBandTextElement(card, ctx, band) {
     align: 'center',
     valign: 'center',
     lineHeight: 1,
-    letterSpacingEm: 0.02,
-    autofit: { min: Math.round(H * 0.055), max: Math.round(H * 0.09), lines: 1 },
+    letterSpacingEm: 0,
+    autofit: { min: Math.round(H * 0.045), max: Math.round(H * 0.08), lines: 1 },
   };
+}
+
+function overlapsY(el, y, h) {
+  const top = Number(el.y || 0);
+  const bottom = top + Number(el.h || 0);
+  return bottom > y && top < y + h;
 }
 
 function repairWeatherFrame(card, ctx, frame) {
@@ -305,11 +311,17 @@ function repairWeatherFrame(card, ctx, frame) {
       delete band.colorFixed;
     }
     const bandText = weatherBandTextElement(card, ctx, band);
-    const textIdx = elements.findIndex((el) =>
-      el.type === 'text' &&
-      (el.bind === 'weatherSummary' || sameText(el.text, card.subtitle) || sameText(el.text, card.body) || sameText(el.text, summary))
-    );
-    if (textIdx >= 0) elements.splice(textIdx, 1);
+    for (let i = elements.length - 1; i >= 0; i--) {
+      const el = elements[i];
+      if (el === band || el.type !== 'text') continue;
+      const isWeatherText = el.bind === 'weatherSummary' ||
+        el.bind === 'subtitle' ||
+        el.bind === 'body' ||
+        sameText(el.text, card.subtitle) ||
+        sameText(el.text, card.body) ||
+        sameText(el.text, summary);
+      if (isWeatherText || overlapsY(el, Number(band.y || 0), Number(band.h || 0))) elements.splice(i, 1);
+    }
     const bandIndex = elements.indexOf(band);
     elements.splice(Math.max(0, bandIndex + 1), 0, bandText);
   }
