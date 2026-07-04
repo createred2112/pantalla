@@ -695,6 +695,7 @@ $('#btnPreview').addEventListener('click', async () => {
 
 $('#btnSave').addEventListener('click', async () => {
   const id = $('#edId').value;
+  const data = collect();
   const renderSavedCard = async () => {
     if (!id) return;
     try { await api('/cards/' + id + '/render', { method: 'POST' }); }
@@ -711,6 +712,8 @@ $('#btnSave').addEventListener('click', async () => {
       ED_SLOT.duration = Number($('#edDuration').value) || 8;
       ED_SLOT.enabled = $('#edEnabled').checked;
       ED_SLOT.video = $('#edVideo').checked;
+      ED_SLOT.videoIntro = data.videoIntro || '';
+      ED_SLOT.videoOutro = data.videoOutro || '';
       // Plantilla y tema del BLOQUE: mandan sobre los de cada pieza (vacío = auto).
       ED_SLOT.template = $('#edTemplate').value || '';
       ED_SLOT.theme = $('#edTheme').value || '';
@@ -730,7 +733,6 @@ $('#btnSave').addEventListener('click', async () => {
     finally { b.disabled = false; }
     return;
   }
-  const data = collect();
   if (ED_SLOT && ED_SLOT.source !== 'library') {
     const b = $('#btnSave');
     b.disabled = true;
