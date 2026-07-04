@@ -25,6 +25,7 @@ let CONFIG = {};
 let RUNDOWN = null;
 let RUNDOWN_SELECTED = 0;
 let LIBRARY_CATEGORY = 'datosUtiles';
+let APP_STATUS = null;
 
 // Galería visual de plantillas (probar varias con los datos actuales).
 let galleryOpen = false;
@@ -53,6 +54,12 @@ async function loadConfig() {
 function requiredVideoCount() {
   const fixed = CONFIG && CONFIG.naming && Array.isArray(CONFIG.naming.fixedFiles) ? CONFIG.naming.fixedFiles.length : 0;
   return Number((CONFIG.screenProfile && CONFIG.screenProfile.requiredCount) || fixed || 8);
+}
+
+function fmtStamp(ts) {
+  if (!ts) return 'Nunca';
+  try { return new Date(ts).toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }); }
+  catch { return String(ts); }
 }
 function renderSwatches() {
   const cont = $('#themeSwatches');
@@ -415,6 +422,58 @@ function todayState() {
   return { required, active, selected, pending, stale, seconds, countOk, filesOk, label, ok };
 }
 
+function uploadSourceLabel(source, dryRun) {
+  if (dryRun) return 'Comprobación manual';
+  const map = {
+    manual: 'Subida manual',
+    'manual-check': 'Comprobación manual',
+    'manual-pilot': 'Subida manual desde piloto',
+    'automatic-daily': 'Subida automática diaria',
+    'automatic-hourly': 'Subida automática horaria',
+    'automatic-watch': 'Subida automática por cambios',
+  };
+  return map[source] || 'Subida';
+}
+
+function latestUpload() {
+  const st = (APP_STATUS && APP_STATUS.stages) || {};
+  const upload = st.upload || null;
+  const pilotUpload = PILOT && PILOT.upload ? PILOT.upload : null;
+  if (!upload) return pilotUpload;
+  if (!pilotUpload) return upload;
+  return Date.parse(pilotUpload.ts || 0) > Date.parse(upload.ts || 0) ? pilotUpload : upload;
+}
+
+function uploadResultHtml(upload, compact = false) {
+  if (!upload || !upload.ts) {
+    return `<div class="upload-result warn">
+      <div class="ur-head"><b>Sin subidas registradas</b><span>todavía</span></div>
+      <p>Cuando subas manualmente o el piloto suba solo, el resultado aparecerá aquí.</p>
+    </div>`;
+  }
+  const ok = upload.ok !== false;
+  const simulated = upload.dryRun === true;
+  const cls = ok ? (simulated ? 'warn' : 'ok') : 'err';
+  const title = ok
+    ? (simulated ? 'Comprobación correcta' : 'Subida correcta')
+    : (upload.skipped ? 'No se subió' : 'Fallo al subir');
+  const source = uploadSourceLabel(upload.source, simulated);
+  const files = Array.isArray(upload.files) ? upload.files : [];
+  const parts = [];
+  if (files.length) parts.push(`${files.length} archivo(s)`);
+  if (upload.remoteDir) parts.push(`carpeta ${upload.remoteDir}`);
+  if (simulated && upload.reason) parts.push(upload.reason);
+  if (!ok && upload.error) parts.push(upload.error);
+  const detail = parts.length ? parts.join(' · ') : (ok ? 'Sin detalle de archivos' : 'Sin detalle del error');
+  const fileList = !compact && files.length
+    ? `<p style="font-family:ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap">${files.map(esc).join('\n')}</p>`
+    : '';
+  return `<div class="upload-result ${cls}">
+    <div class="ur-head"><b>${esc(title)}</b><span>${esc(source)} · ${esc(fmtStamp(upload.ts))}</span></div>
+    <p>${esc(detail)}</p>${fileList}
+  </div>`;
+}
+
 function renderTodayPanel() {
   const box = $('#todayPanel');
   if (!box) return;
@@ -438,7 +497,8 @@ function renderTodayPanel() {
       <button type="button" class="ghost" data-today-action="prepare" ${prepareDisabled ? 'disabled' : ''}>Preparar archivos</button>
       <button type="button" class="ghost" data-today-action="review" ${reviewDisabled ? 'disabled' : ''}>Vista previa</button>
       <button type="button" class="primary" data-today-action="publish" ${publishDisabled ? 'disabled' : ''}>Subir</button>
-    </div>`;
+    </div>
+    ${uploadResultHtml(latestUpload(), true)}`;
 }
 
 function esc(s){return String(s ?? '').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
@@ -880,12 +940,6 @@ function pilotTag(text, ok) {
   return `<span class="tag ${ok ? 'ok' : 'warn'}">${esc(text)}</span>`;
 }
 
-function fmtStamp(ts) {
-  if (!ts) return 'Nunca';
-  try { return new Date(ts).toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }); }
-  catch { return String(ts); }
-}
-
 function stateCard(title, main, detail, ok, badge) {
   return `<div class="pilot-state ${ok ? 'ok' : 'warn'}">
     <div class="k"><span>${esc(title)}</span><span>${esc(badge || (ok ? 'OK' : 'Revisar'))}</span></div>
@@ -1060,9 +1114,12 @@ $('#pilotPublishNow').addEventListener('click', async (e) => {
   b.disabled = true;
   b.textContent = 'Publicando...';
   try {
-    const r = await api('/autopilot/run', { method: 'POST', body: JSON.stringify({ publish: true, sync: true }) });
-    toast(r.published ? `Publicado: ${r.cards} cartela(s).` : 'No se pudo publicar. Mira Estado.');
-    load();
+    await api('/autopilot/run', { method: 'POST', body: JSON.stringify({ publish: true, sync: true }) });
+    await loadStatus();
+    const up = latestUpload();
+    if (up && up.ok !== false && !up.dryRun) toast(`Subida correcta: ${(up.files || []).length} archivo(s)`);
+    else toast(up && up.error ? `Fallo al subir: ${up.error}` : 'No se pudo publicar. Mira el resultado.');
+    await load();
     loadPilot();
   } catch (err) {
     toast('Error: ' + err.message);
@@ -2547,9 +2604,10 @@ async function runPublish(dryRun) {
   try {
     const r = await api('/publish', { method: 'POST', body: JSON.stringify({ dryRun }) });
     $('#dot').style.background = r.ok ? '#2bb673' : '#e2231a';
+    const upload = r && r.steps && r.steps.upload;
     if (r.ok) {
       const files = plannedFiles(r);
-      const up = r.steps.upload || {};
+      const up = upload || {};
       if (dryRun) toast(`Prueba OK: ${files.length} archivo(s)`);
       else if (up.dryRun) toast(`Simulado: ${up.reason || 'no se subió al FTP'}`);
       else toast(`Publicado: ${(up.files || []).length} archivo(s)`);
@@ -2557,6 +2615,10 @@ async function runPublish(dryRun) {
       toast(publishError(r));
     }
     await load();
+    if (!dryRun && upload) {
+      $('#publishPlan').innerHTML = uploadResultHtml(upload, false);
+      publishDlg.showModal();
+    }
     return r;
   } catch (e) {
     $('#dot').style.background = '#e2231a';
@@ -2583,6 +2645,8 @@ async function preparePublish() {
     `<p style="margin-top:0">La prueba está correcta. Se subirán <b>${files.length}</b> archivo(s) al FTP${up.remoteDir ? `, carpeta <b>${esc(up.remoteDir)}</b>` : ''}.</p>` +
     `<div id="publishFiles" style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;background:#06101f;border:1px solid var(--line);border-radius:10px;padding:10px;max-height:34vh;overflow:auto;white-space:pre-wrap">${files.map(esc).join('\n')}</div>` +
     `<p class="hint" style="margin-bottom:0">Al confirmar se regenerará la secuencia y se intentará subir al FTP real.</p>`;
+  $('#btnPublishConfirm').hidden = false;
+  $('#btnPublishCancel').textContent = 'Cancelar';
   publishDlg.showModal();
 }
 
@@ -2604,7 +2668,9 @@ $('#todayPanel').addEventListener('click', (e) => {
 $('#btnPublishCancel').addEventListener('click', () => publishDlg.close());
 $('#btnPublishCancelTop').addEventListener('click', () => publishDlg.close());
 $('#btnPublishConfirm').addEventListener('click', async () => {
-  publishDlg.close();
+  $('#publishPlan').innerHTML = '<div class="upload-result warn"><div class="ur-head"><b>Subiendo a pantalla...</b><span>no cierres esta ventana</span></div><p>Estamos creando la tanda final y enviando los archivos al FTP.</p></div>';
+  $('#btnPublishConfirm').hidden = true;
+  $('#btnPublishCancel').textContent = 'Cerrar';
   await runPublish(false);
 });
 
@@ -2616,9 +2682,12 @@ async function loadStatus(full) {
   try {
     const s = await api('/status');
     const st = s.status;
+    APP_STATUS = st;
+    renderTodayPanel();
     const last = st.lastPublish ? new Date(st.lastPublish).toLocaleString('es-ES') : 'nunca';
     $('#statusLine').innerHTML =
-      `Pantalla ${s.screen.width}×${s.screen.height} · FTP ${s.ftpConfigured ? '<b>configurado</b>' : '<b style="color:#e0a106">sin configurar</b>'} · Última publicación: <b>${last}</b>`;
+      `Pantalla ${s.screen.width}×${s.screen.height} · FTP ${s.ftpConfigured ? '<b>configurado</b>' : '<b style="color:#e0a106">sin configurar</b>'} · Última publicación real: <b>${last}</b>` +
+      uploadResultHtml(latestUpload(), true);
     if (full) {
       $('#statusBox').innerHTML = Object.entries(st.stages || {}).map(([k, v]) =>
         `<div>${v.ok ? '✅' : '❌'} <b>${k}</b> · ${new Date(v.ts).toLocaleTimeString('es-ES')}${v.error ? ' · ' + esc(v.error) : ''}</div>`).join('') || 'Sin actividad aún.';

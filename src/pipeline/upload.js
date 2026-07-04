@@ -14,10 +14,10 @@ function listPublishFiles() {
     .filter((f) => fs.statSync(path.join(paths.publish, f)).isFile());
 }
 
-async function upload({ dryRun, files: plannedFiles } = {}) {
+async function upload({ dryRun, files: plannedFiles, source = 'manual' } = {}) {
   const files = plannedFiles != null ? plannedFiles : listPublishFiles();
   if (!files.length) {
-    const r = { ok: false, error: dryRun ? 'La prueba no tiene archivos para subir' : 'publish/ está vacío; ejecuta sequence primero' };
+    const r = { ok: false, source, files, error: dryRun ? 'La prueba no tiene archivos para subir' : 'publish/ está vacío; ejecuta sequence primero' };
     status.set('upload', r);
     log.warn('upload', r.error);
     return r;
@@ -28,7 +28,7 @@ async function upload({ dryRun, files: plannedFiles } = {}) {
   if (dryRun || !hasCreds) {
     const reason = dryRun ? 'dry-run solicitado' : 'faltan credenciales FTP';
     log.warn('upload', `Subida simulada (${reason}). Archivos: ${files.join(', ')}`);
-    const r = { ok: true, dryRun: true, files, reason, remoteDir: ftpCfg.remoteDir };
+    const r = { ok: true, dryRun: true, source, files, reason, remoteDir: ftpCfg.remoteDir };
     status.set('upload', r);
     return r;
   }
@@ -64,11 +64,11 @@ async function upload({ dryRun, files: plannedFiles } = {}) {
     await client.uploadFromDir(paths.publish);
     log.info('upload', `Subidos ${files.length} archivo(s) a ${ftpCfg.remoteDir}`);
 
-    const r = { ok: true, files, remoteDir: ftpCfg.remoteDir };
+    const r = { ok: true, source, files, remoteDir: ftpCfg.remoteDir };
     status.set('upload', r);
     return r;
   } catch (e) {
-    const r = { ok: false, error: e.message };
+    const r = { ok: false, source, files, remoteDir: ftpCfg.remoteDir, error: e.message };
     status.set('upload', r);
     log.error('upload', `Fallo FTP: ${e.message}`);
     return r;

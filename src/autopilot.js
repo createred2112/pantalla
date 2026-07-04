@@ -100,6 +100,7 @@ function preflight() {
 async function run(day, c, opts = {}) {
   const publishNow = opts.publish === true;
   const mode = opts.scheduled ? 'Pase diario' : (opts.sync ? 'Sincronización viva' : (opts.hourly ? 'Pase horario' : 'Preparación manual'));
+  const uploadSource = opts.manual ? 'manual-pilot' : (opts.scheduled ? 'automatic-daily' : (opts.hourly ? 'automatic-hourly' : (opts.sync ? 'automatic-watch' : 'manual-pilot')));
   log.info('autopilot', `${mode}: escaleta del ${day}${publishNow ? ' + FTP' : ' (sin publicar: revisar antes)'}`);
   // Datos frescos de los workers ANTES de materializar (tiempo, luz...).
   try {
@@ -120,7 +121,7 @@ async function run(day, c, opts = {}) {
   }
   let pub = null;
   if (publishNow) {
-    pub = await require('./pipeline/publish').publish({ dryRun: false, skipImport: false });
+    pub = await require('./pipeline/publish').publish({ dryRun: false, skipImport: false, uploadSource });
   } else {
     // Solo renderiza (con caché): deja las cartelas listas para REVISAR.
     try { await require('./pipeline/generate').generate(); } catch (e) { log.warn('autopilot', 'Fallo al renderizar: ' + e.message); }
@@ -215,7 +216,7 @@ async function tick() {
 async function runNow(opts = {}) {
   if (_running) throw new Error('el piloto ya está ejecutándose');
   _running = true;
-  try { return await run(localDay(), conf(), { publish: opts.publish === true, sync: opts.sync === true }); }
+  try { return await run(localDay(), conf(), { publish: opts.publish === true, sync: opts.sync === true, manual: true }); }
   finally { _running = false; }
 }
 

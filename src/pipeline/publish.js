@@ -7,17 +7,17 @@ const { upload } = require('./upload');
 const log = require('../util/logger');
 const status = require('../util/status');
 
-function stop(steps, stage, error) {
+function stop(steps, stage, error, uploadSource) {
   log.warn('publish', `Publicación detenida: ${error}`);
   if (!steps.upload) {
-    steps.upload = { ok: false, skipped: true, error: `No se sube porque falló ${stage}` };
+    steps.upload = { ok: false, skipped: true, source: uploadSource || 'manual', error: `No se sube porque falló ${stage}` };
     status.set('upload', steps.upload);
   }
   log.info('publish', '=== Fin de publicación (ok=false) ===');
   return { ok: false, steps };
 }
 
-async function publish({ dryRun, skipImport } = {}) {
+async function publish({ dryRun, skipImport, uploadSource = 'manual' } = {}) {
   log.info('publish', '=== Inicio de publicación ===');
   const steps = {};
   if (!skipImport) steps.import = importWorker();
@@ -29,14 +29,14 @@ async function publish({ dryRun, skipImport } = {}) {
   steps.rundown = require('../rundown').materialize();
   steps.generate = await generate();
   if (steps.generate.ok === false) {
-    return stop(steps, 'generate', 'falló generate');
+    return stop(steps, 'generate', 'falló generate', uploadSource);
   }
   steps.sequence = sequence({ dryRun });
   if (steps.sequence.ok === false) {
-    return stop(steps, 'sequence', 'falló sequence');
+    return stop(steps, 'sequence', 'falló sequence', uploadSource);
   }
   const plannedFiles = dryRun ? (steps.sequence.files || []) : undefined;
-  steps.upload = await upload({ dryRun, files: plannedFiles });
+  steps.upload = await upload({ dryRun, files: plannedFiles, source: uploadSource });
   const ok = steps.generate.ok && steps.sequence.ok && steps.upload.ok;
   log.info('publish', `=== Fin de publicación (ok=${ok}) ===`);
   return { ok, steps };

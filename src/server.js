@@ -621,7 +621,7 @@ app.get('/api/review', (req, res) => {
 
 // (Re)generar la simulación y recordarla.
 app.post('/api/review', async (req, res) => {
-  const result = await publish({ dryRun: true, skipImport: true });
+  const result = await publish({ dryRun: true, skipImport: true, uploadSource: 'manual-check' });
   const at = new Date().toISOString();
   if (result.ok) _reviewCache = { hash: reviewHash(), result, at };
   res.json({ fresh: Boolean(result.ok), at, result, cards: store.list() });
@@ -630,7 +630,7 @@ app.post('/api/review', async (req, res) => {
 app.post('/api/publish', async (req, res) => {
   const dryRun = req.body && req.body.dryRun;
   const importWorker = req.body && req.body.importWorker === true;
-  const result = await publish({ dryRun, skipImport: !importWorker });
+  const result = await publish({ dryRun, skipImport: !importWorker, uploadSource: dryRun ? 'manual-check' : 'manual' });
   res.json(result);
 });
 
