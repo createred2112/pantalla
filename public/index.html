@@ -311,9 +311,24 @@
   .pilot-txt{flex:1;min-width:0}.pilot-txt b{display:block;font-size:14px}.pilot-txt small{display:block;color:var(--muted);font-size:11.5px;margin-top:2px;line-height:1.35}
   .pilot-grid{display:grid;grid-template-columns:110px 1fr 120px;gap:8px;margin-top:10px}
   .pilot-grid label{margin:0}.pilot-grid input,.pilot-grid select{padding:8px 9px;font-size:13px}
+  .pilot-state-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:10px}
+  .pilot-state{border:1px solid var(--line);border-radius:10px;padding:10px;background:#081729}
+  .pilot-state.ok{border-color:rgba(43,182,115,.55);background:rgba(43,182,115,.12)}
+  .pilot-state.warn{border-color:rgba(232,172,22,.55);background:rgba(232,172,22,.1)}
+  .pilot-state b{display:block;font-size:13px}.pilot-state span{display:block;color:var(--muted);font-size:11.5px;margin-top:3px;line-height:1.35}
+  .pilot-history{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:8px}
+  .pilot-plan{margin-top:10px;border-top:1px solid rgba(159,178,212,.22);padding-top:9px;display:grid;gap:8px}
+  .pilot-plan-title{font-size:11px;text-transform:uppercase;letter-spacing:1.8px;color:var(--muted);font-weight:900}
+  .pilot-plan-card{border:1px solid var(--line);border-radius:10px;background:#081729;padding:9px}
+  .pilot-plan-head{display:flex;gap:8px;align-items:baseline;justify-content:space-between}
+  .pilot-plan-head b{font-size:13px}.pilot-plan-head span{font-size:11px;color:var(--muted)}
+  .pilot-choice{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px}
+  .pilot-choice button{font-size:11px;padding:6px 8px;border-radius:999px;background:#0a1a30;border:1px solid var(--line);color:var(--muted)}
+  .pilot-choice button.on{background:var(--warn);border-color:var(--warn);color:#081729;font-weight:900}
+  .pilot-choice button.next{border-color:rgba(43,182,115,.55);color:#bff0d5}
   .pilot-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.pilot-actions button{flex:1;min-width:132px}
   .pilot-checks{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}
-  @media (max-width:640px){ .pilot-grid{grid-template-columns:1fr}.pilot-actions button{min-width:0} }
+  @media (max-width:640px){ .pilot-grid,.pilot-state-grid,.pilot-history{grid-template-columns:1fr}.pilot-actions button{min-width:0} }
 </style>
 </head>
 <body>
@@ -375,7 +390,10 @@
         </select>
       </label>
     </div>
+    <div class="pilot-state-grid" id="pilotMatrix"></div>
+    <div class="pilot-history" id="pilotHistory"></div>
     <div class="pilot-checks" id="pilotChecks"></div>
+    <div class="pilot-plan" id="pilotPlan"></div>
     <div class="pilot-actions">
       <button class="ghost" id="pilotRun" title="Actualiza datos, escaleta y MP4 sin subir al FTP.">Preparar ahora</button>
       <button class="ghost" id="pilotPublishNow" title="Genera y sube los ocho MP4 al FTP ahora.">Publicar ahora</button>

@@ -235,13 +235,28 @@ function cleanDays(days) {
   const out = {};
   for (const [d, v] of Object.entries(days && typeof days === 'object' ? days : {})) {
     const skip = Array.isArray(v && v.skip) ? [...new Set(v.skip.map(String).filter(Boolean))] : [];
-    if (skip.length) out[String(d).slice(0, 10)] = { skip };
+    const pick = {};
+    for (const [slotId, idx] of Object.entries((v && v.pick && typeof v.pick === 'object') ? v.pick : {})) {
+      const n = Number(idx);
+      if (String(slotId).trim() && Number.isInteger(n) && n >= 0) pick[String(slotId)] = n;
+    }
+    if (skip.length || Object.keys(pick).length) out[String(d).slice(0, 10)] = { skip, ...(Object.keys(pick).length ? { pick } : {}) };
   }
   return out;
 }
 
 function skipSetFor(rundown, date) {
   return new Set((((rundown.days || {})[date] || {}).skip) || []);
+}
+
+function pickMapFor(rundown, date) {
+  const raw = (((rundown.days || {})[date] || {}).pick) || {};
+  const out = {};
+  for (const [slotId, idx] of Object.entries(raw)) {
+    const n = Number(idx);
+    if (Number.isInteger(n) && n >= 0) out[slotId] = n;
+  }
+  return out;
 }
 
 function save(rundown, options = {}) {
@@ -313,10 +328,33 @@ function pickDaily(items, key, date, rotation) {
   return items[(step + off) % items.length];
 }
 
-function slotPayload(slot, library, date) {
+function libraryChoice(items, key, date, rotation, pickIndex) {
+  if (!Array.isArray(items) || !items.length) return null;
+  if (Number.isInteger(pickIndex) && pickIndex >= 0 && pickIndex < items.length) return items[pickIndex];
+  return pickDaily(items, key, date, rotation);
+}
+
+function libraryPlanForSlot(slot, library, date, pickIndex) {
+  const s = normalizeSlot(slot);
+  if (s.source !== 'library') return null;
+  const items = libraryItems(library, s.libraryKey, date);
+  const chosen = libraryChoice(items, s.id, date, s.rotation, pickIndex);
+  const chosenIndex = chosen ? items.indexOf(chosen) : -1;
+  const next = items.map((item, index) => ({
+    index,
+    title: item.title || item.body || '(sin titulo)',
+    subtitle: item.subtitle || '',
+    template: item.template || '',
+    theme: item.theme || '',
+    chosen: index === chosenIndex,
+  }));
+  return { items, chosen, chosenIndex, next };
+}
+
+function slotPayload(slot, library, date, options = {}) {
   const s = normalizeSlot(slot);
   if (s.source === 'library') {
-    const item = pickDaily(libraryItems(library, s.libraryKey, date), s.id, date, s.rotation);
+    const item = libraryChoice(libraryItems(library, s.libraryKey, date), s.id, date, s.rotation, options.pickIndex);
     return item ? { ...item } : {
       title: s.label,
       subtitle: 'Pendiente',
@@ -362,9 +400,9 @@ function slotPayload(slot, library, date) {
   return s;
 }
 
-function toCard(slot, library, order, date) {
+function toCard(slot, library, order, date, pickMap = {}) {
   const s = normalizeSlot(slot);
-  const p = slotPayload(s, library, date);
+  const p = slotPayload(s, library, date, { pickIndex: pickMap[s.id] });
   // La plantilla/tema fijados EN EL BLOQUE mandan sobre la pieza o el dato
   // automático. Si quedan vacíos, cada pieza conserva su estilo propio.
   const tplOverride = s.template;
@@ -390,11 +428,11 @@ function toCard(slot, library, order, date) {
   });
 }
 
-function shouldMaterialize(slot, library, date) {
+function shouldMaterialize(slot, library, date, pickMap = {}) {
   const s = normalizeSlot(slot);
   if (s.enabled === false) return false;
   if (s.source === 'library' && s.libraryKey === 'agendaEventos') {
-    const p = slotPayload(s, library, date);
+    const p = slotPayload(s, library, date, { pickIndex: pickMap[s.id] });
     return Boolean(!p.missing && (p.title || p.body));
   }
   return true;
@@ -402,9 +440,11 @@ function shouldMaterialize(slot, library, date) {
 
 function report(rundown, library, date) {
   const skip = skipSetFor(rundown, date);
+  const pick = pickMapFor(rundown, date);
   return (rundown.slots || []).map((slot, i) => {
     const s = normalizeSlot(slot);
-    const p = slotPayload(s, library, date);
+    const p = slotPayload(s, library, date, { pickIndex: pick[s.id] });
+    const plan = libraryPlanForSlot(s, library, date, pick[s.id]);
     const skippedToday = skip.has(s.id);
     const autoSkipped = s.source === 'library' && s.libraryKey === 'agendaEventos' && (p.missing || (!p.title && !p.body));
     const missing = s.enabled && !skippedToday && !autoSkipped && (p.missing || !p.title);
@@ -423,6 +463,8 @@ function report(rundown, library, date) {
       autoSkipped,
       skippedToday,
       note: autoSkipped ? 'Sin agenda activa para este momento' : (missing ? (s.source === 'worker' ? `Pendiente worker: ${s.workerKey}` : 'Pendiente de contenido') : ''),
+      chosenIndex: plan ? plan.chosenIndex : null,
+      choices: plan ? plan.next.slice(0, 8) : [],
     };
   });
 }
@@ -430,8 +472,9 @@ function report(rundown, library, date) {
 function materialize(options = {}) {
   const { rundown, library, activeDate, report: rep } = read(options);
   const skip = skipSetFor(rundown, activeDate);
-  const active = (rundown.slots || []).filter((s) => !skip.has(String(s.id)) && shouldMaterialize(s, library, activeDate));
-  const generated = active.map((slot, i) => toCard(slot, library, i + 1, activeDate));
+  const pick = pickMapFor(rundown, activeDate);
+  const active = (rundown.slots || []).filter((s) => !skip.has(String(s.id)) && shouldMaterialize(s, library, activeDate, pick));
+  const generated = active.map((slot, i) => toCard(slot, library, i + 1, activeDate, pick));
   const manual = store.list()
     .filter((card) => card.source !== 'rundown')
     .map((card, i) => ({ ...card, order: generated.length + i + 1 }));
@@ -439,4 +482,19 @@ function materialize(options = {}) {
   return { ok: true, count: generated.length, cards: generated, report: rep };
 }
 
-module.exports = { read, save, saveLibrary, saveDay, reset, materialize, dayTheme, RUNDOWN_FILE, LIBRARY_FILE };
+function pick(date, slotId, itemIndex) {
+  const day = String(date || todayKey()).slice(0, 10);
+  const data = readJson(RUNDOWN_FILE, DEFAULT_RUNDOWN);
+  upgradeRundown(data);
+  if (!data.days || typeof data.days !== 'object') data.days = {};
+  const rec = data.days[day] && typeof data.days[day] === 'object' ? data.days[day] : {};
+  const picks = rec.pick && typeof rec.pick === 'object' ? rec.pick : {};
+  const n = Number(itemIndex);
+  if (Number.isInteger(n) && n >= 0) picks[String(slotId)] = n;
+  else delete picks[String(slotId)];
+  rec.pick = picks;
+  data.days[day] = rec;
+  return save(data, { date: day });
+}
+
+module.exports = { read, save, saveLibrary, saveDay, reset, materialize, pick, dayTheme, RUNDOWN_FILE, LIBRARY_FILE };

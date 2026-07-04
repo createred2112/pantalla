@@ -807,9 +807,67 @@ function pilotTag(text, ok) {
   return `<span class="tag ${ok ? 'ok' : 'warn'}">${esc(text)}</span>`;
 }
 
+function fmtStamp(ts) {
+  if (!ts) return 'Nunca';
+  try { return new Date(ts).toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }); }
+  catch { return String(ts); }
+}
+
+function stateCard(title, main, detail, ok) {
+  return `<div class="pilot-state ${ok ? 'ok' : 'warn'}"><b>${esc(title)}: ${esc(main)}</b><span>${esc(detail)}</span></div>`;
+}
+
 function syncLabel(minutes) {
   const n = Number(minutes || 0);
   return n > 0 ? `vigila cada ${n} min` : 'solo pase diario';
+}
+
+function renderPilotMatrix() {
+  const updateOn = PILOT.enabled;
+  const syncOn = PILOT.enabled && PILOT.liveSync !== false && Number(PILOT.syncEveryMinutes || 0) > 0;
+  const uploadOn = PILOT.enabled && PILOT.mode === 'publish';
+  const first = PILOT.enabled ? `primer pase ${PILOT.time || '08:00'}` : 'apagada';
+  const syncEvery = syncOn ? `cada ${PILOT.syncEveryMinutes} min` : 'sin vigilancia continua';
+  $('#pilotMatrix').innerHTML = [
+    stateCard('Auto actualización', updateOn ? 'ACTIVA' : 'INACTIVA', PILOT.enabled ? `${first}; ${syncEvery}` : 'Activa el piloto para actualizar datos, escaleta y MP4 automáticamente.', updateOn),
+    stateCard('Auto subida', uploadOn ? 'ACTIVA' : 'INACTIVA', uploadOn ? `${first}; sube al FTP cuando detecta cambios` : 'Modo revisar: prepara los MP4, pero no los sube solo.', uploadOn),
+  ].join('');
+}
+
+function renderPilotHistory() {
+  const gen = PILOT.generate || null;
+  const sync = PILOT.sync || null;
+  const upload = PILOT.upload || null;
+  const lastUpdate = sync && sync.ts ? sync : (gen && gen.ts ? gen : PILOT.last);
+  const updateOk = !lastUpdate || lastUpdate.ok !== false;
+  const updateDetail = lastUpdate
+    ? (`${lastUpdate.cards ? lastUpdate.cards + ' cartelas' : ''}${lastUpdate.count ? lastUpdate.count + ' MP4' : ''}${lastUpdate.reused ? ' · ' + lastUpdate.reused + ' reutilizados' : ''}${lastUpdate.unchanged ? ' · sin cambios' : ''}`.trim() || 'OK')
+    : 'Sin resultado todavía';
+  const uploadOk = upload && upload.ok !== false;
+  $('#pilotHistory').innerHTML = [
+    stateCard('Última actualización', fmtStamp(lastUpdate && lastUpdate.ts), updateOk ? updateDetail : (lastUpdate.error || 'Falló; mira Estado'), updateOk),
+    stateCard('Última subida', fmtStamp(upload && upload.ts), upload ? (uploadOk ? `${(upload.files || []).length} archivo(s) · ${upload.dryRun ? 'simulada' : 'FTP OK'}` : (upload.error || 'Falló FTP')) : 'Aún no se ha subido desde el panel.', uploadOk),
+  ].join('');
+}
+
+function renderPilotPlan() {
+  const rows = (((PILOT.rundown || {}).report) || [])
+    .filter((r) => r.source === 'library' && Array.isArray(r.choices) && r.choices.length);
+  if (!rows.length) { $('#pilotPlan').innerHTML = ''; return; }
+  const html = rows.map((r) => {
+    const chosen = r.choices.find((c) => c.chosen) || null;
+    const nextIndex = chosen ? (r.choices.findIndex((c) => c.chosen) + 1) % r.choices.length : 0;
+    const next = r.choices[nextIndex] || chosen;
+    const buttons = r.choices.slice(0, 6).map((c) =>
+      `<button type="button" data-pilot-pick="${esc(r.id)}:${c.index}" class="${c.chosen ? 'on' : (c === next ? 'next' : '')}" title="${esc(c.subtitle || '')}">${esc(c.title)}</button>`
+    ).join('');
+    return `<div class="pilot-plan-card">
+      <div class="pilot-plan-head"><b>${esc(r.label)}</b><span>${r.chosenIndex != null && r.chosenIndex >= 0 ? 'usando #' + (r.chosenIndex + 1) : 'sin pieza'}</span></div>
+      <div class="hint2">Ahora: <b>${esc(chosen ? chosen.title : (r.title || 'sin contenido'))}</b>${next && next !== chosen ? ` · Siguiente: <b>${esc(next.title)}</b>` : ''}</div>
+      <div class="pilot-choice">${buttons}</div>
+    </div>`;
+  }).join('');
+  $('#pilotPlan').innerHTML = `<div class="pilot-plan-title">Carruseles programados · usado / siguiente / elegir</div>${html}`;
 }
 
 function renderPilot() {
@@ -818,16 +876,17 @@ function renderPilot() {
   bar.style.display = 'block';
   bar.classList.toggle('on', PILOT.enabled);
   $('#pilotTitle').textContent = PILOT.enabled ? 'Piloto de emisión · activo' : 'Piloto de emisión · apagado';
-  const workersTxt = (PILOT.workers || []).filter((w) => w.fresh).map((w) => w.preview).filter(Boolean).join(' · ');
   const modeTxt = PILOT.mode === 'publish' ? 'publica al FTP' : 'prepara para revisar';
   const syncTxt = syncLabel(PILOT.liveSync ? PILOT.syncEveryMinutes : 0);
-  $('#pilotInfo').textContent = `${modeTxt} · primer pase ${PILOT.time || '08:00'} · ${syncTxt} · ${fmtLastRun(PILOT.last)}${workersTxt ? ' · ' + workersTxt : ''}`;
+  $('#pilotInfo').textContent = `${modeTxt} · primer pase ${PILOT.time || '08:00'} · ${syncTxt}`;
   $('#pilotTime').value = PILOT.time || '08:00';
   $('#pilotMode').value = PILOT.mode === 'publish' ? 'publish' : 'review';
   const syncMinutes = PILOT.liveSync === false ? 0 : Number(PILOT.syncEveryMinutes || 10);
   $('#pilotSync').value = String([0, 5, 10, 15, 30, 60].includes(syncMinutes) ? syncMinutes : 10);
   $('#pilotToggle').textContent = PILOT.enabled ? 'Apagar' : 'Activar';
   $('#pilotToggle').classList.toggle('primary', !PILOT.enabled);
+  renderPilotMatrix();
+  renderPilotHistory();
   const p = PILOT.preflight || {};
   const required = Number(p.requiredCount || 8);
   const selected = Number(p.selectedCount || 0);
@@ -840,6 +899,7 @@ function renderPilot() {
   ];
   if (sync && sync.ts) checks.push(pilotTag(`última vigilancia ${new Date(sync.ts).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}`, sync.ok !== false));
   $('#pilotChecks').innerHTML = checks.join('');
+  renderPilotPlan();
 }
 
 async function loadPilot() {
@@ -916,6 +976,24 @@ $('#pilotPublishNow').addEventListener('click', async (e) => {
   }
 });
 $('#pilotReview').addEventListener('click', () => { location.href = '/review.html'; });
+$('#pilotPlan').addEventListener('click', async (e) => {
+  const b = e.target.closest('[data-pilot-pick]');
+  if (!b || !PILOT) return;
+  const [slotId, idx] = b.dataset.pilotPick.split(':');
+  const date = (PILOT.rundown && PILOT.rundown.activeDate) || localDatePart();
+  b.disabled = true;
+  try {
+    await api('/rundown/pick', { method: 'POST', body: JSON.stringify({ date, slotId, itemIndex: Number(idx) }) });
+    await api('/rundown/materialize', { method: 'POST', body: JSON.stringify({ date }) });
+    toast('Pieza fijada para hoy');
+    load();
+    loadPilot();
+  } catch (err) {
+    toast('Error: ' + err.message);
+  } finally {
+    b.disabled = false;
+  }
+});
 
 // --- Barra de acciones ---
 $('#btnAdd').addEventListener('click', () => openEditor(null));

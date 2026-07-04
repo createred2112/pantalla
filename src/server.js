@@ -241,6 +241,11 @@ app.post('/api/rundown/materialize', (req, res) => {
   res.json(result);
 });
 
+app.post('/api/rundown/pick', (req, res) => {
+  const body = req.body || {};
+  res.json(rundown.pick(body.date || req.query.date, body.slotId, body.itemIndex));
+});
+
 // Frame resuelto de una cartela (para el editor visual): elementos posicionados.
 app.get('/api/frame/:id', (req, res) => {
   const card = store.list().find((c) => c.id === req.params.id);
@@ -597,7 +602,19 @@ const workers = require('./workers');
 
 app.get('/api/autopilot', (req, res) => {
   const st = status.read().stages || {};
-  res.json({ ...autopilot.conf(), last: autopilot.state(), sync: st['autopilot-sync'] || null, preflight: autopilot.preflight(), workers: workers.state() });
+  const rd = rundown.read();
+  res.json({
+    ...autopilot.conf(),
+    last: autopilot.state(),
+    sync: st['autopilot-sync'] || null,
+    hourly: st['autopilot-hora'] || null,
+    upload: st.upload || null,
+    generate: st.generate || null,
+    sequence: st.sequence || null,
+    preflight: autopilot.preflight(),
+    workers: workers.state(),
+    rundown: { activeDate: rd.activeDate, report: rd.report },
+  });
 });
 
 app.put('/api/autopilot', (req, res) => {
