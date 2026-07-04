@@ -159,6 +159,9 @@ async function runLocked(day, c, opts = {}) {
     const prev = state();
     const attempts = ok ? 0 : ((prev && prev.day === day ? Number(prev.attempts || 0) : 0) + 1);
     status.set('autopilot', { ok, day, cards: r.count, published: Boolean(pub && pub.ok), prepared: !publishNow, mode: publishNow ? 'publish' : 'review', attempts, signature: sig });
+    if (ok && c.liveSync && Number(c.syncEveryMinutes || 0) > 0) {
+      status.set('autopilot-sync', { ok, day, cards: r.count, published: Boolean(pub && pub.ok), prepared: !publishNow, mode: publishNow ? 'publish' : 'review', signature: sig, fromScheduled: true });
+    }
   }
   if (opts.sync) {
     status.set('autopilot-sync', { ok, day, cards: r.count, published: Boolean(pub && pub.ok), prepared: !publishNow, mode: publishNow ? 'publish' : 'review', signature: sig });
