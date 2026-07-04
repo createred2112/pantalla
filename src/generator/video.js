@@ -136,6 +136,25 @@ function setupAnim(durMs, motion) {
       { transform: 'translateY(1.6%) rotate(1.5deg)' },
     ], { duration: 2600, delay: T0 + 500, iterations: Math.max(1, Math.ceil(durMs / 2600)), direction: 'alternate', easing: 'ease-in-out' });
   });
+  els.filter((el) => el.dataset.anim === 'rain' || el.dataset.anim === 'snow').forEach((el) => {
+    const slow = el.dataset.anim === 'snow';
+    add(el, [
+      { transform: 'translateY(-3%)' },
+      { transform: `translateY(${slow ? '4%' : '7%'})` },
+    ], { duration: slow ? 2200 : 1150, delay: T0 + 400, iterations: Math.max(1, Math.ceil(durMs / (slow ? 2200 : 1150))), direction: 'alternate', easing: 'ease-in-out' });
+  });
+  els.filter((el) => el.dataset.anim === 'wind').forEach((el) => {
+    add(el, [
+      { transform: 'translateX(-3%)' },
+      { transform: 'translateX(4%)' },
+    ], { duration: 1400, delay: T0 + 400, iterations: Math.max(1, Math.ceil(durMs / 1400)), direction: 'alternate', easing: 'ease-in-out' });
+  });
+  els.filter((el) => el.dataset.anim === 'pulse').forEach((el) => {
+    add(el, [
+      { transform: 'scale(.96)', opacity: .78 },
+      { transform: 'scale(1.04)', opacity: 1 },
+    ], { duration: 820, delay: T0 + 400, iterations: Math.max(1, Math.ceil(durMs / 820)), direction: 'alternate', easing: 'ease-in-out' });
+  });
   // El sol gira despacio, sin parar: vida constante sin marear.
   els.filter((el) => el.dataset.anim === 'spin').forEach((el) => {
     add(el, [

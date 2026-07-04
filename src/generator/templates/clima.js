@@ -11,6 +11,38 @@ function keyOf(text) {
   if (/cubiert|nubl|nubos/.test(t)) return 'nube';
   return 'sol';
 }
+function rgb(color) {
+  const s = String(color || '').trim().toLowerCase();
+  let m = s.match(/^#([0-9a-f]{3})$/);
+  if (m) return [...m[1]].map((h) => parseInt(h + h, 16));
+  m = s.match(/^#([0-9a-f]{6})$/);
+  if (m) return [0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16));
+  return null;
+}
+function lum(c) {
+  const a = rgb(c);
+  if (!a) return null;
+  const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+  return 0.2126 * f(a[0]) + 0.7152 * f(a[1]) + 0.0722 * f(a[2]);
+}
+function contrast(a, b) {
+  const x = lum(a), y = lum(b);
+  if (x == null || y == null) return 99;
+  return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+}
+function iconColor(theme) {
+  const bg = theme.bg || '#0E0E0E';
+  const choices = [theme.accent, theme.text, theme.logoAccent, '#0E0E0E', '#FFFFFF'];
+  return choices.filter(Boolean).sort((a, b) => contrast(b, bg) - contrast(a, bg))[0] || theme.text || '#FFFFFF';
+}
+function animFor(key) {
+  if (key === 'sol') return 'spin';
+  if (key === 'lluvia') return 'rain';
+  if (key === 'nieve') return 'snow';
+  if (key === 'tormenta') return 'pulse';
+  if (key === 'viento') return 'wind';
+  return 'float';
+}
 // Iconos de línea profesionales (geometría Feather Icons, MIT) en 24x24,
 // escalados a 100x100. Formas equilibradas y probadas, trazo redondeado.
 function iconSvg(key, c) {
@@ -37,7 +69,7 @@ function iconSvg(key, c) {
 }
 
 module.exports = {
-  iconSvg, keyOf, // reutilizados por la plantilla "prevision"
+  iconSvg, keyOf, iconColor, animFor, // reutilizados por la plantilla "prevision"
   id: 'clima',
   label: 'Tiempo ahora (temperatura + icono)',
   hint: { title: 'Temperatura ahora (p. ej. 24º)', subtitle: 'Condición actual: SOLEADO, LLUVIA…', body: 'Nota secundaria opcional', date: 'Momento: AHORA, 13:45…' },
@@ -72,8 +104,8 @@ module.exports = {
     const icoX = Math.round(W - pad - icoS - W * 0.03 + W * ((Number(conf.dx) || 0) / 100));
     const icoY = Math.round(zoneY + (zoneH - icoS) / 2 + H * ((Number(conf.dy) || 0) / 100));
     els.push({
-      type: 'svg', anim: icoKey === 'sol' ? 'spin' : 'float', // el sol gira, el resto flota
-      x: icoX, y: icoY, w: icoS, h: icoS, svg: iconSvg(icoKey, theme.accent),
+      type: 'svg', anim: animFor(icoKey),
+      x: icoX, y: icoY, w: icoS, h: icoS, svg: iconSvg(icoKey, iconColor(theme)),
     });
 
     // Banda de acento a sangre (firma de la casa) con la condición ACTUAL.

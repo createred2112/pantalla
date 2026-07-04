@@ -1480,6 +1480,8 @@ function weekdayBox(item, n, label) {
 
 function libraryItemHtml(meta, item, i) {
   const isAgenda = meta.key === 'agendaEventos';
+  const isCurious = meta.key === 'datosCuriosos';
+  const subtitleLabel = isAgenda ? 'Etiqueta' : (isCurious ? 'Cabecera superior' : 'Firma/sección');
   const head = `<button type="button" class="lib-row" data-lib-open="${i}">
       <span class="lib-dot ${item.enabled !== false ? 'on' : ''}"></span>
       <span class="lib-title">${esc(item.title || item.body || (isAgenda ? '(bloque de agenda sin rellenar)' : '(sin título)'))}</span>
@@ -1494,7 +1496,7 @@ function libraryItemHtml(meta, item, i) {
     <div class="lib-edit">
       <div class="mini">
         <label>${isAgenda ? 'Cabecera' : 'Título'}<input data-lib-field="title" value="${esc(item.title || '')}" placeholder="${isAgenda ? 'Agenda, Ahora en..., Mañana...' : ''}"></label>
-        <label>${isAgenda ? 'Etiqueta' : 'Firma/sección'}<input data-lib-field="subtitle" value="${esc(item.subtitle || '')}" placeholder="${isAgenda ? 'Hoy, Mañana, Festival...' : ''}"></label>
+        <label>${subtitleLabel}<input data-lib-field="subtitle" value="${esc(item.subtitle || '')}" placeholder="${isAgenda ? 'Hoy, Mañana, Festival...' : (isCurious ? 'Lo que quieras que aparezca arriba' : '')}"></label>
       </div>
       <label>${isAgenda ? 'Eventos del bloque' : 'Texto'}<textarea data-lib-field="body" placeholder="${isAgenda ? '21:00 | Concierto | Plaza Nueva\\n22:30 | DJ set | Casco Viejo' : ''}">${esc(item.body || '')}</textarea></label>
       <label>¿Cuándo sale?
