@@ -336,6 +336,17 @@
   .pilot-choice button.on{background:rgba(43,182,115,.18);border-color:rgba(43,182,115,.62)}
   .pilot-choice button.next{border-color:rgba(232,172,22,.65)}
   .pilot-checks{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}
+  .today-panel{background:linear-gradient(135deg,rgba(43,182,115,.1),var(--card) 64%);border:1px solid var(--line);
+    border-radius:var(--r);padding:14px;margin:0 0 12px;box-shadow:var(--shadow)}
+  .today-head{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+  .today-head b{font-size:16px}.today-head span{margin-left:auto}
+  .today-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+  .today-kpi{background:#081729;border:1px solid rgba(159,178,212,.18);border-radius:8px;padding:9px 10px;min-width:0}
+  .today-kpi small{display:block;color:var(--muted);font-size:10px;text-transform:uppercase;font-weight:900;letter-spacing:0}
+  .today-kpi b{display:block;margin-top:3px;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .today-actions{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:10px}
+  .today-actions button{min-width:0}
+  @media (max-width:760px){ .today-grid,.today-actions{grid-template-columns:1fr 1fr}.today-head{align-items:flex-start}.today-head span{margin-left:0}.today-head{flex-wrap:wrap} }
   @media (max-width:760px){ .pilot-grid,.pilot-state-grid,.pilot-history,.pilot-plan-card,.pilot-actions{grid-template-columns:1fr}.pilot-top{grid-template-columns:auto 1fr}.pilot-top #pilotToggle{grid-column:1/-1;width:100%}.pilot-plan-now{grid-template-columns:1fr} }
 </style>
 </head>
@@ -356,18 +367,19 @@
   <div class="bar">
     <button class="tool featured" id="btnRundown">
       <span class="ico">🗓</span>
-      <span class="tool-txt"><b>Escaleta</b><small>Elegir cartelas · rellenar · vista previa</small></span>
+      <span class="tool-txt"><b>Crear emisión</b><small>8 cartelas · revisar · pantalla</small></span>
     </button>
     <button class="tool danger" id="btnBreaking">
       <span class="ico">🚨</span>
-      <span class="tool-txt"><b>Última hora</b><small>URL → alerta en pantalla</small></span>
+      <span class="tool-txt"><b>Alerta urgente</b><small>Noticia rápida en pantalla</small></span>
     </button>
     <button class="tool" id="btnImport">
       <span class="ico">📥</span>
-      <span class="tool-txt"><b>Importar</b><small>Archivos del worker</small></span>
+      <span class="tool-txt"><b>Traer archivos</b><small>Fotos y vídeos recibidos</small></span>
     </button>
     <button class="tool sq" id="btnRefresh" title="Refrescar la lista">↻</button>
   </div>
+  <div class="today-panel" id="todayPanel"></div>
   <div class="pilot" id="pilotBar" style="display:none">
     <div class="pilot-top">
       <span class="pilot-ico" id="pilotIco"></span>
@@ -419,9 +431,9 @@
 <button class="fab" id="btnAdd" title="Nueva cartela">＋</button>
 
 <div class="footbar">
-  <button class="ghost" id="btnDry">Probar (sin subir)</button>
+  <button class="ghost" id="btnDry">Comprobar</button>
   <button class="ghost" id="btnReview">Vista previa</button>
-  <button class="primary" id="btnPublish">Publicar a pantalla ▶</button>
+  <button class="primary" id="btnPublish">Subir a pantalla ▶</button>
 </div>
 
 <!-- Editor -->
@@ -496,8 +508,8 @@
     </div>
     <div class="dlg-f">
       <button class="ghost" value="cancel">Cancelar</button>
-      <button class="ghost" type="button" id="btnSaveRender">Guardar y generar</button>
-      <button class="primary" type="button" id="btnSave">Guardar</button>
+      <button class="ghost" type="button" id="btnSaveRender">Guardar y crear archivo</button>
+      <button class="primary" type="button" id="btnSave">Solo guardar</button>
     </div>
   </form>
 </dialog>

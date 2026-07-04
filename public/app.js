@@ -336,8 +336,9 @@ async function load() {
 function render() {
   const el = $('#list');
   const sum = $('#listSummary');
+  renderTodayPanel();
   if (!cards.length) {
-    el.innerHTML = '<div class="empty">No hay cartelas todavía.<br>Crea la primera con ＋ o genera el día con la Escaleta.</div>';
+    el.innerHTML = '<div class="empty">Aún no hay emisión preparada.<br>Empieza en Crear emisión.</div>';
     if (sum) sum.textContent = '';
     return;
   }
@@ -394,6 +395,50 @@ function render() {
       </div>`;
     el.appendChild(div);
   });
+}
+
+function todayState() {
+  const required = requiredVideoCount();
+  const active = cards.filter((c) => c.enabled !== false);
+  const selected = required ? active.slice(0, required) : active;
+  const pending = selected.filter((c) => c.type === 'generated' && !c.rendered).length;
+  const stale = selected.filter((c) => c.type === 'generated' && !c.rendered && c.staleRendered).length;
+  const seconds = selected.reduce((n, c) => n + (Number(c.duration) || 10), 0);
+  const countOk = !required || active.length === required;
+  const filesOk = selected.length > 0 && pending === 0;
+  let label = 'Pendiente';
+  let ok = false;
+  if (active.length < required) label = `Faltan ${required - active.length}`;
+  else if (active.length > required) label = `Sobran ${active.length - required}`;
+  else if (pending) label = `${pending} por crear`;
+  else { label = 'Lista'; ok = true; }
+  return { required, active, selected, pending, stale, seconds, countOk, filesOk, label, ok };
+}
+
+function renderTodayPanel() {
+  const box = $('#todayPanel');
+  if (!box) return;
+  const st = todayState();
+  const activeCount = st.active.length;
+  const prepareDisabled = !activeCount;
+  const reviewDisabled = !activeCount;
+  const publishDisabled = !st.ok;
+  box.innerHTML = `
+    <div class="today-head">
+      <b>Emisión de hoy</b>
+      <span class="tag ${st.ok ? 'ok' : 'warn'}">${esc(st.label)}</span>
+    </div>
+    <div class="today-grid">
+      <div class="today-kpi"><small>Cartelas</small><b>${activeCount}/${st.required || activeCount}</b></div>
+      <div class="today-kpi"><small>Archivos</small><b>${st.pending ? `${st.pending} pendientes` : (activeCount ? 'Listos' : 'Sin preparar')}</b></div>
+      <div class="today-kpi"><small>Vuelta</small><b>${st.seconds || 0}s</b></div>
+    </div>
+    <div class="today-actions">
+      <button type="button" class="ghost" data-today-action="rundown">Crear emisión</button>
+      <button type="button" class="ghost" data-today-action="prepare" ${prepareDisabled ? 'disabled' : ''}>Preparar archivos</button>
+      <button type="button" class="ghost" data-today-action="review" ${reviewDisabled ? 'disabled' : ''}>Vista previa</button>
+      <button type="button" class="primary" data-today-action="publish" ${publishDisabled ? 'disabled' : ''}>Subir</button>
+    </div>`;
 }
 
 function esc(s){return String(s ?? '').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
@@ -915,6 +960,7 @@ function renderPilotPlan() {
 
 function renderPilot() {
   if (!PILOT) return;
+  renderTodayPanel();
   const bar = $('#pilotBar');
   bar.style.display = 'block';
   bar.classList.toggle('on', PILOT.enabled);
@@ -2510,11 +2556,12 @@ async function runPublish(dryRun) {
     } else {
       toast(publishError(r));
     }
-    loadStatus();
+    await load();
     return r;
   } catch (e) {
     $('#dot').style.background = '#e2231a';
     toast('Error: ' + e.message);
+    loadStatus();
     return null;
   } finally {
     setPublishBusy(false);
@@ -2545,6 +2592,15 @@ async function doPublish(dryRun) {
 $('#btnPublish').addEventListener('click', () => preparePublish());
 $('#btnDry').addEventListener('click', () => doPublish(true));
 $('#btnReview').addEventListener('click', () => window.open('/review.html', '_blank'));
+$('#todayPanel').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-today-action]');
+  if (!b) return;
+  const action = b.dataset.todayAction;
+  if (action === 'rundown') return $('#btnRundown').click();
+  if (action === 'prepare') return doPublish(true);
+  if (action === 'review') return window.open('/review.html', '_blank');
+  if (action === 'publish') return preparePublish();
+});
 $('#btnPublishCancel').addEventListener('click', () => publishDlg.close());
 $('#btnPublishCancelTop').addEventListener('click', () => publishDlg.close());
 $('#btnPublishConfirm').addEventListener('click', async () => {
