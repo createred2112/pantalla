@@ -1013,21 +1013,29 @@ function auditTypeLabel(type) {
 }
 
 function renderAudit(entries) {
-  if (!entries || !entries.length) return '<div class="status">Todavía no hay registro operativo.</div>';
-  return entries.slice().reverse().map((e) => {
-    const ok = e.ok === false ? 'bad' : (e.type === 'autopilot.skip' ? 'skip' : 'ok');
+  if (!entries || !entries.length) return '<div class="status">Todavía no hay operaciones registradas.</div>';
+  return entries.map((e) => {
+    const ok = e.status === 'error' ? 'bad' : (e.status === 'skipped' ? 'skip' : 'ok');
     const ts = e.ts ? new Date(e.ts).toLocaleString('es-ES') : '';
-    const source = e.source ? ` · ${esc(e.source)}` : '';
-    const run = e.runId ? ` · ${esc(e.runId)}` : '';
+    const icon = e.status === 'error' ? '!' : (e.status === 'skipped' ? 'i' : '✓');
+    const steps = (e.steps || []).map((s) => `<div class="audit-step"><b>${esc(s.label)}</b><span>${esc(s.detail)}</span></div>`).join('');
     const files = Array.isArray(e.files) && e.files.length
-      ? `<div class="audit-files">${e.files.map(esc).join(' · ')}</div>`
+      ? `<div class="audit-files"><b>Archivos finales:</b><br>${e.files.map((f) => `<code>${esc(f)}</code>`).join('')}</div>`
       : '';
-    const extra = e.error ? `<p>${esc(e.error)}</p>` : (e.count != null ? `<p>${esc(e.count)} elemento(s)</p>` : '');
+    const omitted = Array.isArray(e.omitted) && e.omitted.length
+      ? `<div class="audit-omitted"><b>Fuera por límite de 8:</b> ${esc(e.omitted.map((o) => o.title || o.id).join(' · '))}</div>`
+      : '';
     return `<div class="audit-row ${ok}">
-      <b>${esc(auditTypeLabel(e.type))}</b>
-      <small>${esc(ts)}${source}${run}</small>
-      <p>${esc(e.message || '')}</p>
-      ${files}${extra}
+      <div class="audit-head">
+        <div class="audit-icon">${icon}</div>
+        <div class="audit-title">
+          <b>${esc(e.title || e.headline || 'Operación')}</b>
+          <small>${esc(ts)} · ${esc(e.source || '')} · ${esc(e.headline || '')}</small>
+        </div>
+      </div>
+      <p class="audit-summary">${esc(e.summary || '')}</p>
+      ${steps ? `<div class="audit-steps">${steps}</div>` : ''}
+      ${files}${omitted}
     </div>`;
   }).join('');
 }
@@ -2750,7 +2758,7 @@ async function loadStatus(full) {
       const stageHtml = Object.entries(st.stages || {}).map(([k, v]) =>
         `<div>${v.ok ? '✅' : '❌'} <b>${k}</b> · ${new Date(v.ts).toLocaleTimeString('es-ES')}${v.error ? ' · ' + esc(v.error) : ''}</div>`).join('') || 'Sin actividad aún.';
       $('#statusBox').innerHTML = busyHtml + stageHtml;
-      const audit = await api('/audit?n=160');
+      const audit = await api('/operations?n=12');
       $('#auditBox').innerHTML = renderAudit(audit);
       const logs = await api('/log?n=120');
       $('#log').textContent = logs.map(l => `${(l.ts||'').slice(11,19)} ${(l.level||'').toUpperCase()} (${l.stage}) ${l.msg}`).join('\n');

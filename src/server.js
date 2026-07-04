@@ -10,6 +10,7 @@ const store = require('./store');
 const log = require('./util/logger');
 const status = require('./util/status');
 const auditLog = require('./util/auditLog');
+const operationLog = require('./util/operationLog');
 const pipelineLock = require('./util/pipelineLock');
 const { renderToBuffer } = require('./generator/renderCard');
 const { publish } = require('./pipeline/publish');
@@ -727,6 +728,10 @@ app.get('/api/log', (req, res) => {
 
 app.get('/api/audit', (req, res) => {
   res.json(auditLog.tail(Number(req.query.n) || 200));
+});
+
+app.get('/api/operations', (req, res) => {
+  res.json(operationLog.list(Number(req.query.n) || 20));
 });
 
 app.listen(env.port, () => {

@@ -18,7 +18,14 @@ function compact(value) {
   try {
     const raw = JSON.stringify(value);
     if (raw.length <= 6000) return value;
-    return { truncated: true, text: raw.slice(0, 6000) };
+    return {
+      runId: value.runId,
+      ok: value.ok,
+      source: value.source,
+      count: value.count,
+      truncated: true,
+      text: raw.slice(0, 6000),
+    };
   } catch {
     return { unserializable: true };
   }

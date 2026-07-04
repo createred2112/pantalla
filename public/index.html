@@ -82,15 +82,28 @@
   .status b{color:var(--txt)}
   #log{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;background:#06101f;border:1px solid var(--line);
     border-radius:10px;padding:10px;max-height:40vh;overflow:auto;white-space:pre-wrap;color:#bcd}
-  .audit-list{display:flex;flex-direction:column;gap:8px;margin:10px 0 14px}
-  .audit-row{border:1px solid var(--line);border-radius:10px;background:#081729;padding:9px 10px}
-  .audit-row.ok{border-color:rgba(43,182,115,.45)}
-  .audit-row.bad{border-color:rgba(226,35,26,.55)}
-  .audit-row.skip{border-color:rgba(232,172,22,.5)}
-  .audit-row b{display:block;font-size:13px}
-  .audit-row small{display:block;color:var(--muted);font-size:11px;margin-top:2px}
-  .audit-row p{margin:5px 0 0;font-size:12px;color:#d8e6ff}
-  .audit-files{margin-top:6px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;color:#bcd}
+  .audit-list{display:flex;flex-direction:column;gap:10px;margin:10px 0 14px}
+  .audit-row{border:1px solid var(--line);border-radius:12px;background:#081729;padding:12px}
+  .audit-row.ok{border-color:rgba(43,182,115,.55);background:linear-gradient(180deg,rgba(43,182,115,.12),#081729 60%)}
+  .audit-row.bad{border-color:rgba(226,35,26,.65);background:linear-gradient(180deg,rgba(226,35,26,.14),#081729 60%)}
+  .audit-row.skip{border-color:rgba(232,172,22,.6);background:linear-gradient(180deg,rgba(232,172,22,.12),#081729 60%)}
+  .audit-head{display:flex;gap:10px;align-items:flex-start}
+  .audit-icon{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--line);font-weight:900;flex:none}
+  .audit-row.ok .audit-icon{background:var(--ok);color:#04150d}
+  .audit-row.bad .audit-icon{background:var(--accent);color:#fff}
+  .audit-row.skip .audit-icon{background:var(--warn);color:#081729}
+  .audit-title{flex:1;min-width:0}
+  .audit-title b{display:block;font-size:14px}
+  .audit-title small{display:block;color:var(--muted);font-size:11px;margin-top:2px}
+  .audit-summary{margin:8px 0 0;font-size:12px;color:#d8e6ff;line-height:1.35}
+  .audit-steps{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:10px}
+  .audit-step{border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:7px 8px;background:rgba(0,0,0,.16)}
+  .audit-step b{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#bcd}
+  .audit-step span{display:block;font-size:12px;margin-top:2px;color:#fff}
+  .audit-files,.audit-omitted{margin-top:8px;font-size:11px;color:#bcd;line-height:1.35}
+  .audit-files code{font-family:ui-monospace,Menlo,Consolas,monospace;background:#06101f;border:1px solid var(--line);border-radius:999px;padding:2px 6px;display:inline-block;margin:2px 3px 2px 0}
+  .tech-details{margin-top:12px}
+  .tech-details summary{cursor:pointer;color:var(--muted);font-size:12px}
   .toast{position:fixed;left:50%;bottom:150px;transform:translateX(-50%);background:#000c;border:1px solid var(--line);
     padding:10px 16px;border-radius:999px;z-index:50;opacity:0;transition:opacity .2s}
   .toast.show{opacity:1}
@@ -635,10 +648,12 @@
   <div class="dlg-h"><h2>Estado y registro</h2><button class="ghost" onclick="statusDlg.close()">✕</button></div>
   <div class="dlg-b">
     <div id="statusBox" class="status"></div>
-    <h3 style="margin:14px 0 6px;font-size:13px">Registro operativo</h3>
+    <h3 style="margin:14px 0 6px;font-size:13px">Registro claro de operaciones</h3>
     <div id="auditBox" class="audit-list"></div>
-    <h3 style="margin:14px 0 6px;font-size:13px">Log técnico</h3>
-    <div id="log"></div>
+    <details class="tech-details">
+      <summary>Ver log técnico</summary>
+      <div id="log"></div>
+    </details>
   </div>
 </dialog>
 
