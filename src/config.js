@@ -31,6 +31,16 @@ const FIXED_SCREEN_FILES = [
 ];
 
 function migrateProductionContract(c) {
+  c.palette = c.palette && typeof c.palette === 'object' ? c.palette : {};
+  c.palette.naranja = c.palette.naranja || {
+    bg: '#FF8A00',
+    bg2: '#FF8A00',
+    text: '#0E0E0E',
+    textMuted: 'rgba(14,14,14,0.76)',
+    accent: '#0E0E0E',
+    accentText: '#FFFFFF',
+    logoAccent: '#0E0E0E',
+  };
   c.screen = { ...(c.screen || {}), format: 'mp4' };
   c.naming = {
     ...(c.naming || {}),

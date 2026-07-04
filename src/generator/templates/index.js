@@ -11,6 +11,7 @@ const modules = [
   require('./luz'),
   require('./gasolina'),
   require('./alerta'),
+  require('./meteoaviso'),
   require('./evento'),
   require('./cita'),
   require('./clima'),

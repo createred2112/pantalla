@@ -146,7 +146,7 @@ function hex(c) { return (c && c[0] === '#') ? c.slice(0, 7) : '#000000'; }
 
 function buildBumperEditor() {
   const bumpers = SETTINGS.templateBumpers || {};
-  const chosen = ['clima', 'prevision', 'luz', 'gasolina', 'dato', 'alerta', 'agenda', 'noticia', 'mensaje'];
+  const chosen = ['clima', 'prevision', 'meteoaviso', 'luz', 'gasolina', 'dato', 'alerta', 'agenda', 'noticia', 'mensaje'];
   const list = chosen.map((id) => TEMPLATES.find((t) => t.id === id)).filter(Boolean);
   $('#setTemplateBumpers').innerHTML = list.map((t) => {
     const b = bumpers[t.id] || {};
@@ -1044,6 +1044,8 @@ const PLAN_TYPES = [
   { id: 'tiempo', label: 'Tiempo ahora · automático', def: true, slot: { source: 'worker', workerKey: 'weather', template: 'clima', label: 'Tiempo ahora', rotation: 'hora' } },
   { id: 'prevision', label: 'Previsión 3 días · automático', def: true, slot: { source: 'worker', workerKey: 'forecast', template: 'prevision', label: 'Previsión' } },
   { id: 'agenda', label: 'Agenda viva · programable', def: true, duration: 10, slot: { source: 'library', libraryKey: 'agendaEventos', label: 'Agenda' } },
+  { id: 'meteoaviso', label: 'Aviso meteorológico · programable', slot: { source: 'library', libraryKey: 'avisosMeteorologicos', label: 'Aviso meteorológico', template: 'meteoaviso', theme: 'naranja' } },
+  { id: 'meteoconsejo', label: 'Consejo meteorológico · programable', slot: { source: 'library', libraryKey: 'consejosMeteorologicos', label: 'Consejo meteorológico', template: 'meteoaviso', theme: 'naranja' } },
   { id: 'curioso', label: 'Dato curioso · carrusel', def: true, slot: { source: 'library', libraryKey: 'datosCuriosos', label: 'Dato curioso' } },
   { id: 'utiles', label: 'Aviso útil · carrusel', slot: { source: 'library', libraryKey: 'datosUtiles', label: 'Aviso útil' } },
   { id: 'consejo', label: 'Consejo informático (Fast2Computer) · carrusel', slot: { source: 'library', libraryKey: 'consejosInformaticos', label: 'Consejo informático' } },
@@ -1559,7 +1561,8 @@ function weekdayBox(item, n, label) {
 function libraryItemHtml(meta, item, i) {
   const isAgenda = meta.key === 'agendaEventos';
   const isCurious = meta.key === 'datosCuriosos';
-  const subtitleLabel = isAgenda ? 'Etiqueta' : (isCurious ? 'Cabecera superior' : 'Firma/sección');
+  const isMeteo = meta.key === 'avisosMeteorologicos' || meta.key === 'consejosMeteorologicos';
+  const subtitleLabel = isAgenda ? 'Etiqueta' : (isCurious ? 'Cabecera superior' : (isMeteo ? 'Riesgo o tipo de aviso' : 'Firma/sección'));
   const head = `<button type="button" class="lib-row" data-lib-open="${i}">
       <span class="lib-dot ${item.enabled !== false ? 'on' : ''}"></span>
       <span class="lib-title">${esc(item.title || item.body || (isAgenda ? '(bloque de agenda sin rellenar)' : '(sin título)'))}</span>
@@ -1573,10 +1576,10 @@ function libraryItemHtml(meta, item, i) {
     ${head}
     <div class="lib-edit">
       <div class="mini">
-        <label>${isAgenda ? 'Cabecera' : 'Título'}<input data-lib-field="title" value="${esc(item.title || '')}" placeholder="${isAgenda ? 'Agenda, Ahora en..., Mañana...' : ''}"></label>
+        <label>${isAgenda ? 'Cabecera' : 'Título'}<input data-lib-field="title" value="${esc(item.title || '')}" placeholder="${isAgenda ? 'Agenda, Ahora en..., Mañana...' : (isMeteo ? 'Alerta naranja' : '')}"></label>
         <label>${subtitleLabel}<input data-lib-field="subtitle" value="${esc(item.subtitle || '')}" placeholder="${isAgenda ? 'Hoy, Mañana, Festival...' : (isCurious ? 'Lo que quieras que aparezca arriba' : '')}"></label>
       </div>
-      <label>${isAgenda ? 'Eventos del bloque' : 'Texto'}<textarea data-lib-field="body" placeholder="${isAgenda ? '21:00 | Concierto | Plaza Nueva\\n22:30 | DJ set | Casco Viejo' : ''}">${esc(item.body || '')}</textarea></label>
+      <label>${isAgenda ? 'Eventos del bloque' : 'Texto'}<textarea data-lib-field="body" placeholder="${isAgenda ? '21:00 | Concierto | Plaza Nueva\\n22:30 | DJ set | Casco Viejo' : (isMeteo ? 'Evita actividad física en las horas centrales y bebe agua con frecuencia.' : '')}">${esc(item.body || '')}</textarea></label>
       <label>¿Cuándo sale?
         <select data-lib-mode>
           <option value="always" ${!sched ? 'selected' : ''}>Siempre (en el carrusel con las demás)</option>
@@ -1586,15 +1589,15 @@ function libraryItemHtml(meta, item, i) {
       <div class="lib-sched" ${sched ? '' : 'hidden'}>
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin:6px 0 8px">
           <button type="button" class="ghost" data-quick-time="now">Sale desde ahora</button>
-          <button type="button" class="ghost" data-quick-time="tonight">Quitar a las 22:00</button>
-          <button type="button" class="ghost" data-quick-time="tomorrow1320">Mañana 13:20</button>
-          <button type="button" class="ghost" data-quick-time="tomorrow1342">Mañana 13:42</button>
+          ${isAgenda
+            ? '<button type="button" class="ghost" data-quick-time="tonight">Quitar a las 22:00</button><button type="button" class="ghost" data-quick-time="tomorrow1320">Mañana 13:20</button><button type="button" class="ghost" data-quick-time="tomorrow1342">Mañana 13:42</button>'
+            : '<button type="button" class="ghost" data-quick-time="midnight">Hasta las 23:59</button><button type="button" class="ghost" data-quick-time="tomorrow">Mañana todo el día</button><button type="button" class="ghost" data-quick-time="48h">Próximas 48 h</button>'}
         </div>
         <div class="mini">
           <label>Empieza a salir<input type="datetime-local" data-lib-field="startAt" value="${esc(item.startAt || '')}"></label>
           <label>Deja de salir<input type="datetime-local" data-lib-field="endAt" value="${esc(item.endAt || '')}"></label>
         </div>
-        <div class="hint">${isAgenda ? 'Este bloque sale solo dentro de esta ventana. Si añades otro después, evita solaparlos.' : 'Para agenda: pon “deja de salir” cuando el evento ya no tenga sentido. Puedes dejar preparado mañana desde ahora.'}</div>
+        <div class="hint">${isAgenda ? 'Este bloque sale solo dentro de esta ventana. Si añades otro después, evita solaparlos.' : 'Cuando termine la ventana, la pieza desaparece sola del carrusel activo.'}</div>
         <div class="mini">
           <label>Desde<input type="date" data-lib-field="start" value="${esc(item.start || '')}"></label>
           <label>Hasta<input type="date" data-lib-field="end" value="${esc(item.end || '')}"></label>
@@ -2283,6 +2286,18 @@ $('#libraryList').addEventListener('click', (e) => {
     const end = wrap.querySelector('[data-lib-field="endAt"]');
     if (quick.dataset.quickTime === 'now' && start) start.value = nowLocal;
     if (quick.dataset.quickTime === 'tonight' && end) end.value = dtLocal(active, '22:00');
+    if (quick.dataset.quickTime === 'midnight' && end) end.value = dtLocal(active, '23:59');
+    if (quick.dataset.quickTime === 'tomorrow') {
+      if (start) start.value = dtLocal(tomorrow, '00:00');
+      if (end) end.value = dtLocal(tomorrow, '23:59');
+    }
+    if (quick.dataset.quickTime === '48h') {
+      if (start) start.value = nowLocal;
+      if (end) {
+        const in48 = new Date(now.getTime() + 48 * 3600000);
+        end.value = `${in48.getFullYear()}-${String(in48.getMonth() + 1).padStart(2, '0')}-${String(in48.getDate()).padStart(2, '0')}T${String(in48.getHours()).padStart(2, '0')}:${String(in48.getMinutes()).padStart(2, '0')}`;
+      }
+    }
     if (quick.dataset.quickTime === 'tomorrow1320') {
       if (start) start.value = dtLocal(tomorrow, '13:20');
       if (end && !end.value) end.value = dtLocal(tomorrow, '13:42');

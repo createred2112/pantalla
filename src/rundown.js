@@ -36,6 +36,10 @@ const DEFAULT_LIBRARY = {
   agendaEventos: [
     { title: 'Agenda', subtitle: 'Hoy', body: '19:30 | Actividad pendiente | Lugar\n20:00 | Añade eventos | Vitoria-Gasteiz', template: 'agenda', theme: 'blanco' },
   ],
+  avisosMeteorologicos: [],
+  consejosMeteorologicos: [
+    { title: 'Cuida la hidratación', subtitle: 'Consejo por calor', body: 'Bebe agua aunque no tengas sed y evita el sol en las horas centrales.', template: 'meteoaviso', theme: 'naranja', enabled: false },
+  ],
 };
 
 const LIBRARY_KEYS = [
@@ -46,6 +50,8 @@ const LIBRARY_KEYS = [
   { key: 'consejosInformaticos', label: 'Consejos informáticos', template: 'noticia', theme: 'azul' },
   { key: 'comentariosSemana', label: 'Comentarios de la semana', template: 'cita', theme: 'carbon' },
   { key: 'agendaEventos', label: 'Agenda viva', template: 'agenda', theme: 'blanco' },
+  { key: 'avisosMeteorologicos', label: 'Avisos meteorológicos', template: 'meteoaviso', theme: 'naranja' },
+  { key: 'consejosMeteorologicos', label: 'Consejos meteorológicos', template: 'meteoaviso', theme: 'naranja' },
 ];
 
 const DEFAULT_RUNDOWN = {

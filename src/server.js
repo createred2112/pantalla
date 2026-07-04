@@ -355,6 +355,7 @@ const SAMPLE_DATA = {
   noticia: { title: 'El tranvía llega al centro', subtitle: 'Movilidad', body: 'La nueva línea conecta el centro con los barrios del sur.', date: '24 jun' },
   dato: { title: '1.240', subtitle: 'Personas en las piscinas', body: 'Actualizado cada 15 min', date: '13:00' },
   alerta: { title: 'Corte de tráfico en la Avenida', subtitle: 'Tráfico', body: 'Desvíos por la calle Dato', date: 'Hoy' },
+  meteoaviso: { title: 'Alerta naranja', subtitle: 'Temperaturas extremas', body: 'Evita actividad física en las horas centrales y bebe agua con frecuencia.', date: 'Mañana · AEMET' },
   evento: { title: 'Kaldearte: Ballet Aéreo', subtitle: 'Espectáculo', body: 'Plaza de la Virgen Blanca', date: 'Sáb 28 · 21:30' },
   cita: { title: 'Volar sobre la ciudad cambia tu mirada', subtitle: 'Iñigo Naya' },
   clima: { title: '24º', subtitle: 'Soleado', body: '', date: 'AHORA', data: { max: 28, min: 14 } },
