@@ -963,7 +963,7 @@ let RD_PLAN_DAYS = 7;      // días que enseña el planificador (lo fija el asis
 
 // Catálogo del asistente "Planificar días": tipos de cartela predeterminados.
 const PLAN_TYPES = [
-  { id: 'tiempo', label: 'Tiempo ahora · automático', def: true, slot: { source: 'worker', workerKey: 'weather', template: 'clima', label: 'Tiempo ahora' } },
+  { id: 'tiempo', label: 'Tiempo ahora · automático', def: true, slot: { source: 'worker', workerKey: 'weather', template: 'clima', label: 'Tiempo ahora', rotation: 'hora' } },
   { id: 'prevision', label: 'Previsión 3 días · automático', def: true, slot: { source: 'worker', workerKey: 'forecast', template: 'prevision', label: 'Previsión' } },
   { id: 'agenda', label: 'Agenda viva · programable', def: true, duration: 10, slot: { source: 'library', libraryKey: 'agendaEventos', label: 'Agenda' } },
   { id: 'curioso', label: 'Dato curioso · carrusel', def: true, slot: { source: 'library', libraryKey: 'datosCuriosos', label: 'Dato curioso' } },
@@ -988,7 +988,7 @@ function setRundownTab(tab) {
 }
 
 async function openRundown() {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDatePart();
   RUNDOWN = await api('/rundown?date=' + encodeURIComponent($('#rundownDate').value || today));
   RUNDOWN_SELECTED = -1; // nada seleccionado: solo el storyboard
   LIB_OPEN = -1;
@@ -1009,9 +1009,9 @@ function renderRundown() {
   const slots = rd.slots || [];
   if (RUNDOWN_SELECTED >= slots.length) RUNDOWN_SELECTED = -1;
   $('#rundownTitle').value = rd.title || 'Escaleta';
-  $('#rundownDate').value = RUNDOWN.activeDate || new Date().toISOString().slice(0, 10);
+  $('#rundownDate').value = RUNDOWN.activeDate || localDatePart();
   const rep = RUNDOWN.report || [];
-  const emits = (s, i) => s.enabled !== false && !(rep[i] && rep[i].skippedToday);
+  const emits = (s, i) => s.enabled !== false && !(rep[i] && (rep[i].skippedToday || rep[i].autoSkipped));
   const active = slots.filter(emits).length;
   const missing = rep.filter((r) => r.missing).length;
   const secs = slots.reduce((n, s, i) => n + (emits(s, i) ? (Number(s.duration) || 8) : 0), 0);
@@ -1041,16 +1041,18 @@ function sbCardHtml(s, i) {
   const srcTitle = s.source === 'library' ? `Carrusel de «${libLabel(s.libraryKey)}»: cambia cada ${s.rotation === 'hora' ? 'hora' : 'día'}`
     : (s.source === 'worker' ? 'Automático: se rellena solo con datos reales' : 'Escrito por ti');
   const say = rep.skippedToday ? 'no se emite este día'
-    : (rep.missing ? (rep.note || 'sin contenido todavía') : (rep.title || s.title || '—'));
+    : (rep.autoSkipped ? 'sin agenda activa ahora'
+    : (rep.missing ? (rep.note || 'sin contenido todavía') : (rep.title || s.title || '—')));
+  const closed = s.enabled === false || rep.skippedToday || rep.autoSkipped;
   const sel = i === RUNDOWN_SELECTED;
-  return `<button type="button" class="sb-card ${sel ? 'sel' : ''} ${s.enabled === false || rep.skippedToday ? 'off' : ''} ${rep.missing ? 'missing' : ''}" data-slot-open="${i}" title="${esc(srcTitle)}">
+  return `<button type="button" class="sb-card ${sel ? 'sel' : ''} ${closed ? 'off' : ''} ${rep.missing ? 'missing' : ''}" data-slot-open="${i}" title="${esc(srcTitle)}">
     <div class="sb-thumb">${srcIco}
       <img src="/media/output/rd_${encodeURIComponent(s.id)}.jpg?v=${RD_STAMP}" alt="" loading="lazy" onerror="this.remove()">
       <span class="sb-num">${String(i + 1).padStart(2, '0')}</span>
       <span class="sb-dur">${Number(s.duration) || 8}s${s.video ? ' ▶' : ''}</span>
     </div>
     <div class="sb-meta">
-      <div class="sb-name">${srcIco} ${esc(s.label)}${s.enabled === false ? ' · APAGADO' : (rep.skippedToday ? ' · HOY NO' : '')}</div>
+      <div class="sb-name">${srcIco} ${esc(s.label)}${s.enabled === false ? ' · APAGADO' : (rep.skippedToday ? ' · HOY NO' : (rep.autoSkipped ? ' · SIN AGENDA' : ''))}</div>
       <div class="sb-say ${rep.missing ? 'warn' : ''}">${rep.missing ? '⚠ ' : ''}${esc(say)}</div>
     </div>
   </button>`;
@@ -1116,7 +1118,7 @@ function slotEditHtml(s, i) {
           </div>`;
         })()
         : (isWorker
-          ? `<div class="slot-wide hint" style="align-self:center">Contenido automático: se actualiza cada 30 minutos y antes de cada publicación.</div>`
+          ? `<div class="slot-wide hint" style="align-self:center">${s.workerKey === 'weather' ? 'Contenido automático: se refresca cada hora y antes de publicar si toca.' : 'Contenido automático: se refresca cuando caduca el dato y antes de publicar.'}</div>`
           : `<label>Título<input data-rd-current="title" value="${esc(s.title || '')}"></label>
       <label>Subtítulo<input data-rd-current="subtitle" value="${esc(s.subtitle || '')}"></label>
       <label class="slot-wide">Texto<textarea data-rd-current="body">${esc(s.body || '')}</textarea></label>`)}
@@ -1126,9 +1128,11 @@ function slotEditHtml(s, i) {
       <label class="slot-wide" style="color:#ffd98a"><input type="checkbox" data-rd-skipday ${((((RUNDOWN.rundown || {}).days || {})[RUNDOWN.activeDate] || {}).skip || []).includes(s.id) ? 'checked' : ''} style="width:auto;margin-right:8px">
         No emitir SOLO el ${esc(RUNDOWN.activeDate || 'día elegido')} (el resto de días sale con normalidad)</label>
     </div>
-    <div class="status">${rep.missing
+    <div class="status">${rep.autoSkipped
+      ? 'Este bloque no se emitirá ahora: no hay una agenda activa en esta ventana.'
+      : (rep.missing
       ? '⚠ ' + esc(rep.note || 'Pendiente de contenido')
-      : `Programado para el ${esc(RUNDOWN.activeDate || 'día elegido')}: <b>${esc(rep.title || s.title || s.label)}</b>`}</div>
+      : `Programado para el ${esc(RUNDOWN.activeDate || 'día elegido')}: <b>${esc(rep.title || s.title || s.label)}</b>`)}</div>
     <div class="slot-tools">
       <button class="ghost" data-rd-move="-1" ${i === 0 ? 'disabled' : ''}>← Emitir antes</button>
       <button class="ghost" data-rd-move="1" ${i === slots.length - 1 ? 'disabled' : ''}>Emitir después →</button>
@@ -1148,7 +1152,7 @@ function blankLibraryItem(meta) {
 
 function blankAgendaLibraryItem() {
   const meta = (RUNDOWN.libraryKeys || []).find((k) => k.key === 'agendaEventos') || { template: 'agenda', theme: 'blanco' };
-  const active = RUNDOWN.activeDate || new Date().toISOString().slice(0, 10);
+  const active = RUNDOWN.activeDate || localDatePart();
   const blocks = ((RUNDOWN.library || {}).agendaEventos || [])
     .map((item, idx) => agendaRangeForDay(item, active, idx))
     .filter(Boolean)
@@ -1191,12 +1195,12 @@ function clientDayNumber(date) {
 
 function clientItemApplies(item, date) {
   if (item.enabled === false) return false;
-  const d = date || new Date().toISOString().slice(0, 10);
+  const d = date || localDatePart();
   const dates = Array.isArray(item.dates) ? item.dates : [];
   const weekdays = Array.isArray(item.weekdays) ? item.weekdays.map(Number) : [];
   if (dates.length && !dates.includes(d)) return false;
   const now = new Date();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDatePart();
   const dayStart = new Date(`${d}T00:00:00`);
   const dayEnd = new Date(`${d}T23:59:59`);
   if (item.startAt) {
@@ -1253,7 +1257,7 @@ function scheduleSummary(item) {
 function addDays(dateStr, n) {
   const dt = new Date(dateStr + 'T12:00:00');
   dt.setDate(dt.getDate() + n);
-  return dt.toISOString().slice(0, 10);
+  return localDatePart(dt);
 }
 
 function dtLocal(date, time) {
@@ -1310,7 +1314,7 @@ function agendaRangeForDay(item, date, idx) {
 }
 
 function agendaDatesFrom(startDate) {
-  const start = startDate || new Date().toISOString().slice(0, 10);
+  const start = startDate || localDatePart();
   const nDays = Math.max(1, Math.min(14, RD_PLAN_DAYS || 7));
   return Array.from({ length: nDays }, (_, i) => addDays(start, i));
 }
@@ -1356,7 +1360,7 @@ function renderPlanner() {
   if (!box || !RUNDOWN) return;
   const slots = ((RUNDOWN.rundown || {}).slots || []).filter((s) => s.enabled !== false && s.source === 'library');
   if (!slots.length) { box.innerHTML = ''; return; }
-  const start = RUNDOWN.activeDate || new Date().toISOString().slice(0, 10);
+  const start = RUNDOWN.activeDate || localDatePart();
   const lib = RUNDOWN.library || {};
   const nDays = Math.max(1, Math.min(14, RD_PLAN_DAYS));
   let html = `<label style="margin-top:12px">Qué saldrá los próximos ${nDays} día(s)</label><div class="planner">`;
@@ -1452,7 +1456,7 @@ function renderLibraryPanel() {
   const meta = currentLibraryMeta();
   const isAgenda = meta.key === 'agendaEventos';
   const items = (RUNDOWN.library && Array.isArray(RUNDOWN.library[meta.key])) ? RUNDOWN.library[meta.key] : [];
-  const activeDate = RUNDOWN.activeDate || new Date().toISOString().slice(0, 10);
+  const activeDate = RUNDOWN.activeDate || localDatePart();
   const eligible = items.filter((item) => clientItemApplies(item, activeDate)).length;
   const viewItems = isAgenda ? agendaViewItems(items, activeDate) : items.map((item, i) => ({ item, i }));
   const libTitle = document.querySelector('#rdTabLib .library-head h3');
@@ -1556,7 +1560,7 @@ function collectRundown() {
     // Salto SOLO para el día visible (no toca el estado global del bloque).
     const sd = wrap.querySelector('[data-rd-skipday]');
     if (sd) {
-      const d = RUNDOWN.activeDate || new Date().toISOString().slice(0, 10);
+      const d = RUNDOWN.activeDate || localDatePart();
       if (!rd.days || typeof rd.days !== 'object') rd.days = {};
       const rec = rd.days[d] && typeof rd.days[d] === 'object' ? rd.days[d] : { skip: [] };
       rec.skip = Array.isArray(rec.skip) ? rec.skip.filter((x) => x !== slot.id) : [];
@@ -1630,7 +1634,7 @@ function parseBulkItems(text, meta) {
 
 // Guarda TODO de una vez: secuencia + contenido programado.
 async function saveAllRundown(opts = {}) {
-  const date = $('#rundownDate').value || new Date().toISOString().slice(0, 10);
+  const date = $('#rundownDate').value || localDatePart();
   collectRundown();
   collectLibraryCategory();
   sortAgendaLibraryForSave(date);
@@ -1642,7 +1646,7 @@ async function saveAllRundown(opts = {}) {
   // plantilla/contenido se reflejen: la cartela afectada queda marcada como
   // "cambios sin aplicar" (⟳) en el panel. Si se está planificando otro día,
   // NO se tocan las cartelas en emisión (para eso está "Aplicar escaleta").
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDatePart();
   if (opts.materialize !== false && date === today) {
     await api('/rundown/materialize', { method: 'POST', body: JSON.stringify({ date }) });
     load();
@@ -1657,7 +1661,7 @@ async function makeRundown() {
   btn.disabled = true;
   try {
     await saveAllRundown({ silent: true, materialize: false });
-    const date = $('#rundownDate').value || new Date().toISOString().slice(0, 10);
+    const date = $('#rundownDate').value || localDatePart();
     const r = await api('/rundown/materialize', { method: 'POST', body: JSON.stringify({ date }) });
     toast(`Escaleta aplicada: ${r.count} cartela(s). Revisa y pulsa Publicar.`);
     rundownDlg.close();
@@ -2011,7 +2015,7 @@ $('#btnWorkersRefresh').addEventListener('click', async (e) => {
   try {
     await api('/workers/refresh', { method: 'POST' });
     // Recarga la escaleta para ver los datos reales en los bloques.
-    const date = $('#rundownDate').value || new Date().toISOString().slice(0, 10);
+    const date = $('#rundownDate').value || localDatePart();
     if (RD_DIRTY) collectRundown(), collectLibraryCategory();
     const fresh = await api('/rundown?date=' + encodeURIComponent(date));
     if (!RD_DIRTY) { RUNDOWN = fresh; } else { RUNDOWN.report = fresh.report; RUNDOWN.dayTheme = fresh.dayTheme; }
@@ -2191,7 +2195,7 @@ $('#libraryList').addEventListener('click', (e) => {
   const quick = e.target.closest('[data-quick-time]');
   if (quick) {
     const wrap = quick.closest('.lib-edit');
-    const active = RUNDOWN.activeDate || new Date().toISOString().slice(0, 10);
+    const active = RUNDOWN.activeDate || localDatePart();
     const tomorrow = addDays(active, 1);
     const now = new Date();
     const nowLocal = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}T${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;

@@ -95,7 +95,9 @@ async function run(day, c, opts = {}) {
   const mode = opts.scheduled ? 'Pase diario' : (opts.sync ? 'Sincronización viva' : (opts.hourly ? 'Pase horario' : 'Preparación manual'));
   log.info('autopilot', `${mode}: escaleta del ${day}${publishNow ? ' + FTP' : ' (sin publicar: revisar antes)'}`);
   // Datos frescos de los workers ANTES de materializar (tiempo, luz...).
-  try { await require('./workers').refreshAll(); } catch {}
+  try {
+    await require('./workers').refreshAll(opts.hourly ? { forceKeys: ['weather'] } : {});
+  } catch {}
   const r = require('./rundown').materialize({ date: day });
   const sig = sequenceSignature();
   if (opts.skipIfUnchanged) {
@@ -180,7 +182,9 @@ async function tick() {
   // se regenera y publica al cambiar la hora (el caché evita trabajo de más).
   try {
     const rd = require('./rundown').read({ date: day });
-    const hasHourly = (rd.rundown.slots || []).some((s) => s.enabled !== false && s.rotation === 'hora');
+    const hasHourly = (rd.rundown.slots || []).some((s) =>
+      s.enabled !== false && (s.rotation === 'hora' || (s.source === 'worker' && s.workerKey === 'weather'))
+    );
     if (!hasHourly) return;
     const hourKey = `${day}T${String(now.getHours()).padStart(2, '0')}`;
     const st = status.read().stages || {};

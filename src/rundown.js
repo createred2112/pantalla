@@ -100,7 +100,8 @@ function writeJson(file, data) {
 }
 
 function todayKey() {
-  return new Date().toISOString().slice(0, 10);
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 function normalizeLibraryItem(item, defaults) {
@@ -169,7 +170,9 @@ function normalizeLibrary(library) {
   const src = library && typeof library === 'object' ? library : {};
   const next = { days: src.days && typeof src.days === 'object' ? src.days : {} };
   for (const meta of LIBRARY_KEYS) {
-    const base = Array.isArray(src[meta.key]) ? src[meta.key] : DEFAULT_LIBRARY[meta.key];
+    const base = Array.isArray(src[meta.key])
+      ? src[meta.key]
+      : (meta.key === 'agendaEventos' ? [] : DEFAULT_LIBRARY[meta.key]);
     next[meta.key] = (base || []).map((item) => normalizeLibraryItem(item, meta)).filter((item) => item.title || item.body);
   }
   for (const [date, pack] of Object.entries(next.days)) {
@@ -387,13 +390,24 @@ function toCard(slot, library, order, date) {
   });
 }
 
+function shouldMaterialize(slot, library, date) {
+  const s = normalizeSlot(slot);
+  if (s.enabled === false) return false;
+  if (s.source === 'library' && s.libraryKey === 'agendaEventos') {
+    const p = slotPayload(s, library, date);
+    return Boolean(!p.missing && (p.title || p.body));
+  }
+  return true;
+}
+
 function report(rundown, library, date) {
   const skip = skipSetFor(rundown, date);
   return (rundown.slots || []).map((slot, i) => {
     const s = normalizeSlot(slot);
     const p = slotPayload(s, library, date);
     const skippedToday = skip.has(s.id);
-    const missing = s.enabled && !skippedToday && (p.missing || !p.title);
+    const autoSkipped = s.source === 'library' && s.libraryKey === 'agendaEventos' && (p.missing || (!p.title && !p.body));
+    const missing = s.enabled && !skippedToday && !autoSkipped && (p.missing || !p.title);
     return {
       id: s.id,
       order: i + 1,
@@ -406,8 +420,9 @@ function report(rundown, library, date) {
       title: p.title || '',
       subtitle: p.subtitle || '',
       missing: Boolean(missing),
+      autoSkipped,
       skippedToday,
-      note: missing ? (s.source === 'worker' ? `Pendiente worker: ${s.workerKey}` : 'Pendiente de contenido') : '',
+      note: autoSkipped ? 'Sin agenda activa para este momento' : (missing ? (s.source === 'worker' ? `Pendiente worker: ${s.workerKey}` : 'Pendiente de contenido') : ''),
     };
   });
 }
@@ -415,7 +430,7 @@ function report(rundown, library, date) {
 function materialize(options = {}) {
   const { rundown, library, activeDate, report: rep } = read(options);
   const skip = skipSetFor(rundown, activeDate);
-  const active = (rundown.slots || []).filter((s) => s.enabled !== false && !skip.has(String(s.id)));
+  const active = (rundown.slots || []).filter((s) => !skip.has(String(s.id)) && shouldMaterialize(s, library, activeDate));
   const generated = active.map((slot, i) => toCard(slot, library, i + 1, activeDate));
   const manual = store.list()
     .filter((card) => card.source !== 'rundown')

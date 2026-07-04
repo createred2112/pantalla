@@ -21,6 +21,12 @@ async function publish({ dryRun, skipImport } = {}) {
   log.info('publish', '=== Inicio de publicación ===');
   const steps = {};
   if (!skipImport) steps.import = importWorker();
+  try {
+    await require('../workers').refreshAll();
+  } catch (e) {
+    log.warn('publish', `No se pudieron refrescar datos automáticos: ${e.message}`);
+  }
+  steps.rundown = require('../rundown').materialize();
   steps.generate = await generate();
   if (steps.generate.ok === false) {
     return stop(steps, 'generate', 'falló generate');

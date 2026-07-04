@@ -164,7 +164,7 @@ async function fuel() {
 const PROVIDERS = {
   // ttlMs: cada cuánto merece la pena re-consultar la fuente.
   // maxAgeMs: cuándo un dato guardado deja de valer para publicarse.
-  weather: { label: 'El tiempo (Open-Meteo)', fn: weather, ttlMs: 25 * 60000, maxAgeMs: 3 * 3600000 },
+  weather: { label: 'El tiempo (Open-Meteo)', fn: weather, ttlMs: 55 * 60000, maxAgeMs: 3 * 3600000 },
   forecast: { label: 'Previsión 3 días (Open-Meteo)', fn: forecast, ttlMs: 3 * 3600000, maxAgeMs: 12 * 3600000 },
   airQuality: { label: 'Calidad del aire (Open-Meteo)', fn: airQuality, ttlMs: 60 * 60000, maxAgeMs: 4 * 3600000 },
   powerPrice: { label: 'Precio de la luz (REE)', fn: powerPrice, ttlMs: 25 * 60000, maxAgeMs: 3 * 3600000 },
@@ -198,12 +198,15 @@ function get(key) {
 async function refreshAll(opts = {}) {
   const all = loadAll();
   const results = {};
+  const only = new Set([...(opts.keys || []), ...(opts.forceKeys || [])].filter(Boolean));
+  const forced = new Set([...(opts.forceKeys || [])].filter(Boolean));
   let fetched = 0;
   for (const [key, p] of Object.entries(PROVIDERS)) {
+    if (only.size && !only.has(key)) continue;
     if (p.manual) { results[key] = { ok: true, manual: true }; continue; }
     const rec = all[key];
     const age = rec && rec.at ? Date.now() - Date.parse(rec.at) : Infinity;
-    if (!opts.force && age < (p.ttlMs || 30 * 60000)) {
+    if (!opts.force && !forced.has(key) && age < (p.ttlMs || 30 * 60000)) {
       results[key] = { ok: true, skipped: true };
       continue;
     }
