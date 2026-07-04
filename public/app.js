@@ -1007,6 +1007,7 @@ function auditTypeLabel(type) {
     'publish.upload': 'FTP',
     'publish.finish': 'Final',
     'publish.stop': 'Detenido',
+    'pipeline.busy': 'Ocupado',
   };
   return map[type] || type || 'Registro';
 }
@@ -2735,12 +2736,20 @@ async function loadStatus(full) {
     APP_STATUS = st;
     renderTodayPanel();
     const last = st.lastPublish ? new Date(st.lastPublish).toLocaleString('es-ES') : 'nunca';
+    const op = s.operation || null;
+    const opText = op
+      ? ` · <b style="color:#ffd98a">Trabajando ahora:</b> ${esc(op.owner || 'emisión')} desde ${esc(new Date(op.startedAt).toLocaleTimeString('es-ES'))}`
+      : '';
     $('#statusLine').innerHTML =
-      `Pantalla ${s.screen.width}×${s.screen.height} · FTP ${s.ftpConfigured ? '<b>configurado</b>' : '<b style="color:#e0a106">sin configurar</b>'} · Última publicación real: <b>${last}</b>` +
+      `Pantalla ${s.screen.width}×${s.screen.height} · FTP ${s.ftpConfigured ? '<b>configurado</b>' : '<b style="color:#e0a106">sin configurar</b>'} · Última publicación real: <b>${last}</b>${opText}` +
       uploadResultHtml(latestUpload(), true);
     if (full) {
-      $('#statusBox').innerHTML = Object.entries(st.stages || {}).map(([k, v]) =>
+      const busyHtml = op
+        ? `<div>⏳ <b>Operación en curso</b> · ${esc(op.owner || 'emisión')} · empezó ${esc(new Date(op.startedAt).toLocaleString('es-ES'))}</div>`
+        : '<div>✅ <b>Sin operación en curso</b> · se puede preparar o subir</div>';
+      const stageHtml = Object.entries(st.stages || {}).map(([k, v]) =>
         `<div>${v.ok ? '✅' : '❌'} <b>${k}</b> · ${new Date(v.ts).toLocaleTimeString('es-ES')}${v.error ? ' · ' + esc(v.error) : ''}</div>`).join('') || 'Sin actividad aún.';
+      $('#statusBox').innerHTML = busyHtml + stageHtml;
       const audit = await api('/audit?n=160');
       $('#auditBox').innerHTML = renderAudit(audit);
       const logs = await api('/log?n=120');

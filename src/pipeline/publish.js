@@ -7,6 +7,7 @@ const { upload } = require('./upload');
 const log = require('../util/logger');
 const status = require('../util/status');
 const audit = require('../util/auditLog');
+const pipelineLock = require('../util/pipelineLock');
 
 function stop(steps, stage, error, uploadSource, runId) {
   log.warn('publish', `Publicación detenida: ${error}`);
@@ -19,7 +20,7 @@ function stop(steps, stage, error, uploadSource, runId) {
   return { ok: false, steps };
 }
 
-async function publish({ dryRun, skipImport, uploadSource = 'manual', runId } = {}) {
+async function publishLocked({ dryRun, skipImport, uploadSource = 'manual', runId } = {}) {
   runId = runId || audit.runId(uploadSource);
   log.info('publish', '=== Inicio de publicación ===');
   audit.event('publish.start', dryRun ? 'Comprobacion de publicacion iniciada' : 'Publicacion iniciada', {
@@ -70,6 +71,12 @@ async function publish({ dryRun, skipImport, uploadSource = 'manual', runId } = 
   });
   log.info('publish', `=== Fin de publicación (ok=${ok}) ===`);
   return { ok, steps, runId };
+}
+
+async function publish(opts = {}) {
+  if (opts.lock === false) return publishLocked(opts);
+  const owner = opts.dryRun ? 'Comprobacion de subida' : 'Publicacion a pantalla';
+  return pipelineLock.withLock(owner, () => publishLocked(opts));
 }
 
 module.exports = { publish };

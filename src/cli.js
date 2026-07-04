@@ -7,6 +7,7 @@ const { sequence } = require('./pipeline/sequence');
 const { upload } = require('./pipeline/upload');
 const { importWorker } = require('./pipeline/importWorker');
 const { publish } = require('./pipeline/publish');
+const pipelineLock = require('./util/pipelineLock');
 const store = require('./store');
 const auth = require('./auth');
 
@@ -37,9 +38,9 @@ async function main() {
       console.log(list.length ? list.map((a) => `· ${a.user}  (${a.createdAt})`).join('\n') : 'Sin administradores.');
       return { ok: true };
     }
-    case 'generate': return generate();
-    case 'sequence': return sequence({ dryRun });
-    case 'upload': return upload({ dryRun });
+    case 'generate': return pipelineLock.withLock('CLI generate', () => generate());
+    case 'sequence': return pipelineLock.withLock('CLI sequence', () => sequence({ dryRun }));
+    case 'upload': return pipelineLock.withLock('CLI upload', () => upload({ dryRun }));
     case 'import': return importWorker();
     case 'publish': return publish({ dryRun });
     case 'demo': {

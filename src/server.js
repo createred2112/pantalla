@@ -10,6 +10,7 @@ const store = require('./store');
 const log = require('./util/logger');
 const status = require('./util/status');
 const auditLog = require('./util/auditLog');
+const pipelineLock = require('./util/pipelineLock');
 const { renderToBuffer } = require('./generator/renderCard');
 const { publish } = require('./pipeline/publish');
 const { importWorker } = require('./pipeline/importWorker');
@@ -532,7 +533,7 @@ app.post('/api/preview', async (req, res) => {
     }
     res.type(ext === 'png' ? 'image/png' : 'image/jpeg').send(buffer);
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(e.status || 500).json({ error: e.message, code: e.code, busy: e.code === 'PIPELINE_BUSY', lock: e.info || null });
   }
 });
 
@@ -636,8 +637,12 @@ app.post('/api/review', async (req, res) => {
 app.post('/api/publish', async (req, res) => {
   const dryRun = req.body && req.body.dryRun;
   const importWorker = req.body && req.body.importWorker === true;
-  const result = await publish({ dryRun, skipImport: !importWorker, uploadSource: dryRun ? 'manual-check' : 'manual' });
-  res.json(result);
+  try {
+    const result = await publish({ dryRun, skipImport: !importWorker, uploadSource: dryRun ? 'manual-check' : 'manual' });
+    res.json(result);
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message, code: e.code, busy: e.code === 'PIPELINE_BUSY', lock: e.info || null });
+  }
 });
 
 app.post('/api/ftp-test', async (req, res) => {
@@ -661,6 +666,7 @@ app.get('/api/autopilot', (req, res) => {
     upload: st.upload || null,
     generate: st.generate || null,
     sequence: st.sequence || null,
+    busy: pipelineLock.current(),
     preflight: autopilot.preflight(),
     workers: workers.state(),
     rundown: { activeDate: rd.activeDate, report: rd.report },
@@ -711,6 +717,7 @@ app.get('/api/status', (req, res) => {
       heapUsedMb: Math.round(mem.heapUsed / 1024 / 1024),
       externalMb: Math.round(mem.external / 1024 / 1024),
     },
+    operation: pipelineLock.current(),
   });
 });
 

@@ -7,6 +7,7 @@ const { cfg, saveConfig, ftpConfig, abs } = require('./config');
 const log = require('./util/logger');
 const status = require('./util/status');
 const audit = require('./util/auditLog');
+const pipelineLock = require('./util/pipelineLock');
 const store = require('./store');
 const renderMeta = require('./util/renderMeta');
 
@@ -98,7 +99,7 @@ function preflight() {
   };
 }
 
-async function run(day, c, opts = {}) {
+async function runLocked(day, c, opts = {}) {
   const publishNow = opts.publish === true;
   const mode = opts.scheduled ? 'Pase diario' : (opts.sync ? 'Sincronización viva' : (opts.hourly ? 'Pase horario' : 'Preparación manual'));
   const uploadSource = opts.manual ? 'manual-pilot' : (opts.scheduled ? 'automatic-daily' : (opts.hourly ? 'automatic-hourly' : (opts.sync ? 'automatic-watch' : 'manual-pilot')));
@@ -138,7 +139,7 @@ async function run(day, c, opts = {}) {
   }
   let pub = null;
   if (publishNow) {
-    pub = await require('./pipeline/publish').publish({ dryRun: false, skipImport: false, uploadSource, runId });
+    pub = await require('./pipeline/publish').publish({ dryRun: false, skipImport: false, uploadSource, runId, lock: false });
   } else {
     // Solo renderiza (con caché): deja las cartelas listas para REVISAR.
     try {
@@ -170,6 +171,27 @@ async function run(day, c, opts = {}) {
     prepared: !publishNow, signature: sig,
   });
   return { ok, day, cards: r.count, published: Boolean(pub && pub.ok), prepared: !publishNow, signature: sig, runId };
+}
+
+async function run(day, c, opts = {}) {
+  const publishNow = opts.publish === true;
+  const mode = opts.scheduled ? 'Pase diario' : (opts.sync ? 'Sincronización viva' : (opts.hourly ? 'Pase horario' : 'Preparación manual'));
+  const runId = opts.runId || audit.runId(opts.manual ? 'manual-pilot' : (opts.scheduled ? 'automatic-daily' : (opts.hourly ? 'automatic-hourly' : (opts.sync ? 'automatic-watch' : 'manual-pilot'))));
+  const owner = `${mode}${publishNow ? ' + FTP' : ' + preparar'}`;
+  try {
+    return await pipelineLock.withLock(owner, () => runLocked(day, c, { ...opts, runId }));
+  } catch (e) {
+    if (e && e.code === 'PIPELINE_BUSY') {
+      audit.event('pipeline.busy', `${mode}: no se inicia porque ya hay otra operacion en marcha`, {
+        runId, ok: false, busy: true, owner: e.info && e.info.owner, startedAt: e.info && e.info.startedAt,
+      });
+      status.set('pipeline-lock', { ok: false, busy: true, owner: e.info && e.info.owner, startedAt: e.info && e.info.startedAt, error: e.message });
+      if (opts.manual) throw e;
+      log.warn('autopilot', `${mode}: ocupado por ${e.info && e.info.owner ? e.info.owner : 'otra operacion'}`);
+      return { ok: false, busy: true, error: e.message, runId };
+    }
+    throw e;
+  }
 }
 
 async function tick() {
