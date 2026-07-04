@@ -314,6 +314,11 @@ function normalizeSlot(slot) {
     subtitle: slot.subtitle || '',
     body: slot.body || '',
     date: slot.date || '',
+    type: slot.type === 'video' || slot.type === 'image' ? slot.type : 'generated',
+    file: slot.file || '',
+    photo: slot.photo || '',
+    videoIntro: slot.videoIntro || '',
+    videoOutro: slot.videoOutro || '',
     duration: Number(slot.duration) || 8,
     video: slot.video === true,
     // Cadencia del carrusel: 'dia' (una pieza por día) u 'hora' (cambia cada hora).
@@ -359,6 +364,18 @@ function libraryPlanForSlot(slot, library, date, pickIndex) {
 
 function slotPayload(slot, library, date, options = {}) {
   const s = normalizeSlot(slot);
+  if (s.source === 'file') {
+    return {
+      title: s.title || s.label,
+      subtitle: s.subtitle || '',
+      body: s.body || '',
+      date: s.date || '',
+      file: s.file || '',
+      template: s.template || 'noticia',
+      theme: s.theme || '',
+      missing: !s.file,
+    };
+  }
   if (s.source === 'library') {
     const item = libraryChoice(libraryItems(library, s.libraryKey, date), s.id, date, s.rotation, options.pickIndex);
     return item ? { ...item } : {
@@ -413,6 +430,23 @@ function toCard(slot, library, order, date, pickMap = {}) {
   // automático. Si quedan vacíos, cada pieza conserva su estilo propio.
   const tplOverride = s.template;
   const themeOverride = s.theme;
+  if (s.source === 'file') {
+    return store.normalize({
+      id: `rd_${s.id}`,
+      order,
+      enabled: s.enabled,
+      type: s.type === 'image' ? 'image' : 'video',
+      file: p.file || s.file || null,
+      title: p.title || s.title || s.label,
+      subtitle: p.subtitle || s.subtitle || '',
+      body: p.body || s.body || '',
+      date: p.date || s.date || '',
+      duration: s.duration || p.duration || 8,
+      source: 'rundown',
+      slug: s.id,
+      rundownSlot: s.id,
+    });
+  }
   return store.normalize({
     id: `rd_${s.id}`,
     order,
@@ -426,8 +460,11 @@ function toCard(slot, library, order, date, pickMap = {}) {
     body: p.body || s.body || '',
     date: p.date || s.date || '',
     data: p.data || null,
+    photo: s.photo || p.photo || null,
     duration: s.duration || p.duration || 8,
     video: s.video === true,
+    videoIntro: s.videoIntro || null,
+    videoOutro: s.videoOutro || null,
     source: 'rundown',
     slug: s.id,
     rundownSlot: s.id,
@@ -468,7 +505,7 @@ function report(rundown, library, date) {
       missing: Boolean(missing),
       autoSkipped,
       skippedToday,
-      note: autoSkipped ? 'Sin agenda activa para este momento' : (missing ? (s.source === 'worker' ? `Pendiente worker: ${s.workerKey}` : 'Pendiente de contenido') : ''),
+      note: autoSkipped ? 'Sin agenda activa para este momento' : (missing ? (s.source === 'worker' ? `Pendiente worker: ${s.workerKey}` : (s.source === 'file' ? 'Falta seleccionar el archivo MP4' : 'Pendiente de contenido')) : ''),
       chosenIndex: plan ? plan.chosenIndex : null,
       choices: plan ? plan.next.slice(0, 8) : [],
     };

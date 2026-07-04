@@ -2,7 +2,8 @@
 // PILOTO DE EMISIÓN: prepara/publica la pantalla con el contrato real
 // (8 MP4 fijos), usando caché y repitiendo solo cuando la escaleta viva cambia.
 const crypto = require('crypto');
-const { cfg, saveConfig, ftpConfig } = require('./config');
+const fs = require('fs');
+const { cfg, saveConfig, ftpConfig, abs } = require('./config');
 const log = require('./util/logger');
 const status = require('./util/status');
 const store = require('./store');
@@ -62,9 +63,15 @@ function requiredCount() {
 function sequenceSignature(cards = store.active()) {
   const required = requiredCount();
   const selected = required ? cards.slice(0, required) : cards;
+  const readyFileSig = (card) => {
+    const file = card.file || '';
+    let mtime = 0;
+    try { if (file) mtime = Math.round(fs.statSync(abs(file)).mtimeMs); } catch {}
+    return `${card.id}:${file}:${mtime}`;
+  };
   const sig = selected.map((c) => c.type === 'generated'
     ? `${c.id}:${renderMeta.renderHash(c)}`
-    : `${c.id}:${c.file || ''}:${c.updatedAt || ''}`
+    : readyFileSig(c)
   ).join('|');
   return crypto.createHash('sha1').update(sig + JSON.stringify({
     fixed: cfg.naming && cfg.naming.fixedFiles,
@@ -96,18 +103,19 @@ async function run(day, c, opts = {}) {
   log.info('autopilot', `${mode}: escaleta del ${day}${publishNow ? ' + FTP' : ' (sin publicar: revisar antes)'}`);
   // Datos frescos de los workers ANTES de materializar (tiempo, luz...).
   try {
-    await require('./workers').refreshAll(opts.hourly ? { forceKeys: ['weather'] } : {});
+    await require('./workers').refreshAll(opts.hourly ? { forceKeys: ['weather', 'airQuality'] } : {});
   } catch {}
   const r = require('./rundown').materialize({ date: day });
   const sig = sequenceSignature();
   if (opts.skipIfUnchanged) {
-    const prevSync = (status.read().stages || {})['autopilot-sync'] || null;
-    if (prevSync && prevSync.signature === sig && prevSync.ok !== false) {
+    const stages = status.read().stages || {};
+    const prevRun = opts.hourly ? (stages['autopilot-hora'] || stages['autopilot-sync'] || null) : (stages['autopilot-sync'] || null);
+    if (prevRun && prevRun.signature === sig && prevRun.ok !== false) {
       log.info('autopilot', `${mode}: sin cambios; no se regenera ni se sube`);
       if (opts.sync) {
         status.set('autopilot-sync', { ok: true, day, cards: r.count, published: false, prepared: !publishNow, mode: publishNow ? 'publish' : 'review', signature: sig, unchanged: true });
       }
-      return { ok: true, day, cards: r.count, unchanged: true, published: false, prepared: !publishNow };
+      return { ok: true, day, cards: r.count, unchanged: true, published: false, prepared: !publishNow, signature: sig };
     }
   }
   let pub = null;
@@ -131,7 +139,7 @@ async function run(day, c, opts = {}) {
   log[ok ? 'info' : 'warn']('autopilot',
     `${mode} ${ok ? 'OK' : 'con fallos'}: ${r.count} cartela(s)` +
     (pub ? (pub.ok ? ' · publicado en pantalla' : ' · FALLO al publicar (mira el log)') : ' · pendiente de revisión y publicación manual'));
-  return { ok, day, cards: r.count, published: Boolean(pub && pub.ok), prepared: !publishNow };
+  return { ok, day, cards: r.count, published: Boolean(pub && pub.ok), prepared: !publishNow, signature: sig };
 }
 
 async function tick() {
@@ -178,12 +186,12 @@ async function tick() {
     }
   }
 
-  // Pase HORARIO: si el guion tiene bloques de carrusel con cadencia horaria,
-  // se regenera y publica al cambiar la hora (el caché evita trabajo de más).
+  // Pase HORARIO: si el guion tiene bloques horarios o datos que deben respirar
+  // cada hora, se prepara al cambiar la hora (el caché evita trabajo de más).
   try {
     const rd = require('./rundown').read({ date: day });
     const hasHourly = (rd.rundown.slots || []).some((s) =>
-      s.enabled !== false && (s.rotation === 'hora' || (s.source === 'worker' && s.workerKey === 'weather'))
+      s.enabled !== false && (s.rotation === 'hora' || (s.source === 'worker' && ['weather', 'airQuality'].includes(s.workerKey)))
     );
     if (!hasHourly) return;
     const hourKey = `${day}T${String(now.getHours()).padStart(2, '0')}`;
@@ -192,8 +200,8 @@ async function tick() {
     if (hs && hs.hourKey === hourKey) return; // esta hora ya está emitida
     _running = true;
     try {
-      const r = await run(day, c, { publish: c.publish !== false, hourly: true });
-      status.set('autopilot-hora', { ok: r.ok, hourKey });
+      const r = await run(day, c, { publish: c.publish !== false, hourly: true, skipIfUnchanged: true });
+      status.set('autopilot-hora', { ok: r.ok, hourKey, signature: r.signature || null, unchanged: r.unchanged === true });
     } finally {
       _running = false;
     }

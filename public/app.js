@@ -21,6 +21,7 @@ let cards = [];
 let TEMPLATES = [];
 let PALETTE = {};
 let SAFETY = {};
+let CONFIG = {};
 let RUNDOWN = null;
 let RUNDOWN_SELECTED = 0;
 let LIBRARY_CATEGORY = 'datosUtiles';
@@ -33,6 +34,7 @@ const tplCache = new Map(); // clave: template|datos -> objectURL
 async function loadConfig() {
   try {
     const cfg = await api('/config');
+    CONFIG = cfg || {};
     TEMPLATES = cfg.templates || [];
     PALETTE = cfg.palette || {};
     SAFETY = cfg.safety || {};
@@ -46,6 +48,11 @@ async function loadConfig() {
       $('#edVideo').checked = false;
     }
   } catch {}
+}
+
+function requiredVideoCount() {
+  const fixed = CONFIG && CONFIG.naming && Array.isArray(CONFIG.naming.fixedFiles) ? CONFIG.naming.fixedFiles.length : 0;
+  return Number((CONFIG.screenProfile && CONFIG.screenProfile.requiredCount) || fixed || 8);
 }
 function renderSwatches() {
   const cont = $('#themeSwatches');
@@ -735,6 +742,10 @@ $('#btnSave').addEventListener('click', async () => {
       ED_SLOT.video = data.video === true;
       ED_SLOT.videoIntro = data.videoIntro || '';
       ED_SLOT.videoOutro = data.videoOutro || '';
+      if (ED_SLOT.source === 'file') {
+        ED_SLOT.type = data.type === 'image' ? 'image' : 'video';
+        ED_SLOT.file = data.file || '';
+      }
       if (ED_SLOT.source !== 'worker') {
         ED_SLOT.title = data.title || '';
         ED_SLOT.subtitle = data.subtitle || '';
@@ -743,9 +754,9 @@ $('#btnSave').addEventListener('click', async () => {
       }
       await api('/rundown', { method: 'PUT', body: JSON.stringify(RUNDOWN.rundown) });
       await api('/rundown/materialize', { method: 'POST', body: '{}' });
-      await renderSavedCard();
+      if (ED_SLOT.source !== 'file') await renderSavedCard();
       editor.close();
-      toast('Tema guardado en el bloque; cartela regenerada');
+      toast(ED_SLOT.source === 'file' ? 'Bloque de archivo actualizado' : 'Tema guardado en el bloque; cartela regenerada');
       load();
     } catch (e) { toast('Error: ' + e.message); }
     finally { b.disabled = false; }
@@ -833,8 +844,8 @@ function renderPilotMatrix() {
   const first = PILOT.enabled ? `primer pase ${PILOT.time || '08:00'}` : 'apagada';
   const syncEvery = syncOn ? `cada ${PILOT.syncEveryMinutes} min` : 'sin vigilancia continua';
   $('#pilotMatrix').innerHTML = [
-    stateCard('Auto actualización', updateOn ? 'ACTIVA' : 'INACTIVA', PILOT.enabled ? `${first}; ${syncEvery}` : 'Activa el piloto para actualizar datos, escaleta y MP4 automáticamente.', updateOn, updateOn ? 'ACTIVA' : 'INACTIVA'),
-    stateCard('Auto subida', uploadOn ? 'ACTIVA' : 'INACTIVA', uploadOn ? `${first}; sube al FTP cuando detecta cambios` : 'Modo revisar: prepara los MP4, pero no los sube solo.', uploadOn, uploadOn ? 'ACTIVA' : 'MANUAL'),
+    stateCard('Auto actualización', updateOn ? 'ACTIVA' : 'INACTIVA', PILOT.enabled ? `${first}; ${syncEvery}; tiempo y calidad del aire cada hora; MP4 solo si cambia` : 'Activa el piloto para actualizar datos, escaleta y MP4 automáticamente.', updateOn, updateOn ? 'ACTIVA' : 'INACTIVA'),
+    stateCard('Auto subida', uploadOn ? 'ACTIVA' : 'INACTIVA', uploadOn ? `${first}; sube al FTP solo cuando la secuencia cambia` : 'Modo revisar: prepara los MP4, pero no los sube solo.', uploadOn, uploadOn ? 'ACTIVA' : 'MANUAL'),
   ].join('');
 }
 
@@ -905,10 +916,17 @@ function renderPilot() {
   const p = PILOT.preflight || {};
   const required = Number(p.requiredCount || 8);
   const selected = Number(p.selectedCount || 0);
+  const active = Number(p.activeCount || selected || 0);
   const rendered = Number(p.renderedCount || 0);
   const sync = PILOT.sync;
+  const countOk = active === required && selected === required;
+  const countText = active < required
+    ? `${active}/${required} cartelas · faltan ${required - active}`
+    : (active > required
+      ? `${active}/${required} cartelas · sobran ${active - required}`
+      : `${selected}/${required} cartelas`);
   const checks = [
-    pilotTag(`${selected}/${required} vídeos`, selected >= required),
+    pilotTag(countText, countOk),
     pilotTag(PILOT.mode === 'publish' ? (p.ftpConfigured ? 'FTP listo' : 'FTP sin configurar') : 'revisión manual', PILOT.mode !== 'publish' || p.ftpConfigured),
     pilotTag(rendered >= Math.min(required, selected) ? 'MP4 cacheados' : `${rendered}/${Math.min(required, selected)} MP4 cacheados`, rendered >= Math.min(required, selected)),
   ];
@@ -1062,14 +1080,34 @@ const PLAN_TYPES = [
   { id: 'meteoaviso', label: 'Aviso meteorológico · programable', slot: { source: 'library', libraryKey: 'avisosMeteorologicos', label: 'Aviso meteorológico', template: 'meteoaviso', theme: 'naranja' } },
   { id: 'meteoconsejo', label: 'Consejo meteorológico · programable', slot: { source: 'library', libraryKey: 'consejosMeteorologicos', label: 'Consejo meteorológico', template: 'meteoaviso', theme: 'naranja' } },
   { id: 'curioso', label: 'Dato curioso · carrusel', def: true, slot: { source: 'library', libraryKey: 'datosCuriosos', label: 'Dato curioso' } },
-  { id: 'utiles', label: 'Aviso útil · carrusel', slot: { source: 'library', libraryKey: 'datosUtiles', label: 'Aviso útil' } },
+  { id: 'utiles', label: 'Aviso útil · carrusel', def: true, slot: { source: 'library', libraryKey: 'datosUtiles', label: 'Aviso útil' } },
   { id: 'consejo', label: 'Consejo informático (Fast2Computer) · carrusel', slot: { source: 'library', libraryKey: 'consejosInformaticos', label: 'Consejo informático' } },
   { id: 'luz', label: 'Precio de la luz · automático', slot: { source: 'worker', workerKey: 'powerPrice', label: 'Precio de la luz' } },
   { id: 'gasolina', label: 'Gasolineras más baratas · automático', slot: { source: 'worker', workerKey: 'fuel', label: 'Gasolina más barata' } },
-  { id: 'aire', label: 'Calidad del aire · automático', slot: { source: 'worker', workerKey: 'airQuality', template: 'aire', label: 'Calidad del aire' } },
+  { id: 'aire', label: 'Calidad del aire · automático', def: true, slot: { source: 'worker', workerKey: 'airQuality', template: 'aire', label: 'Calidad del aire', rotation: 'hora' } },
+  { id: 'noticia1', label: 'Noticia propia 1 · manual', def: true, slot: { source: 'fixed', template: 'noticia', label: 'Noticia propia 1', title: 'Noticia propia', subtitle: 'GasteizBerri', body: '' } },
+  { id: 'noticia2', label: 'Noticia propia 2 · manual', def: true, slot: { source: 'fixed', template: 'noticia', label: 'Noticia propia 2', title: 'Noticia propia', subtitle: 'GasteizBerri', body: '' } },
+  { id: 'promo', label: 'Vídeo promo MP4 · archivo listo', slot: { source: 'file', type: 'video', file: '', label: 'Vídeo promo', title: 'Vídeo promo', subtitle: 'MP4 listo', duration: 8 } },
   { id: 'piscinas', label: 'Aforo piscinas · manual', slot: { source: 'worker', workerKey: 'poolCapacity', template: 'dato', label: 'Aforo piscinas', subtitle: 'Personas en las piscinas' } },
   { id: 'ultima', label: 'Última hora · reservado (desactivado)', enabled: false, slot: { source: 'fixed', template: 'alerta', label: 'Última hora', subtitle: 'ÚLTIMA HORA' } },
 ];
+
+function wizardCountState() {
+  const required = requiredVideoCount();
+  const selected = WZ ? WZ.sel.size : 0;
+  const diff = selected - required;
+  return { required, selected, diff, ok: diff === 0 };
+}
+
+function wizardCountHtml() {
+  const c = wizardCountState();
+  const msg = c.ok
+    ? `Perfecto: ${c.required}/${c.required} huecos de emisión.`
+    : (c.diff < 0 ? `Faltan ${Math.abs(c.diff)} hueco(s) para llegar a ${c.required}.` : `Sobran ${c.diff} hueco(s): la pantalla solo debe recibir ${c.required}.`);
+  return `<div class="status" style="border-color:${c.ok ? 'rgba(43,182,115,.55)' : 'rgba(232,172,22,.65)'};color:${c.ok ? '#bff0d5' : '#ffd98a'}">
+    <b>${c.selected}/${c.required} cartelas seleccionadas</b><br>${msg}
+  </div>`;
+}
 
 function rdSetDirty(v) {
   RD_DIRTY = v;
@@ -1110,8 +1148,15 @@ function renderRundown() {
   const active = slots.filter(emits).length;
   const missing = rep.filter((r) => r.missing).length;
   const secs = slots.reduce((n, s, i) => n + (emits(s, i) ? (Number(s.duration) || 8) : 0), 0);
+  const required = requiredVideoCount();
+  const countMsg = active === required
+    ? ` · <b style="color:#bff0d5">${active}/${required} emisión lista</b>`
+    : (active < required
+      ? ` · <b style="color:#ffd98a">faltan ${required - active} para llegar a ${required}</b>`
+      : ` · <b style="color:#ffd98a">sobran ${active - required}; deja ${required}</b>`);
   $('#rundownSummary').innerHTML =
     `La pantalla dará una vuelta de <b>${secs}s</b> con <b>${active}</b> bloques` +
+    countMsg +
     (missing ? ` · <b style="color:#e0a106">⚠ ${missing} sin contenido</b>` : ' · <b style="color:#bff0d5">todo listo ✓</b>') +
     (RUNDOWN.dayTheme ? ` · color del día: <b>${esc(RUNDOWN.dayTheme)}</b>` : '');
   $('#slotList').innerHTML = slots.length
@@ -1132,9 +1177,9 @@ function sbCardHtml(s, i) {
   const rep = reportForSlot(s);
   const keys = RUNDOWN.libraryKeys || [];
   const libLabel = (k) => (keys.find((x) => x.key === k) || {}).label || k;
-  const srcIco = s.source === 'library' ? '🔁' : (s.source === 'worker' ? '⚙️' : '✍️');
+  const srcIco = s.source === 'library' ? '🔁' : (s.source === 'worker' ? '⚙️' : (s.source === 'file' ? '▶' : '✍️'));
   const srcTitle = s.source === 'library' ? `Carrusel de «${libLabel(s.libraryKey)}»: cambia cada ${s.rotation === 'hora' ? 'hora' : 'día'}`
-    : (s.source === 'worker' ? 'Automático: se rellena solo con datos reales' : 'Escrito por ti');
+    : (s.source === 'worker' ? 'Automático: se rellena solo con datos reales' : (s.source === 'file' ? 'Archivo listo: se reutiliza sin renderizar' : 'Escrito por ti'));
   const say = rep.skippedToday ? 'no se emite este día'
     : (rep.autoSkipped ? 'sin agenda activa ahora'
     : (rep.missing ? (rep.note || 'sin contenido todavía') : (rep.title || s.title || '—')));
@@ -1172,6 +1217,7 @@ function slotEditHtml(s, i) {
   const slots = (RUNDOWN.rundown && RUNDOWN.rundown.slots) || [];
   const isLib = s.source === 'library';
   const isWorker = s.source === 'worker';
+  const isFile = s.source === 'file';
   const tplSelect = `<label>Plantilla<select data-rd-current="template">
       <option value="">Auto</option>
       ${TEMPLATES.map((t) => `<option value="${esc(t.id)}" ${t.id === s.template ? 'selected' : ''}>${esc(t.label)}</option>`).join('')}
@@ -1183,6 +1229,7 @@ function slotEditHtml(s, i) {
         <option value="fixed" ${s.source === 'fixed' ? 'selected' : ''}>✍️ Manual</option>
         <option value="library" ${isLib ? 'selected' : ''}>🔁 Carrusel</option>
         <option value="worker" ${isWorker ? 'selected' : ''}>⚙️ Dato automático</option>
+        <option value="file" ${isFile ? 'selected' : ''}>▶ MP4 / imagen lista</option>
       </select></label>
       ${isLib ? `<label>Tipo de carrusel<select data-rd-current="libraryKey">
         ${keys.map((k) => `<option value="${esc(k.key)}" ${k.key === s.libraryKey ? 'selected' : ''}>${esc(k.label)}</option>`).join('')}
@@ -1200,7 +1247,7 @@ function slotEditHtml(s, i) {
           ${known ? '' : `<option value="${esc(s.workerKey || '')}" selected>${esc(s.workerKey || 'elige uno…')}</option>`}${sel}
         </select></label>`;
       })() : ''}
-      ${!isLib && !isWorker ? tplSelect : ''}
+      ${!isLib && !isWorker && !isFile ? tplSelect : ''}
       ${isLib
         ? (() => {
           const items = (RUNDOWN.library && RUNDOWN.library[s.libraryKey]) || [];
@@ -1212,11 +1259,20 @@ function slotEditHtml(s, i) {
             <div class="hint" style="margin-top:4px">${s.rotation === 'hora' ? 'Cambia de pieza cada hora; con la publicación automática activa se emite un pase horario.' : 'Cambia de pieza cada día, en ciclo, sin repetir.'} Crear o programar piezas: pestaña «Carrusel».</div>
           </div>`;
         })()
-        : (isWorker
-          ? `<div class="slot-wide hint" style="align-self:center">${s.workerKey === 'weather' ? 'Contenido automático: se refresca cada hora y antes de publicar si toca.' : 'Contenido automático: se refresca cuando caduca el dato y antes de publicar.'}</div>`
+        : (isFile
+          ? `<label>Tipo de archivo<select data-rd-current="type">
+              <option value="video" ${s.type !== 'image' ? 'selected' : ''}>Vídeo MP4</option>
+              <option value="image" ${s.type === 'image' ? 'selected' : ''}>Imagen lista</option>
+            </select></label>
+            <label>Título interno<input data-rd-current="title" value="${esc(s.title || '')}" placeholder="Vídeo promo"></label>
+            <label class="slot-wide">Archivo<input type="file" data-rd-file-upload accept="image/*,video/mp4,video/*">
+              <input data-rd-current="file" value="${esc(s.file || '')}" placeholder="data/uploads/promo.mp4"></label>
+            <div class="slot-wide hint">El archivo listo se reutiliza: no pasa por el render de cartelas. Si la pantalla exige MP4, usa vídeo MP4.</div>`
+          : (isWorker
+          ? `<div class="slot-wide hint" style="align-self:center">${['weather', 'airQuality'].includes(s.workerKey) ? 'Contenido automático: se refresca cada hora y antes de publicar si toca.' : 'Contenido automático: se refresca cuando caduca el dato y antes de publicar.'}</div>`
           : `<label>Título<input data-rd-current="title" value="${esc(s.title || '')}"></label>
       <label>Subtítulo<input data-rd-current="subtitle" value="${esc(s.subtitle || '')}"></label>
-      <label class="slot-wide">Texto<textarea data-rd-current="body">${esc(s.body || '')}</textarea></label>`)}
+      <label class="slot-wide">Texto<textarea data-rd-current="body">${esc(s.body || '')}</textarea></label>`))}
       <label>Duración (segundos)<input type="number" min="1" data-rd-current="duration" value="${Number(s.duration) || 8}"></label>
       <label><input type="checkbox" data-rd-toggle="enabled" ${s.enabled !== false ? 'checked' : ''} style="width:auto;margin-right:8px"> Activa (todos los días)</label>
       <label><input type="checkbox" data-rd-toggle="video" ${s.video ? 'checked' : ''} style="width:auto;margin-right:8px"> Animada (MP4)</label>
@@ -1913,7 +1969,8 @@ function renderWizard() {
 
   if (WZ.step === 1) {
     $('#wzBody').innerHTML = `
-      <p class="hint" style="margin-top:0">Seleccione los tipos de cartela y los días a cubrir.</p>
+      <p class="hint" style="margin-top:0">Elige los 8 huecos de emisión. Pueden ser automáticos, carruseles, noticias propias o un MP4 promo ya listo.</p>
+      ${wizardCountHtml()}
       <label>Días a cubrir</label>
       <input id="wzDays" type="number" min="1" max="14" value="${WZ.days}">
       <label>Tipos de cartela</label>
@@ -1931,6 +1988,20 @@ function renderWizard() {
       if (t.id === 'piscinas') {
         return head + `<label>Aforo actual (lo escribes tú)</label>
           <input data-wz-manual="piscinas:title" value="${esc((WZ.manual.piscinas || {}).title || '')}" placeholder="p. ej. 1.240">`;
+      }
+      if (t.slot.source === 'file') {
+        const cur = WZ.manual[t.id] || {};
+        return head + `<div class="status">MP4 listo: se copiará como su berri-N.mp4 sin renderizar cartela.</div>
+          <label>Título interno</label><input data-wz-manual="${t.id}:title" value="${esc(cur.title || t.slot.title || '')}" placeholder="Vídeo promo">
+          <label>Archivo MP4</label><input type="file" data-wz-upload="${t.id}" accept="video/mp4,video/*">
+          <input data-wz-manual="${t.id}:file" value="${esc(cur.file || '')}" placeholder="data/uploads/promo.mp4">
+          <label>Duración (segundos)</label><input type="number" min="1" data-wz-manual="${t.id}:duration" value="${esc(cur.duration || t.slot.duration || 8)}">`;
+      }
+      if (t.slot.source === 'fixed' && t.id.startsWith('noticia')) {
+        const cur = WZ.manual[t.id] || {};
+        return head + `<label>Titular</label><input data-wz-manual="${t.id}:title" value="${esc(cur.title || '')}" placeholder="Titular de la noticia">
+          <label>Subtítulo</label><input data-wz-manual="${t.id}:subtitle" value="${esc(cur.subtitle || 'GasteizBerri')}" placeholder="Sección o firma">
+          <label>Texto</label><textarea data-wz-manual="${t.id}:body" placeholder="Texto breve para pantalla">${esc(cur.body || '')}</textarea>`;
       }
       if (t.id === 'agenda') {
         return head + renderAgendaWizard();
@@ -1961,6 +2032,7 @@ function renderWizard() {
     <p class="hint" style="margin-top:0">Resumen antes de confirmar:</p>
     <div class="status" style="line-height:1.7">
       Guion de <b>${chosen.length}</b> cartelas: ${chosen.map((t) => esc(t.slot.label)).join(' → ')}<br>
+      ${wizardCountHtml()}
       Cobertura: <b>${WZ.days}</b> día(s); el carrusel cambia a diario sin repetir<br>
       ${agendaMoments ? `Agenda viva: <b>${agendaMoments}</b> mensaje(s) programado(s)<br>` : ''}
       ${newPieces ? `Se incorporan <b>${newPieces}</b> pieza(s) nuevas al carrusel<br>` : ''}
@@ -2001,7 +2073,9 @@ async function wizardFinish() {
     const chosen = PLAN_TYPES.filter((t) => WZ.sel.has(t.id));
     const slots = chosen.map((t) => {
       const s = { id: `plan_${t.id}_${stamp}`, enabled: t.enabled !== false, duration: t.duration || 8, video: false, theme: '', title: '', subtitle: '', body: '', date: '', template: '', libraryKey: '', workerKey: '', ...t.slot };
-      return Object.assign(s, WZ.manual[t.id] || {});
+      Object.assign(s, WZ.manual[t.id] || {});
+      s.duration = Number(s.duration) || 8;
+      return s;
     });
     const lib = RUNDOWN.library || {};
     if (WZ.sel.has('agenda')) {
@@ -2100,9 +2174,34 @@ $('#wzBody').addEventListener('click', (e) => {
     renderWizard();
   }
 });
+$('#wzBody').addEventListener('change', async (e) => {
+  if (e.target && e.target.matches('[data-wz-type]')) {
+    wzCollect();
+    renderWizard();
+    return;
+  }
+  if (e.target && e.target.matches('[data-wz-upload]') && e.target.files && e.target.files[0]) {
+    const id = e.target.dataset.wzUpload;
+    try {
+      toast('Subiendo MP4...');
+      const path = await uploadFile(e.target);
+      WZ.manual[id] = WZ.manual[id] || {};
+      WZ.manual[id].file = path || '';
+      renderWizard();
+      toast('MP4 listo');
+    } catch (err) {
+      toast('Error al subir: ' + err.message);
+    }
+  }
+});
 $('#wzNext').addEventListener('click', () => {
   wzCollect();
   if (WZ.step === 1 && !WZ.sel.size) { toast('Marca al menos un tipo de cartela'); return; }
+  if (WZ.step === 1 && !wizardCountState().ok) { toast(wizardCountState().diff < 0 ? 'Faltan cartelas para llegar a 8' : 'Sobran cartelas: deja exactamente 8'); return; }
+  if (WZ.step === 2) {
+    const missingFile = PLAN_TYPES.find((t) => WZ.sel.has(t.id) && t.slot.source === 'file' && !((WZ.manual[t.id] || {}).file || t.slot.file));
+    if (missingFile) { toast('Falta subir el MP4 de ' + missingFile.slot.label); return; }
+  }
   if (WZ.step < 3) { WZ.step++; renderWizard(); return; }
   wizardFinish();
 });
@@ -2250,6 +2349,17 @@ $('#slotEditor').addEventListener('click', (e) => {
 $('#slotEditor').addEventListener('input', () => { if (RUNDOWN) { collectRundown(); rdSetDirty(true); } });
 $('#slotEditor').addEventListener('change', (e) => {
   if (!RUNDOWN) return;
+  if (e.target && e.target.matches('[data-rd-file-upload]') && e.target.files && e.target.files[0]) {
+    uploadFile(e.target).then((path) => {
+      const input = $('#slotEditor').querySelector('[data-rd-current="file"]');
+      if (input) input.value = path || '';
+      collectRundown();
+      rdSetDirty(true);
+      renderRundown();
+      toast('Archivo listo');
+    }).catch((err) => toast('Error al subir: ' + err.message));
+    return;
+  }
   // Casillas de piezas del carrusel: activan/desactivan la pieza en su fondo.
   if (e.target && e.target.dataset && e.target.dataset.libEnable) {
     const [key, idx] = e.target.dataset.libEnable.split(':');

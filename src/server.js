@@ -84,13 +84,22 @@ const upload = multer({
       cb(null, `up_${Date.now()}${ext}`);
     },
   }),
-  limits: { fileSize: 25 * 1024 * 1024 },
+  limits: { fileSize: 250 * 1024 * 1024 },
 });
 
 // --- API ---
 const templates = require('./generator/templates');
 app.get('/api/config', (req, res) => {
-  res.json({ screen: cfg.screen, brand: cfg.brand, defaults: cfg.defaults, templates: templates.list(), palette: cfg.palette || {}, safety: renderGuard.safetyInfo() });
+  res.json({
+    screen: cfg.screen,
+    screenProfile: cfg.screenProfile || {},
+    naming: cfg.naming || {},
+    brand: cfg.brand,
+    defaults: cfg.defaults,
+    templates: templates.list(),
+    palette: cfg.palette || {},
+    safety: renderGuard.safetyInfo(),
+  });
 });
 
 // Fuentes disponibles (familias empaquetadas en assets/fonts).
