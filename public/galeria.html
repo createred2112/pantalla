@@ -23,6 +23,7 @@
   .cell .lbl{padding:9px 12px;font-size:13px;display:flex;justify-content:space-between;align-items:center;gap:8px}
   .cell .lbl b{font-weight:700}
   .cell .lbl span{color:var(--muted);font-size:11px}
+  .cell .theme{display:inline-block;margin-left:5px;padding:2px 6px;border:1px solid var(--line2);border-radius:999px;color:var(--txt);font-size:10px}
   .cell img{width:100%;aspect-ratio:16/9;object-fit:contain;background:#000;display:block}
   .cell .ph{width:100%;aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;color:var(--muted);
     background:repeating-linear-gradient(45deg,#0a1a30,#0a1a30 12px,#0c1d36 12px,#0c1d36 24px);font-size:13px}
@@ -38,6 +39,7 @@
   <h1>Galería de plantillas</h1>
   <span id="ver" style="color:var(--muted);font-size:12px"></span>
   <button class="btn" id="btnGenerate">↻ Regenerar muestras</button>
+  <button class="btn" id="btnMatrix">Todos los colores</button>
   <a class="btn" href="/">← Volver al panel</a>
 </header>
 <main id="grid"><div class="note">Cargando…</div></main>
@@ -46,6 +48,8 @@
 // nada. Solo se regeneran al pulsar el botón o si cambió el diseño global.
 const grid = document.getElementById('grid');
 const btn = document.getElementById('btnGenerate');
+const btnMatrix = document.getElementById('btnMatrix');
+let MATRIX = false;
 
 function paint(state, msg) {
   grid.innerHTML = '';
@@ -60,19 +64,20 @@ function paint(state, msg) {
     cell.className = 'cell';
     cell.innerHTML = `<div class="lbl"><b>${t.label}</b><span>${t.id}${t.url && !t.fresh ? ' · desactualizada' : ''}</span></div>` +
       (t.url ? `<img alt="${t.id}" loading="lazy" src="${t.url}">` : `<div class="ph">sin muestra</div>`);
+    if (t.theme) cell.querySelector('.lbl span').insertAdjacentHTML('beforeend', `<i class="theme">${t.theme}</i>`);
     grid.appendChild(cell);
   }
 }
 
 async function load() {
   try {
-    const r = await fetch('/api/template-samples');
+    const r = await fetch('/api/template-samples' + (MATRIX ? '?matrix=1' : ''));
     if (r.status === 401) { location.href = '/login'; return; }
     const state = await r.json();
     const missing = state.items.filter((i) => !i.url).length;
     let msg = null;
     if (missing === state.items.length) {
-      msg = { warn: true, html: 'Todavía no hay muestras generadas. Pulsa <b>Regenerar muestras</b> (solo hace falta una vez).' };
+      msg = { warn: true, html: MATRIX ? 'Todavía no hay auditoría de todos los colores. Pulsa <b>Regenerar muestras</b>; tardará un poco.' : 'Todavía no hay muestras generadas. Pulsa <b>Regenerar muestras</b> (solo hace falta una vez).' };
     } else if (!state.fresh) {
       msg = { warn: true, html: 'El diseño ha cambiado desde la última generación: las muestras pueden no reflejarlo. Pulsa <b>Regenerar muestras</b> cuando quieras.' };
     }
@@ -84,9 +89,10 @@ async function load() {
 
 btn.addEventListener('click', async () => {
   btn.disabled = true;
+  btnMatrix.disabled = true;
   btn.innerHTML = '<span class="spin">◠</span> Generando…';
   try {
-    const r = await fetch('/api/template-samples', { method: 'POST' });
+    const r = await fetch('/api/template-samples' + (MATRIX ? '?matrix=1' : ''), { method: 'POST' });
     const state = await r.json();
     if (!r.ok) throw new Error(state.error || 'error');
     paint(state, { html: `Muestras al día · generadas ${state.generatedAt ? new Date(state.generatedAt).toLocaleString('es-ES') : 'ahora'}.` });
@@ -94,8 +100,17 @@ btn.addEventListener('click', async () => {
     grid.insertAdjacentHTML('afterbegin', `<div class="note warn">No se pudieron generar: ${e.message}</div>`);
   } finally {
     btn.disabled = false;
+    btnMatrix.disabled = false;
     btn.innerHTML = '↻ Regenerar muestras';
   }
+});
+
+btnMatrix.addEventListener('click', () => {
+  MATRIX = !MATRIX;
+  btnMatrix.classList.toggle('primary', MATRIX);
+  btnMatrix.textContent = MATRIX ? 'Vista normal' : 'Todos los colores';
+  grid.innerHTML = '<div class="note">Cargando…</div>';
+  load();
 });
 
 fetch('/api/whoami').then((r) => r.json()).then((w) => {

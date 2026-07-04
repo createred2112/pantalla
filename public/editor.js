@@ -26,6 +26,7 @@ async function load() {
   $('#scope').innerHTML = `Editando <b>${FRAME.hasOwnLayout ? 'esta cartela' : 'plantilla base'}</b> · tema <b>${FRAME.theme && FRAME.theme.key ? FRAME.theme.key : 'auto'}</b>`;
   if (FRAME.template === 'agenda') {
     $('#btnDefault').disabled = true;
+    $('#btnResetDefault').disabled = true;
     $('#btnDefault').title = 'Agenda cambia mucho segun tenga horas o solo frases. Guarda el diseno solo en esta cartela.';
     $('#btnDefault').textContent = 'Predeterminado bloqueado';
   }
@@ -234,6 +235,17 @@ $('#btnDefault').addEventListener('click', async () => {
   if (!confirm('¿Aplicar este diseño como PREDETERMINADO de la plantilla "' + FRAME.template + '" SOLO para el tema "' + theme + '"?')) return;
   const r = await fetch('/api/templates/' + FRAME.template + '/layout', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ theme, layout: layoutPayload() }) });
   toast(r.ok ? 'Guardado como plantilla + color ✓' : 'Error');
+});
+$('#btnResetDefault').addEventListener('click', async () => {
+  if (FRAME.template === 'agenda') {
+    toast('Agenda no tiene predeterminado global');
+    return;
+  }
+  const theme = FRAME.theme && FRAME.theme.key ? FRAME.theme.key : '';
+  if (!confirm('¿Borrar el diseño PREDETERMINADO de la plantilla "' + FRAME.template + '" SOLO para el tema "' + theme + '"? Las cartelas volverán al diseño sano de código.')) return;
+  const r = await fetch('/api/templates/' + FRAME.template + '/layout?theme=' + encodeURIComponent(theme), { method: 'DELETE' });
+  toast(r.ok ? 'Plantilla + color restablecida ✓' : 'Error');
+  if (r.ok) setTimeout(() => location.reload(), 450);
 });
 $('#btnReset').addEventListener('click', async () => {
   if (!confirm('¿Volver al diseño por defecto de la plantilla? Se perderán los cambios de esta cartela.')) return;

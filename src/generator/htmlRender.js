@@ -13,8 +13,10 @@ let _browser = null;
 let _fontCss = null;
 let _queue = Promise.resolve();
 let _idleTimer = null;
+let _pageUses = 0;
 
 const IDLE_CLOSE_MS = Number(process.env.PANTALLA_CHROME_IDLE_MS || 15000);
+const MAX_PAGES_PER_BROWSER = Number(process.env.PANTALLA_CHROME_MAX_PAGES || 24);
 
 function enqueue(task) {
   const run = _queue.catch(() => {}).then(task);
@@ -35,7 +37,7 @@ async function browser() {
   const puppeteer = require('puppeteer');
   _browser = await puppeteer.launch({
     headless: 'new',
-    protocolTimeout: 120000,
+    protocolTimeout: 240000,
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
@@ -57,6 +59,7 @@ async function browser() {
       '--font-render-hinting=none',
     ],
   });
+  _pageUses = 0;
   _browser.on('disconnected', () => { _browser = null; });
   return _browser;
 }
@@ -66,12 +69,14 @@ async function withPage(task) {
     const b = await browser();
     const page = await b.newPage();
     try {
-      page.setDefaultTimeout(120000);
-      page.setDefaultNavigationTimeout(120000);
+      page.setDefaultTimeout(240000);
+      page.setDefaultNavigationTimeout(240000);
       return await task(page);
     } finally {
       try { await page.close(); } catch {}
-      scheduleClose();
+      _pageUses++;
+      if (_pageUses >= MAX_PAGES_PER_BROWSER) await close();
+      else scheduleClose();
     }
   });
 }

@@ -277,6 +277,13 @@ app.put('/api/templates/:id/layout', (req, res) => {
   res.json({ ok: true });
 });
 
+app.delete('/api/templates/:id/layout', (req, res) => {
+  const theme = String(req.query.theme || '').trim();
+  require('./templateLayouts').set(req.params.id, theme, null);
+  log.info('editor', `Layout predeterminado restablecido en plantilla ${req.params.id}${theme ? ' / tema ' + theme : ''}`);
+  res.json({ ok: true });
+});
+
 app.post('/api/cards', (req, res) => res.json(store.add(req.body)));
 
 app.put('/api/cards/:id', (req, res) => {
@@ -392,46 +399,73 @@ const SAMPLE_DATA = {
 const SAMPLES_DIR = path.join(paths.output, 'samples');
 const SAMPLES_META = path.join(SAMPLES_DIR, 'meta.json');
 
-function samplesHash() {
+function samplesHash(matrix = false) {
   const crypto = require('crypto');
   return crypto.createHash('sha1').update(JSON.stringify({
-    v: 11, // subir al cambiar el diseño de las plantillas en código
+    v: 12, // subir al cambiar el diseño de las plantillas en código
+    matrix,
     brand: cfg.brand, palette: cfg.palette, screen: cfg.screen,
     tpls: templates.list().map((t) => t.id), data: SAMPLE_DATA,
   })).digest('hex');
 }
 
-function samplesState() {
+function sampleName(templateId, theme) {
+  return theme ? `${templateId}__${theme}` : templateId;
+}
+
+function sampleMetaFile(matrix = false) {
+  return matrix ? path.join(SAMPLES_DIR, 'meta-matrix.json') : SAMPLES_META;
+}
+
+function sampleItems(matrix = false) {
+  const tpls = templates.list();
+  if (!matrix) return tpls.map((t) => ({ id: t.id, label: t.label, template: t.id, theme: '' }));
+  const themes = Object.keys(cfg.palette || {});
+  return tpls.flatMap((t) => themes.map((theme) => ({
+    id: sampleName(t.id, theme),
+    label: t.label,
+    template: t.id,
+    theme,
+  })));
+}
+
+function samplesState(matrix = false) {
   let meta = null;
-  try { meta = JSON.parse(fs.readFileSync(SAMPLES_META, 'utf8')); } catch {}
-  const fresh = Boolean(meta && meta.hash === samplesHash());
-  const items = templates.list().map((t) => {
+  try { meta = JSON.parse(fs.readFileSync(sampleMetaFile(matrix), 'utf8')); } catch {}
+  const fresh = Boolean(meta && meta.hash === samplesHash(matrix));
+  const items = sampleItems(matrix).map((t) => {
     const file = path.join(SAMPLES_DIR, `${t.id}.jpg`);
     const exists = fs.existsSync(file);
     const v = exists ? Math.round(fs.statSync(file).mtimeMs) : 0;
-    return { id: t.id, label: t.label, url: exists ? `/media/output/samples/${t.id}.jpg?v=${v}` : null, fresh: exists && fresh };
+    return { ...t, url: exists ? `/media/output/samples/${t.id}.jpg?v=${v}` : null, fresh: exists && fresh };
   });
-  return { items, fresh: fresh && items.every((i) => i.url), generatedAt: meta ? meta.at : null };
+  return { matrix, items, fresh: fresh && items.every((i) => i.url), generatedAt: meta ? meta.at : null };
 }
 
 // Estado de las muestras: la galería pinta AL INSTANTE desde disco.
-app.get('/api/template-samples', (req, res) => res.json(samplesState()));
+app.get('/api/template-samples', (req, res) => res.json(samplesState(req.query.matrix === '1')));
 
 // (Re)generar las muestras: única acción que renderiza, y solo bajo demanda.
 app.post('/api/template-samples', async (req, res) => {
+  const matrix = req.query.matrix === '1';
   try {
     renderGuard.assertCanUseChrome('render');
     fs.mkdirSync(SAMPLES_DIR, { recursive: true });
-    for (const t of templates.list()) {
-      const card = store.normalize({ id: `sample_${t.id}`, template: t.id, ...(SAMPLE_DATA[t.id] || { title: 'Ejemplo · ' + t.label }) });
+    for (const t of sampleItems(matrix)) {
+      const card = store.normalize({
+        id: `sample_${t.id}`,
+        template: t.template,
+        ...(SAMPLE_DATA[t.template] || { title: 'Ejemplo · ' + t.label }),
+        ...(t.theme ? { theme: t.theme } : {}),
+      });
       const { buffer } = await renderToBuffer(card);
       const small = await sharp(buffer).resize(720).jpeg({ quality: 82 }).toBuffer();
       fs.writeFileSync(path.join(SAMPLES_DIR, `${t.id}.jpg`), small);
     }
     try { await require('./generator/htmlRender').close(); } catch {}
-    require('./util/atomicWrite').writeJsonAtomic(SAMPLES_META, { hash: samplesHash(), at: new Date().toISOString() });
-    log.info('samples', `Muestras de plantillas regeneradas (${templates.list().length})`);
-    res.json({ ok: true, ...samplesState() });
+    require('./util/atomicWrite').writeJsonAtomic(sampleMetaFile(matrix), { hash: samplesHash(matrix), at: new Date().toISOString() });
+    log.info('samples', `Muestras de plantillas regeneradas (${sampleItems(matrix).length})`);
+    res.json({ ok: true, ...samplesState(matrix) });
   } catch (e) {
     try { await require('./generator/htmlRender').close(); } catch {}
     log.error('samples', e.message);
