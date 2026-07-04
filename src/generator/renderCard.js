@@ -218,8 +218,108 @@ function repairAirFrame(card, ctx, frame) {
   return { ...frame, elements };
 }
 
+function weatherSummary(card) {
+  const range = card.body || (card.data && card.data.max != null && card.data.min != null ? `Máx ${card.data.max}º · mín ${card.data.min}º` : '');
+  return [card.subtitle || '', range].filter(Boolean).join(' · ');
+}
+
+function weatherIconElement(card, ctx) {
+  const { W, H, theme } = ctx;
+  const clima = require('./templates/clima');
+  const pad = Math.round(W * 0.05);
+  const zoneY = Math.round(H * 0.145);
+  const zoneH = Math.round(H * 0.51);
+  const icoS = Math.round(Math.min(zoneH, W * 0.36));
+  return {
+    id: 'el_weather_icon_guard',
+    type: 'svg',
+    anim: clima.animFor(clima.keyOf(card.subtitle)),
+    x: Math.round(W - pad - icoS),
+    y: Math.round(zoneY + (zoneH - icoS) / 2),
+    w: icoS,
+    h: icoS,
+    svg: clima.iconSvg(clima.keyOf(card.subtitle), clima.iconColor(theme)),
+  };
+}
+
+function weatherBandTextElement(card, ctx, band) {
+  const { W, H, theme } = ctx;
+  const pad = Math.round(W * 0.05);
+  return {
+    id: 'el_weather_band_text_guard',
+    type: 'text',
+    bind: 'weatherSummary',
+    x: pad,
+    y: band.y,
+    w: W - pad * 2,
+    h: band.h,
+    text: weatherSummary(card).toUpperCase(),
+    font: 'display',
+    weight: 800,
+    color: theme.accentText,
+    colorTheme: 'accentText',
+    align: 'center',
+    valign: 'center',
+    lineHeight: 1,
+    letterSpacingEm: 0.02,
+    autofit: { min: Math.round(H * 0.055), max: Math.round(H * 0.09), lines: 1 },
+  };
+}
+
+function repairWeatherFrame(card, ctx, frame) {
+  const { W, H, theme } = ctx;
+  const elements = Array.isArray(frame.elements) ? [...frame.elements] : [];
+
+  const icon = weatherIconElement(card, ctx);
+  const svgIdx = elements.findIndex((el) => el.type === 'svg' && /<svg/i.test(String(el.svg || '')));
+  if (svgIdx >= 0) elements[svgIdx] = { ...elements[svgIdx], ...icon };
+  else elements.push(icon);
+
+  const summary = weatherSummary(card);
+  if (summary) {
+    let band = elements.find((el) =>
+      (el.type === 'rect' || el.type === 'band') &&
+      Number(el.w || 0) >= W * 0.8 &&
+      Number(el.h || 0) >= H * 0.08 &&
+      Number(el.y || 0) >= H * 0.5 &&
+      Number(el.y || 0) <= H * 0.84
+    );
+    if (!band) {
+      band = {
+        id: 'el_weather_band_guard',
+        type: 'rect',
+        x: 0,
+        y: Math.round(H * 0.67),
+        w: W,
+        h: Math.round(H * 0.16),
+        color: theme.accent,
+        colorTheme: 'accent',
+      };
+      elements.push(band);
+    } else {
+      band.x = 0;
+      band.w = W;
+      band.h = Math.max(Number(band.h) || 0, Math.round(H * 0.14));
+      band.color = theme.accent;
+      band.colorTheme = 'accent';
+      delete band.colorFixed;
+    }
+    const bandText = weatherBandTextElement(card, ctx, band);
+    const textIdx = elements.findIndex((el) =>
+      el.type === 'text' &&
+      (el.bind === 'weatherSummary' || sameText(el.text, card.subtitle) || sameText(el.text, card.body) || sameText(el.text, summary))
+    );
+    if (textIdx >= 0) elements.splice(textIdx, 1);
+    const bandIndex = elements.indexOf(band);
+    elements.splice(Math.max(0, bandIndex + 1), 0, bandText);
+  }
+
+  return { ...frame, elements };
+}
+
 function repairFrameForCard(card, ctx, frame) {
   if (card && card.template === 'aire') return repairAirFrame(card, ctx, frame);
+  if (card && card.template === 'clima') return repairWeatherFrame(card, ctx, frame);
   return frame;
 }
 

@@ -8,6 +8,7 @@ function keyOf(text) {
   if (/lluv|llovizn|chubas|aguac/.test(t)) return 'lluvia';
   if (/niebl|brum|calima/.test(t)) return 'niebla';
   if (/vient|rach/.test(t)) return 'viento';
+  if (/poco nubos|interval|nubes y claros|claros/.test(t)) return 'solnube';
   if (/cubiert|nubl|nubos/.test(t)) return 'nube';
   return 'sol';
 }
@@ -51,6 +52,11 @@ function iconSvg(key, c) {
       '<line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>' +
       '<line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>' +
       '<line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>',
+    solnube: '<circle cx="8" cy="8" r="3.2"/><line x1="8" y1="1.5" x2="8" y2="3"/><line x1="8" y1="13" x2="8" y2="14.4"/>' +
+      '<line x1="1.5" y1="8" x2="3" y2="8"/><line x1="13" y1="8" x2="14.4" y2="8"/>' +
+      '<line x1="3.4" y1="3.4" x2="4.4" y2="4.4"/><line x1="11.6" y1="11.6" x2="12.6" y2="12.6"/>' +
+      '<line x1="3.4" y1="12.6" x2="4.4" y2="11.6"/><line x1="11.6" y1="4.4" x2="12.6" y2="3.4"/>' +
+      '<path d="M18.5 19.5H9a4.5 4.5 0 0 1 .5-9 5.9 5.9 0 0 1 10.8 2.9 3.2 3.2 0 0 1-1.8 6.1z"/>',
     nube: '<path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/>',
     lluvia: '<path d="M20 16.58A5 5 0 0 0 18 7h-1.26A8 8 0 1 0 4 15.25"/>' +
       '<line x1="16" y1="13" x2="16" y2="21"/><line x1="8" y1="13" x2="8" y2="21"/><line x1="12" y1="15" x2="12" y2="23"/>',
@@ -109,24 +115,17 @@ module.exports = {
     });
 
     // Banda de acento a sangre (firma de la casa) con la condición ACTUAL.
-    const bandTxt = card.subtitle || '';
+    const dayRange = card.body || (card.data && card.data.max != null && card.data.min != null ? `Máx ${card.data.max}º · mín ${card.data.min}º` : '');
+    const bandTxt = [card.subtitle || '', dayRange].filter(Boolean).join(' · ');
     if (bandTxt) {
       const bandY = Math.round(H * 0.67);
-      const bandH = Math.round(H * 0.14);
+      const bandH = Math.round(H * 0.16);
       els.push({ type: 'rect', x: 0, y: bandY, w: W, h: bandH, color: theme.accent });
       els.push({
         type: 'text', x: pad, y: bandY, w: W - pad * 2, h: bandH,
         text: bandTxt.toUpperCase(), font: 'display', weight: 800, color: theme.accentText,
         align: 'center', valign: 'center', lineHeight: 1, letterSpacingEm: 0.02,
-        autofit: { min: Math.round(H * 0.04), max: Math.round(H * 0.072), lines: 1 },
-      });
-    }
-    const dayRange = card.body || (card.data && card.data.max != null && card.data.min != null ? `Hoy: máx ${card.data.max}º · mín ${card.data.min}º` : '');
-    if (dayRange) {
-      els.push({
-        type: 'text', x: Math.round(W * 0.54), y: Math.round(H * 0.84), w: Math.round(W * 0.41), h: Math.round(H * 0.07),
-        text: dayRange.toUpperCase(), font: 'text', weight: 800, color: theme.textMuted,
-        align: 'right', valign: 'center', size: Math.round(H * 0.04), lineHeight: 1,
+        autofit: { min: Math.round(H * 0.055), max: Math.round(H * 0.09), lines: 1 },
       });
     }
 
