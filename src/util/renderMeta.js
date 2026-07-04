@@ -105,7 +105,7 @@ function isFresh(card, opts = {}) {
   const file = path.join(paths.output, meta.file);
   if (!fs.existsSync(file)) return null;
   if (opts.wantVideo === true && !meta.file.endsWith('.mp4')) return null;
-  return { file, name: meta.file, hash: meta.hash, at: meta.at };
+  return { file, name: meta.file, hash: meta.hash, at: meta.at, durationSeconds: meta.durationSeconds || null };
 }
 
 module.exports = { renderHash, get, set, remove, isFresh, FILE };

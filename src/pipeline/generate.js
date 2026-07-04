@@ -9,6 +9,7 @@ const log = require('../util/logger');
 const status = require('../util/status');
 const renderGuard = require('../util/renderGuard');
 const renderMeta = require('../util/renderMeta');
+const mediaDuration = require('../util/mediaDuration');
 
 function forceVideoOutput() {
   const profile = require('../config').cfg.screenProfile || {};
@@ -35,12 +36,15 @@ async function renderOne(card, opts = {}) {
     // animada puede caer a JPG si el modo seguro impide renderizar vídeo.
     const fresh = renderMeta.isFresh(effectiveCard, { wantVideo: forcedVideo || wantVideo }) ||
       (!forcedVideo && effectiveCard.video && !wantVideo ? renderMeta.isFresh(effectiveCard) : null);
-    if (fresh) return { file: fresh.file, reused: true };
+    if (fresh) return { file: fresh.file, reused: true, durationSeconds: fresh.durationSeconds || mediaDuration.roundedDuration(fresh.file) };
   }
 
   let file;
+  let durationSeconds = null;
   if (wantVideo) {
-    file = (await require('../generator/video').renderVideoToFile(effectiveCard)).file;
+    const out = await require('../generator/video').renderVideoToFile(effectiveCard);
+    file = out.file;
+    durationSeconds = out.durationSeconds || null;
   } else if (forcedVideo) {
     renderGuard.assertCanUseChrome('video');
   } else if (effectiveCard.video) {
@@ -49,8 +53,9 @@ async function renderOne(card, opts = {}) {
   } else {
     file = await renderToFile(effectiveCard);
   }
-  renderMeta.set(effectiveCard.id, { hash: renderMeta.renderHash(effectiveCard), file: path.basename(file) });
-  return { file, reused: false };
+  if (!durationSeconds && path.extname(file).toLowerCase() === '.mp4') durationSeconds = mediaDuration.roundedDuration(file);
+  renderMeta.set(effectiveCard.id, { hash: renderMeta.renderHash(effectiveCard), file: path.basename(file), durationSeconds });
+  return { file, reused: false, durationSeconds };
 }
 
 async function generate(opts = {}) {
@@ -65,7 +70,7 @@ async function generate(opts = {}) {
       status.set('generate', { ok: null, running: true, count: cards.length, done: i, current: card.id, currentTitle: card.title || card.id, reused, results });
       const r = await renderOne(card, opts);
       if (r.reused) reused++;
-      results.push({ id: card.id, file: r.file, ok: true, reused: r.reused });
+      results.push({ id: card.id, file: r.file, ok: true, reused: r.reused, durationSeconds: r.durationSeconds || null });
       log.info('generate', r.reused ? `Reutilizado ${card.id} -> ${r.file}` : `OK ${card.id} -> ${r.file}`);
       status.set('generate', { ok: null, running: true, count: cards.length, done: i + 1, current: null, reused, results });
     } catch (e) {

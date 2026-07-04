@@ -10,6 +10,7 @@ const { slugify } = require('../util/slugify');
 const log = require('../util/logger');
 const status = require('../util/status');
 const renderMeta = require('../util/renderMeta');
+const mediaDuration = require('../util/mediaDuration');
 
 function pad(n) {
   return String(n).padStart(cfg.naming.padStart || 2, '0');
@@ -204,7 +205,7 @@ function sequence({ dryRun } = {}) {
       id: card.id,
       type: card.type,
       file: path.basename(dest),
-      duration: card.duration,
+      duration: mediaDuration.roundedDuration(src) || card.duration,
     });
     copies.push({ src, file: path.basename(dest) });
     log.info('sequence', `${pad(pos)} -> ${path.basename(dest)}`);

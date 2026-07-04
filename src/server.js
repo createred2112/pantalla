@@ -116,6 +116,7 @@ function fontFamilies() {
 }
 
 const renderMeta = require('./util/renderMeta');
+const mediaDuration = require('./util/mediaDuration');
 
 function renderedCandidates(card) {
   if (!card || card.type !== 'generated') return null;
@@ -148,6 +149,7 @@ function renderedCandidates(card) {
       url: `/media/output/${encodeURIComponent(card.id)}.${ext}?v=${Math.round(st.mtimeMs)}`,
       ext,
       type: ext === 'mp4' ? 'video' : 'image',
+      durationSeconds: ext === 'mp4' ? (meta && meta.file === name && meta.durationSeconds ? meta.durationSeconds : mediaDuration.roundedDuration(file)) : null,
       posterUrl: ext === 'mp4' && poster ? poster.url : null,
       stale: !fresh,
       mtimeMs: st.mtimeMs,
@@ -220,7 +222,10 @@ app.put('/api/settings', (req, res) => {
 app.get('/api/cards', (req, res) => {
   res.json(store.list().map((card) => {
     const rendered = renderedInfo(card);
-    return { ...card, rendered, staleRendered: rendered ? null : renderedInfo(card, { includeStale: true }) };
+    const staleRendered = rendered ? null : renderedInfo(card, { includeStale: true });
+    const readyFileDuration = card.type === 'video' && card.file ? mediaDuration.roundedDuration(abs(card.file)) : null;
+    const effectiveDuration = (rendered && rendered.durationSeconds) || readyFileDuration || (staleRendered && staleRendered.durationSeconds) || Number(card.duration) || null;
+    return { ...card, rendered, staleRendered, effectiveDuration };
   }));
 });
 
@@ -544,7 +549,7 @@ app.post('/api/preview-video', async (req, res) => {
       _previewVideo: true,
     });
     const out = await require('./generator/video').renderVideoToFile(card);
-    res.json({ ok: true, url: `/media/output/${path.basename(out.file)}?v=${Date.now()}`, duration: card.duration });
+    res.json({ ok: true, url: `/media/output/${path.basename(out.file)}?v=${Date.now()}`, duration: out.durationSeconds || card.duration });
   } catch (e) {
     log.error('preview-video', e.message);
     res.status(500).json({ error: e.message });

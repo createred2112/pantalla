@@ -351,9 +351,9 @@ function render() {
   }
   if (sum) {
     const act = cards.filter((c) => c.enabled !== false);
-    const secs = act.reduce((n, c) => n + (Number(c.duration) || 10), 0);
+    const secs = act.reduce((n, c) => n + cardDuration(c), 0);
     const pending = cards.filter((c) => c.type === 'generated' && !c.rendered).length;
-    sum.textContent = `${act.length} activa(s) · vuelta de ${secs}s${pending ? ` · ${pending} por generar` : ''}`;
+    sum.textContent = `${act.length} activa(s) · vuelta de ${durationLabel(secs)}${pending ? ` · ${pending} por generar` : ''}`;
   }
   el.innerHTML = '';
   cards.forEach((c, i) => {
@@ -390,7 +390,7 @@ function render() {
         ${c.source === 'worker' ? '<span class="tag worker">worker</span>' : ''}
         ${c.source === 'rundown' ? '<span class="tag rundown">escaleta</span>' : ''}
         ${c.enabled === false ? '<span class="tag off">oculta</span>' : ''}
-        <span class="tag">${c.duration||10}s</span>
+        <span class="tag">${durationLabel(cardDuration(c))} final</span>
         <span class="spacer"></span>
         <button class="iconbtn" data-up="${i}" ${i===0?'disabled':''} title="Subir">▲</button>
         <button class="iconbtn" data-down="${i}" ${i===cards.length-1?'disabled':''} title="Bajar">▼</button>
@@ -410,7 +410,7 @@ function todayState() {
   const selected = required ? active.slice(0, required) : active;
   const pending = selected.filter((c) => c.type === 'generated' && !c.rendered).length;
   const stale = selected.filter((c) => c.type === 'generated' && !c.rendered && c.staleRendered).length;
-  const seconds = selected.reduce((n, c) => n + (Number(c.duration) || 10), 0);
+  const seconds = selected.reduce((n, c) => n + cardDuration(c), 0);
   const countOk = !required || active.length === required;
   const filesOk = selected.length > 0 && pending === 0;
   let label = 'Pendiente';
@@ -420,6 +420,15 @@ function todayState() {
   else if (pending) label = `${pending} por crear`;
   else { label = 'Lista'; ok = true; }
   return { required, active, selected, pending, stale, seconds, countOk, filesOk, label, ok };
+}
+
+function cardDuration(card) {
+  return Number(card && (card.effectiveDuration || (card.rendered && card.rendered.durationSeconds) || card.duration)) || 10;
+}
+
+function durationLabel(seconds) {
+  const n = Number(seconds) || 0;
+  return Number.isInteger(n) ? `${n}s` : `${n.toFixed(1)}s`;
 }
 
 function uploadSourceLabel(source, dryRun) {
@@ -490,7 +499,7 @@ function renderTodayPanel() {
     <div class="today-grid">
       <div class="today-kpi"><small>Cartelas</small><b>${activeCount}/${st.required || activeCount}</b></div>
       <div class="today-kpi"><small>Archivos</small><b>${st.pending ? `${st.pending} pendientes` : (activeCount ? 'Listos' : 'Sin preparar')}</b></div>
-      <div class="today-kpi"><small>Vuelta</small><b>${st.seconds || 0}s</b></div>
+      <div class="today-kpi"><small>Vuelta final</small><b>${durationLabel(st.seconds || 0)}</b></div>
     </div>
     <div class="today-actions">
       <button type="button" class="ghost" data-today-action="rundown">Crear emisión</button>
@@ -1393,7 +1402,7 @@ function slotEditHtml(s, i) {
           : `<label>Título<input data-rd-current="title" value="${esc(s.title || '')}"></label>
       <label>Subtítulo<input data-rd-current="subtitle" value="${esc(s.subtitle || '')}"></label>
       <label class="slot-wide">Texto<textarea data-rd-current="body">${esc(s.body || '')}</textarea></label>`))}
-      <label>Duración (segundos)<input type="number" min="1" data-rd-current="duration" value="${Number(s.duration) || 8}"></label>
+      <label>Duración base (segundos)<input type="number" min="1" data-rd-current="duration" value="${Number(s.duration) || 8}"></label>
       <label><input type="checkbox" data-rd-toggle="enabled" ${s.enabled !== false ? 'checked' : ''} style="width:auto;margin-right:8px"> Activa (todos los días)</label>
       <label><input type="checkbox" data-rd-toggle="video" ${s.video ? 'checked' : ''} style="width:auto;margin-right:8px"> Animada (MP4)</label>
       <label class="slot-wide" style="color:#ffd98a"><input type="checkbox" data-rd-skipday ${((((RUNDOWN.rundown || {}).days || {})[RUNDOWN.activeDate] || {}).skip || []).includes(s.id) ? 'checked' : ''} style="width:auto;margin-right:8px">
@@ -2115,7 +2124,7 @@ function renderWizard() {
           <label>Título interno</label><input data-wz-manual="${t.id}:title" value="${esc(cur.title || t.slot.title || '')}" placeholder="Vídeo promo">
           <label>Archivo MP4</label><input type="file" data-wz-upload="${t.id}" accept="video/mp4,video/*">
           <input data-wz-manual="${t.id}:file" value="${esc(cur.file || '')}" placeholder="data/uploads/promo.mp4">
-          <label>Duración (segundos)</label><input type="number" min="1" data-wz-manual="${t.id}:duration" value="${esc(cur.duration || t.slot.duration || 8)}">`;
+          <div class="hint" style="margin-top:5px">La duración se calcula desde el MP4 real.</div>`;
       }
       if (t.slot.source === 'fixed' && t.id.startsWith('noticia')) {
         const cur = WZ.manual[t.id] || {};

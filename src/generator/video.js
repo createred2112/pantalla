@@ -11,6 +11,7 @@ const { cfg, paths, abs } = require('../config');
 const { buildHtml, withPage, AUTOFIT } = require('./htmlRender');
 const { prepare } = require('./renderCard');
 const renderGuard = require('../util/renderGuard');
+const mediaDuration = require('../util/mediaDuration');
 const log = require('../util/logger');
 
 // Se inyecta en la página: crea una coreografía completa (en pausa) y expone
@@ -310,7 +311,7 @@ async function renderVideoToFile(card) {
     if (intro || outro) log.info('video', `Uniendo cortinillas ${card.id}: ${intro ? 'entrada' : ''}${intro && outro ? ' + ' : ''}${outro ? 'salida' : ''}`);
     await stitchClips([intro, main, outro].filter(Boolean), out, dir, W, H, fps);
     log.info('video', `MP4 listo ${card.id}: ${path.basename(out)}`);
-    return { file: out, ext: 'mp4' };
+    return { file: out, ext: 'mp4', durationSeconds: mediaDuration.roundedDuration(out) };
     });
   } finally {
     try { for (const f of fs.readdirSync(dir)) fs.rmSync(path.join(dir, f)); fs.rmdirSync(dir); } catch {}
