@@ -102,7 +102,7 @@ function norm(color) {
 }
 
 // Mapa color->rol del tema de la paleta que mejor explica los colores usados.
-function legacyTokenMap(layout) {
+function legacyTokenMap(layout, currentTheme) {
   const used = new Set();
   if (layout.background && layout.background.color && !layout.background.colorTheme && !layout.background.colorFixed) used.add(norm(layout.background.color));
   for (const e of layout.elements || []) {
@@ -113,7 +113,8 @@ function legacyTokenMap(layout) {
   if (!used.size) return {};
   let best = null;
   let bestHits = 0;
-  for (const theme of Object.values(cfg.palette || {})) {
+  const themes = [currentTheme, ...Object.values(cfg.palette || {})].filter(Boolean);
+  for (const theme of themes) {
     let hits = 0;
     for (const v of used) if (TOKEN_KEYS.some((k) => norm(theme[k]) === v)) hits++;
     if (hits > bestHits) { bestHits = hits; best = theme; }
@@ -131,7 +132,7 @@ function legacyTokenMap(layout) {
 // Aplica un layout (elementos) a los datos de la cartela (refresca texto vinculado
 // y mantiene vivos los colores ligados al tema cuando el editor los guardó así).
 function applyLayout(layout, card, ctx) {
-  const legacy = legacyTokenMap(layout);
+  const legacy = legacyTokenMap(layout, ctx && ctx.theme);
   const live = (explicitToken, rawColor, fixed) => {
     const token = explicitToken || (fixed ? null : legacy[norm(rawColor)]);
     return (token && themeValue(ctx, token)) || rawColor;
@@ -145,7 +146,81 @@ function applyLayout(layout, card, ctx) {
     if (el.bg) el.bg = live(el.bgTheme, el.bg, el.bgFixed);
     return el;
   });
-  return { background: bg, elements };
+  return repairFrameForCard(card, ctx, { background: bg, elements });
+}
+
+function sameText(a, b) {
+  return norm(String(a || '').replace(/\s+/g, ' ')) === norm(String(b || '').replace(/\s+/g, ' '));
+}
+
+function airBodyElement(card, ctx, band) {
+  const { W, H, theme } = ctx;
+  const pad = Math.round(W * 0.05);
+  return {
+    id: 'el_air_body_guard',
+    type: 'text',
+    bind: 'body',
+    x: pad,
+    y: band.y,
+    w: W - pad * 2,
+    h: band.h,
+    text: String(card.body || '').toUpperCase(),
+    font: 'display',
+    weight: 800,
+    color: theme.accentText,
+    colorTheme: 'accentText',
+    align: 'center',
+    valign: 'center',
+    lineHeight: 1,
+    autofit: { min: Math.round(H * 0.04), max: Math.round(H * 0.075), lines: 1 },
+  };
+}
+
+function repairAirFrame(card, ctx, frame) {
+  if (!String(card.body || '').trim()) return frame;
+  const { W, H, theme } = ctx;
+  const elements = Array.isArray(frame.elements) ? [...frame.elements] : [];
+  let band = elements.find((el) =>
+    (el.type === 'rect' || el.type === 'band') &&
+    Number(el.w || 0) >= W * 0.8 &&
+    Number(el.h || 0) >= H * 0.06 &&
+    Number(el.y || 0) >= H * 0.45 &&
+    Number(el.y || 0) <= H * 0.82
+  );
+  if (!band) {
+    band = {
+      id: 'el_air_band_guard',
+      type: 'rect',
+      x: 0,
+      y: Math.round(H * 0.64),
+      w: W,
+      h: Math.round(H * 0.13),
+      color: theme.accent,
+      colorTheme: 'accent',
+    };
+    elements.push(band);
+  } else {
+    band.x = 0;
+    band.w = W;
+    band.color = theme.accent;
+    band.colorTheme = 'accent';
+    delete band.colorFixed;
+  }
+
+  const idx = elements.findIndex((el) =>
+    (el.type === 'text' || el.type === 'chip') &&
+    (el.bind === 'body' || sameText(el.text, card.body))
+  );
+  const body = idx >= 0 ? { ...elements[idx], ...airBodyElement(card, ctx, band) } : airBodyElement(card, ctx, band);
+  if (idx >= 0) elements.splice(idx, 1);
+  const bandIndex = elements.indexOf(band);
+  elements.splice(Math.max(0, bandIndex + 1), 0, body);
+  return { ...frame, elements };
+}
+
+function repairFrameForCard(card, ctx, frame) {
+  if (card && card.template === 'aire') return repairAirFrame(card, ctx, frame);
+  return frame;
 }
 
 // Frame resuelto, por prioridad: layout propio de la cartela > layout por defecto
@@ -156,7 +231,7 @@ function resolveFrame(card, ctx, tpl) {
   if (tl && Array.isArray(tl.elements)) return applyLayout(tl, card, ctx);
   const frame = tpl.build(card, ctx) || { elements: [] };
   frame.elements = (frame.elements || []).map((e, i) => Object.assign({ id: 'el' + i, bind: inferBind(e, card) }, e));
-  return frame;
+  return repairFrameForCard(card, ctx, frame);
 }
 
 // Resuelve el frame para el editor (sin renderizar): { W, H, background, elements }.
