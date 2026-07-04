@@ -6,6 +6,7 @@ const fs = require('fs');
 const { cfg, saveConfig, ftpConfig, abs } = require('./config');
 const log = require('./util/logger');
 const status = require('./util/status');
+const audit = require('./util/auditLog');
 const store = require('./store');
 const renderMeta = require('./util/renderMeta');
 
@@ -101,18 +102,34 @@ async function run(day, c, opts = {}) {
   const publishNow = opts.publish === true;
   const mode = opts.scheduled ? 'Pase diario' : (opts.sync ? 'Sincronización viva' : (opts.hourly ? 'Pase horario' : 'Preparación manual'));
   const uploadSource = opts.manual ? 'manual-pilot' : (opts.scheduled ? 'automatic-daily' : (opts.hourly ? 'automatic-hourly' : (opts.sync ? 'automatic-watch' : 'manual-pilot')));
+  const runId = opts.runId || audit.runId(uploadSource);
   log.info('autopilot', `${mode}: escaleta del ${day}${publishNow ? ' + FTP' : ' (sin publicar: revisar antes)'}`);
+  audit.event('autopilot.start', `${mode}: ${publishNow ? 'actualizar, preparar y subir' : 'actualizar y preparar'}`, {
+    runId, source: uploadSource, day, mode: publishNow ? 'publish' : 'review',
+    syncEveryMinutes: c.syncEveryMinutes,
+  });
   // Datos frescos de los workers ANTES de materializar (tiempo, luz...).
+  const forceKeys = (opts.hourly || opts.sync) ? ['weather', 'airQuality'] : [];
   try {
-    await require('./workers').refreshAll(opts.hourly ? { forceKeys: ['weather', 'airQuality'] } : {});
-  } catch {}
+    const workerRefresh = await require('./workers').refreshAll(forceKeys.length ? { forceKeys } : {});
+    audit.event('workers.refresh', forceKeys.length
+      ? 'Datos automaticos revisados; tiempo y calidad del aire forzados'
+      : 'Datos automaticos revisados segun cache',
+    { runId, ok: true, forceKeys, results: workerRefresh.results });
+  } catch (e) {
+    audit.event('workers.refresh', 'No se pudieron refrescar datos automaticos', { runId, ok: false, error: e.message });
+  }
   const r = require('./rundown').materialize({ date: day });
+  audit.event('rundown.materialize', `Escaleta materializada: ${r.count || 0} cartela(s)`, { runId, ok: r.ok !== false, count: r.count });
   const sig = sequenceSignature();
   if (opts.skipIfUnchanged) {
     const stages = status.read().stages || {};
     const prevRun = opts.hourly ? (stages['autopilot-hora'] || stages['autopilot-sync'] || null) : (stages['autopilot-sync'] || null);
     if (prevRun && prevRun.signature === sig && prevRun.ok !== false) {
       log.info('autopilot', `${mode}: sin cambios; no se regenera ni se sube`);
+      audit.event('autopilot.skip', 'Sin cambios: se conservan los MP4 y no se sube al FTP', {
+        runId, ok: true, source: uploadSource, day, count: r.count, signature: sig,
+      });
       if (opts.sync) {
         status.set('autopilot-sync', { ok: true, day, cards: r.count, published: false, prepared: !publishNow, mode: publishNow ? 'publish' : 'review', signature: sig, unchanged: true });
       }
@@ -121,10 +138,18 @@ async function run(day, c, opts = {}) {
   }
   let pub = null;
   if (publishNow) {
-    pub = await require('./pipeline/publish').publish({ dryRun: false, skipImport: false, uploadSource });
+    pub = await require('./pipeline/publish').publish({ dryRun: false, skipImport: false, uploadSource, runId });
   } else {
     // Solo renderiza (con caché): deja las cartelas listas para REVISAR.
-    try { await require('./pipeline/generate').generate(); } catch (e) { log.warn('autopilot', 'Fallo al renderizar: ' + e.message); }
+    try {
+      const gen = await require('./pipeline/generate').generate();
+      audit.event('generate.finish', `MP4 preparados: ${gen.count || 0}; reutilizados: ${gen.reused || 0}`, {
+        runId, ok: gen.ok !== false, count: gen.count, reused: gen.reused,
+      });
+    } catch (e) {
+      audit.event('generate.finish', 'Fallo al preparar MP4', { runId, ok: false, error: e.message });
+      log.warn('autopilot', 'Fallo al renderizar: ' + e.message);
+    }
   }
   const ok = Boolean(r.ok !== false && (!pub || pub.ok));
   // Solo la ejecución PROGRAMADA marca el día como hecho: la preparación
@@ -140,7 +165,11 @@ async function run(day, c, opts = {}) {
   log[ok ? 'info' : 'warn']('autopilot',
     `${mode} ${ok ? 'OK' : 'con fallos'}: ${r.count} cartela(s)` +
     (pub ? (pub.ok ? ' · publicado en pantalla' : ' · FALLO al publicar (mira el log)') : ' · pendiente de revisión y publicación manual'));
-  return { ok, day, cards: r.count, published: Boolean(pub && pub.ok), prepared: !publishNow, signature: sig };
+  audit.event('autopilot.finish', `${mode} ${ok ? 'OK' : 'con fallos'}`, {
+    runId, ok, source: uploadSource, day, cards: r.count, published: Boolean(pub && pub.ok),
+    prepared: !publishNow, signature: sig,
+  });
+  return { ok, day, cards: r.count, published: Boolean(pub && pub.ok), prepared: !publishNow, signature: sig, runId };
 }
 
 async function tick() {

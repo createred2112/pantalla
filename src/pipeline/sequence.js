@@ -257,7 +257,7 @@ function sequence({ dryRun } = {}) {
   status.set('sequence', { ok: true, count: manifest.length, requiredCount: countNeeded || undefined, manifest, files: filesForPublish(copies.map((c) => c.file)), omitted });
   log.info('sequence', `Secuencia lista: ${manifest.length} archivo(s) en publish/`);
   if (omitted.length) log.warn('sequence', `${omitted.length} cartela(s) activa(s) quedan fuera porque la pantalla solo admite ${countNeeded}`);
-  return { ok: true, manifest, files: filesForPublish(copies.map((c) => c.file)), omitted };
+  return { ok: true, count: manifest.length, requiredCount: countNeeded || undefined, manifest, files: filesForPublish(copies.map((c) => c.file)), omitted };
 }
 
 module.exports = { sequence };

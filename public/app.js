@@ -990,6 +990,47 @@ function renderPilotHistory() {
   ].join('');
 }
 
+function auditTypeLabel(type) {
+  const map = {
+    'autopilot.start': 'Piloto',
+    'autopilot.finish': 'Piloto',
+    'autopilot.skip': 'Sin cambios',
+    'workers.refresh': 'Datos',
+    'rundown.materialize': 'Escaleta',
+    'generate.finish': 'MP4',
+    'publish.start': 'Publicación',
+    'publish.import': 'Importar',
+    'publish.workers': 'Datos',
+    'publish.rundown': 'Escaleta',
+    'publish.generate': 'MP4',
+    'publish.sequence': '8 archivos',
+    'publish.upload': 'FTP',
+    'publish.finish': 'Final',
+    'publish.stop': 'Detenido',
+  };
+  return map[type] || type || 'Registro';
+}
+
+function renderAudit(entries) {
+  if (!entries || !entries.length) return '<div class="status">Todavía no hay registro operativo.</div>';
+  return entries.slice().reverse().map((e) => {
+    const ok = e.ok === false ? 'bad' : (e.type === 'autopilot.skip' ? 'skip' : 'ok');
+    const ts = e.ts ? new Date(e.ts).toLocaleString('es-ES') : '';
+    const source = e.source ? ` · ${esc(e.source)}` : '';
+    const run = e.runId ? ` · ${esc(e.runId)}` : '';
+    const files = Array.isArray(e.files) && e.files.length
+      ? `<div class="audit-files">${e.files.map(esc).join(' · ')}</div>`
+      : '';
+    const extra = e.error ? `<p>${esc(e.error)}</p>` : (e.count != null ? `<p>${esc(e.count)} elemento(s)</p>` : '');
+    return `<div class="audit-row ${ok}">
+      <b>${esc(auditTypeLabel(e.type))}</b>
+      <small>${esc(ts)}${source}${run}</small>
+      <p>${esc(e.message || '')}</p>
+      ${files}${extra}
+    </div>`;
+  }).join('');
+}
+
 function renderPilotPlan() {
   const rows = (((PILOT.rundown || {}).report) || [])
     .filter((r) => r.source === 'library' && Array.isArray(r.choices) && r.choices.length);
@@ -2700,6 +2741,8 @@ async function loadStatus(full) {
     if (full) {
       $('#statusBox').innerHTML = Object.entries(st.stages || {}).map(([k, v]) =>
         `<div>${v.ok ? '✅' : '❌'} <b>${k}</b> · ${new Date(v.ts).toLocaleTimeString('es-ES')}${v.error ? ' · ' + esc(v.error) : ''}</div>`).join('') || 'Sin actividad aún.';
+      const audit = await api('/audit?n=160');
+      $('#auditBox').innerHTML = renderAudit(audit);
       const logs = await api('/log?n=120');
       $('#log').textContent = logs.map(l => `${(l.ts||'').slice(11,19)} ${(l.level||'').toUpperCase()} (${l.stage}) ${l.msg}`).join('\n');
     }

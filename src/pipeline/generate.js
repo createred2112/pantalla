@@ -82,7 +82,7 @@ async function generate(opts = {}) {
   const ok = results.every((r) => r.ok);
   log.info('generate', `Generación: ${results.length - reused - results.filter((r) => !r.ok).length} nueva(s), ${reused} reutilizada(s) de ${cards.length}`);
   status.set('generate', { ok, count: results.length, reused, results });
-  return { ok, results, reused };
+  return { ok, count: results.length, results, reused };
 }
 
 module.exports = { generate, renderOne };

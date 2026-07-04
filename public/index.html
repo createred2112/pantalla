@@ -82,6 +82,15 @@
   .status b{color:var(--txt)}
   #log{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;background:#06101f;border:1px solid var(--line);
     border-radius:10px;padding:10px;max-height:40vh;overflow:auto;white-space:pre-wrap;color:#bcd}
+  .audit-list{display:flex;flex-direction:column;gap:8px;margin:10px 0 14px}
+  .audit-row{border:1px solid var(--line);border-radius:10px;background:#081729;padding:9px 10px}
+  .audit-row.ok{border-color:rgba(43,182,115,.45)}
+  .audit-row.bad{border-color:rgba(226,35,26,.55)}
+  .audit-row.skip{border-color:rgba(232,172,22,.5)}
+  .audit-row b{display:block;font-size:13px}
+  .audit-row small{display:block;color:var(--muted);font-size:11px;margin-top:2px}
+  .audit-row p{margin:5px 0 0;font-size:12px;color:#d8e6ff}
+  .audit-files{margin-top:6px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;color:#bcd}
   .toast{position:fixed;left:50%;bottom:150px;transform:translateX(-50%);background:#000c;border:1px solid var(--line);
     padding:10px 16px;border-radius:999px;z-index:50;opacity:0;transition:opacity .2s}
   .toast.show{opacity:1}
@@ -623,9 +632,12 @@
 
 <!-- Estado -->
 <dialog id="statusDlg">
-  <div class="dlg-h"><h2>Estado y log</h2><button class="ghost" onclick="statusDlg.close()">✕</button></div>
+  <div class="dlg-h"><h2>Estado y registro</h2><button class="ghost" onclick="statusDlg.close()">✕</button></div>
   <div class="dlg-b">
     <div id="statusBox" class="status"></div>
+    <h3 style="margin:14px 0 6px;font-size:13px">Registro operativo</h3>
+    <div id="auditBox" class="audit-list"></div>
+    <h3 style="margin:14px 0 6px;font-size:13px">Log técnico</h3>
     <div id="log"></div>
   </div>
 </dialog>

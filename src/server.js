@@ -9,6 +9,7 @@ const sharp = require('sharp');
 const store = require('./store');
 const log = require('./util/logger');
 const status = require('./util/status');
+const auditLog = require('./util/auditLog');
 const { renderToBuffer } = require('./generator/renderCard');
 const { publish } = require('./pipeline/publish');
 const { importWorker } = require('./pipeline/importWorker');
@@ -715,6 +716,10 @@ app.get('/api/status', (req, res) => {
 
 app.get('/api/log', (req, res) => {
   res.json(log.tail(Number(req.query.n) || 150));
+});
+
+app.get('/api/audit', (req, res) => {
+  res.json(auditLog.tail(Number(req.query.n) || 200));
 });
 
 app.listen(env.port, () => {
