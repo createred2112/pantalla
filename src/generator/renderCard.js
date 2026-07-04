@@ -317,9 +317,44 @@ function repairWeatherFrame(card, ctx, frame) {
   return { ...frame, elements };
 }
 
+function forecastDays(card) {
+  const d = card && card.data ? card.data : {};
+  return Array.isArray(d.days) ? d.days.slice(0, 3) : [];
+}
+
+function forecastIconElement(day, i, count, ctx) {
+  const { W, H, theme } = ctx;
+  const clima = require('./templates/clima');
+  const pad = Math.round(W * 0.05);
+  const colW = Math.round((W - pad * 2) / Math.max(1, count));
+  const x = pad + i * colW;
+  const icoS = Math.round(H * 0.25);
+  const key = clima.keyOf(day && day.cond);
+  return {
+    id: `el_forecast_icon_guard_${i}`,
+    type: 'svg',
+    anim: clima.animFor(key),
+    x: Math.round(x + (colW - icoS) / 2),
+    y: Math.round(H * 0.285),
+    w: icoS,
+    h: icoS,
+    svg: clima.iconSvg(key, clima.iconColor(theme)),
+  };
+}
+
+function repairForecastFrame(card, ctx, frame) {
+  const days = forecastDays(card);
+  if (!days.length) return frame;
+  const elements = (Array.isArray(frame.elements) ? [...frame.elements] : [])
+    .filter((el) => el.type !== 'svg' || !/<svg/i.test(String(el.svg || '')));
+  days.forEach((day, i) => elements.push(forecastIconElement(day, i, days.length, ctx)));
+  return { ...frame, elements };
+}
+
 function repairFrameForCard(card, ctx, frame) {
   if (card && card.template === 'aire') return repairAirFrame(card, ctx, frame);
   if (card && card.template === 'clima') return repairWeatherFrame(card, ctx, frame);
+  if (card && card.template === 'prevision') return repairForecastFrame(card, ctx, frame);
   return frame;
 }
 

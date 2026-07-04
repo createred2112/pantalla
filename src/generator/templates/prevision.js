@@ -24,19 +24,19 @@ module.exports = {
     }
 
     const colW = Math.round((W - pad * 2) / days.length);
+    const iconStroke = iconColor(theme);
     days.forEach((day, i) => {
       const x = pad + i * colW;
-      const first = i === 0; // HOY manda: acento
-      const c = first ? iconColor(theme) : theme.text;
+      const c = theme.text;
       if (i > 0) {
         els.push({ type: 'rect', x: x, y: Math.round(H * 0.2), w: 2, h: Math.round(H * 0.58), color: theme.textMuted, radius: 0 });
       }
       // Día
       els.push({ type: 'text', x, y: Math.round(H * 0.185), w: colW, h: Math.round(H * 0.075), text: String(day.label || '').toUpperCase(), font: 'display', weight: 800, color: c, align: 'center', valign: 'center', letterSpacingEm: 0.06, autofit: { min: Math.round(H * 0.035), max: Math.round(H * 0.055), lines: 1 } });
       // Icono
-      const icoS = Math.round(H * 0.24);
+      const icoS = Math.round(H * 0.25);
       const icoKey = keyOf(day.cond);
-      els.push({ type: 'svg', anim: animFor(icoKey), x: Math.round(x + (colW - icoS) / 2), y: Math.round(H * 0.29), w: icoS, h: icoS, svg: iconSvg(icoKey, c) });
+      els.push({ type: 'svg', anim: animFor(icoKey), x: Math.round(x + (colW - icoS) / 2), y: Math.round(H * 0.285), w: icoS, h: icoS, svg: iconSvg(icoKey, iconStroke) });
       // Máxima gigante
       els.push({ type: 'text', x, y: Math.round(H * 0.55), w: colW, h: Math.round(H * 0.15), text: `${day.max}º`, font: 'display', weight: 800, color: c, align: 'center', valign: 'center', lineHeight: 1, autofit: { min: Math.round(H * 0.08), max: Math.round(H * 0.13), lines: 1 } });
       // Mínima
