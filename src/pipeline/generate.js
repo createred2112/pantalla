@@ -2,6 +2,7 @@
 // Etapa GENERATE: renderiza las cartelas de tipo "generated"... solo si hace
 // falta. Si el contenido no cambió desde el último render, se REUTILIZA el
 // archivo de output/ sin tocar Chromium/ffmpeg (opts.force lo salta).
+const fs = require('fs');
 const path = require('path');
 const { active } = require('../store');
 const { renderToFile } = require('../generator/renderCard');
@@ -10,6 +11,7 @@ const status = require('../util/status');
 const renderGuard = require('../util/renderGuard');
 const renderMeta = require('../util/renderMeta');
 const mediaDuration = require('../util/mediaDuration');
+const { paths } = require('../config');
 
 function forceVideoOutput() {
   const profile = require('../config').cfg.screenProfile || {};
@@ -24,6 +26,24 @@ function publishableCards() {
   return required > 0 ? cards.slice(0, required) : cards;
 }
 
+function reuseSharedRender(card, fresh) {
+  if (!fresh || !fresh.shared) return null;
+  const ext = path.extname(fresh.file).toLowerCase() || '.mp4';
+  const dest = path.join(paths.output, `${card.id}${ext}`);
+  fs.mkdirSync(paths.output, { recursive: true });
+  if (path.resolve(fresh.file) !== path.resolve(dest)) fs.copyFileSync(fresh.file, dest);
+  if (ext === '.mp4') {
+    const posterSrc = path.join(paths.output, `${path.basename(fresh.file, ext)}.jpg`);
+    const posterDest = path.join(paths.output, `${card.id}.jpg`);
+    if (fs.existsSync(posterSrc) && path.resolve(posterSrc) !== path.resolve(posterDest)) {
+      fs.copyFileSync(posterSrc, posterDest);
+    }
+  }
+  const durationSeconds = fresh.durationSeconds || (ext === '.mp4' ? mediaDuration.roundedDuration(dest) : null);
+  renderMeta.set(card.id, { hash: fresh.hash, file: path.basename(dest), durationSeconds });
+  return { file: dest, reused: true, shared: true, durationSeconds };
+}
+
 // Devuelve { file, reused }. force=true regenera siempre.
 async function renderOne(card, opts = {}) {
   const forcedVideo = card.type === 'generated' && forceVideoOutput();
@@ -36,7 +56,8 @@ async function renderOne(card, opts = {}) {
     // animada puede caer a JPG si el modo seguro impide renderizar vídeo.
     const fresh = renderMeta.isFresh(effectiveCard, { wantVideo: forcedVideo || wantVideo }) ||
       (!forcedVideo && effectiveCard.video && !wantVideo ? renderMeta.isFresh(effectiveCard) : null);
-    if (fresh) return { file: fresh.file, reused: true, durationSeconds: fresh.durationSeconds || mediaDuration.roundedDuration(fresh.file) };
+    if (fresh) return reuseSharedRender(effectiveCard, fresh) ||
+      { file: fresh.file, reused: true, durationSeconds: fresh.durationSeconds || mediaDuration.roundedDuration(fresh.file) };
   }
 
   let file;

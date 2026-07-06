@@ -91,6 +91,12 @@ function videoOptions(selected, placeholder = 'Elegir vídeo guardado...') {
   return opts.join('');
 }
 
+function videoNameForPath(path) {
+  if (!path) return 'Sin cortinilla';
+  const item = VIDEO_LIBRARY.find((v) => v.path === path);
+  return item ? videoLabel(item) : path;
+}
+
 function fillVideoSelect(sel, selected, placeholder) {
   if (!sel) return;
   sel.innerHTML = videoOptions(selected || '', placeholder);
@@ -211,20 +217,32 @@ function hex(c) { return (c && c[0] === '#') ? c.slice(0, 7) : '#000000'; }
 
 function buildBumperEditor() {
   const bumpers = SETTINGS.templateBumpers || {};
-  const chosen = ['clima', 'prevision', 'meteoaviso', 'luz', 'gasolina', 'dato', 'alerta', 'agenda', 'noticia', 'mensaje'];
+  const chosen = ['clima', 'prevision', 'meteoaviso', 'agenda', 'luz', 'aire', 'gasolina', 'dato', 'alerta', 'noticia', 'mensaje'];
   const list = chosen.map((id) => TEMPLATES.find((t) => t.id === id)).filter(Boolean);
   $('#setTemplateBumpers').innerHTML = list.map((t) => {
     const b = bumpers[t.id] || {};
-    return `<div data-bumper-template="${esc(t.id)}" style="padding:10px;margin:8px 0;background:#0a1a30;border:1px dashed var(--line);border-radius:10px">
+    return `<div data-bumper-template="${esc(t.id)}" style="padding:10px;margin:8px 0;background:#0a1a30;border:1px solid var(--line);border-radius:10px">
       <b style="font-size:13px">${esc(t.label)}</b>
-      <label>Entrada MP4</label>
-      <input type="file" data-bumper-file="intro" accept="video/mp4,video/*">
-      <select data-bumper-pick="intro" class="video-pick">${videoOptions(b.intro || '', 'Elegir entrada guardada...')}</select>
-      <input data-bumper-path="intro" value="${esc(b.intro || '')}" placeholder="data/uploads/entrada-${esc(t.id)}.mp4">
-      <label>Salida MP4</label>
-      <input type="file" data-bumper-file="outro" accept="video/mp4,video/*">
-      <select data-bumper-pick="outro" class="video-pick">${videoOptions(b.outro || '', 'Elegir salida guardada...')}</select>
-      <input data-bumper-path="outro" value="${esc(b.outro || '')}" placeholder="data/uploads/salida-${esc(t.id)}.mp4">
+      <div class="mini2" style="margin-top:8px">
+        <label style="margin-top:0">Entrada
+          <select data-bumper-pick="intro" class="video-pick">${videoOptions(b.intro || '', 'Sin entrada')}</select>
+        </label>
+        <label style="margin-top:0">Subir entrada nueva
+          <input type="file" data-bumper-file="intro" accept="video/mp4,video/*">
+        </label>
+      </div>
+      <input type="hidden" data-bumper-path="intro" value="${esc(b.intro || '')}">
+      <div class="hint" data-bumper-current="intro">Entrada actual: ${esc(videoNameForPath(b.intro || ''))}</div>
+      <div class="mini2" style="margin-top:8px">
+        <label style="margin-top:0">Salida
+          <select data-bumper-pick="outro" class="video-pick">${videoOptions(b.outro || '', 'Sin salida')}</select>
+        </label>
+        <label style="margin-top:0">Subir salida nueva
+          <input type="file" data-bumper-file="outro" accept="video/mp4,video/*">
+        </label>
+      </div>
+      <input type="hidden" data-bumper-path="outro" value="${esc(b.outro || '')}">
+      <div class="hint" data-bumper-current="outro">Salida actual: ${esc(videoNameForPath(b.outro || ''))}</div>
     </div>`;
   }).join('');
 }
@@ -257,6 +275,8 @@ $('#setTemplateBumpers').addEventListener('change', async (e) => {
   if (pick) {
     const row = pick.closest('[data-bumper-template]');
     row.querySelector(`[data-bumper-path="${pick.dataset.bumperPick}"]`).value = pick.value || '';
+    const label = row.querySelector(`[data-bumper-current="${pick.dataset.bumperPick}"]`);
+    if (label) label.textContent = `${pick.dataset.bumperPick === 'intro' ? 'Entrada' : 'Salida'} actual: ${videoNameForPath(pick.value || '')}`;
     return;
   }
   const fileInput = e.target.closest('[data-bumper-file]');
@@ -267,6 +287,10 @@ $('#setTemplateBumpers').addEventListener('change', async (e) => {
   const p = await uploadFile(fileInput);
   await loadVideoLibrary();
   row.querySelector(`[data-bumper-path="${kind}"]`).value = p || '';
+  const pickSelect = row.querySelector(`[data-bumper-pick="${kind}"]`);
+  if (pickSelect) fillVideoSelect(pickSelect, p || '', kind === 'intro' ? 'Sin entrada' : 'Sin salida');
+  const label = row.querySelector(`[data-bumper-current="${kind}"]`);
+  if (label) label.textContent = `${kind === 'intro' ? 'Entrada' : 'Salida'} actual: ${videoNameForPath(p || '')}`;
   toast('Cortinilla lista');
 });
 
