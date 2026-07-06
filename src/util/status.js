@@ -10,7 +10,7 @@ function read() {
   try {
     return JSON.parse(fs.readFileSync(STATUS_FILE, 'utf8'));
   } catch {
-    return { stages: {}, lastPublish: null };
+    return { stages: {}, lastPublish: null, lastRealUpload: null };
   }
 }
 
@@ -28,6 +28,7 @@ function set(stage, result) {
   };
   if (stage === 'upload' && result.ok !== false && !result.dryRun) {
     state.lastPublish = state.stages[stage].ts;
+    state.lastRealUpload = state.stages[stage];
   }
   return write(state);
 }

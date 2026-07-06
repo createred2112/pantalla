@@ -557,10 +557,10 @@ function showActivity(activity) {
 }
 
 function uploadSourceLabel(source, dryRun) {
-  if (dryRun) return 'Comprobación manual';
+  if (dryRun) return 'Comprobación sin enviar';
   const map = {
     manual: 'Subida manual',
-    'manual-check': 'Comprobación manual',
+    'manual-check': 'Comprobación sin enviar',
     'manual-pilot': 'Subida manual desde piloto',
     'automatic-daily': 'Subida automática diaria',
     'automatic-hourly': 'Subida automática horaria',
@@ -569,13 +569,27 @@ function uploadSourceLabel(source, dryRun) {
   return map[source] || 'Subida';
 }
 
-function latestUpload() {
+function newestByTs(items) {
+  return items
+    .filter(Boolean)
+    .sort((a, b) => Date.parse(b.ts || 0) - Date.parse(a.ts || 0))[0] || null;
+}
+
+function latestUploadActivity() {
   const st = (APP_STATUS && APP_STATUS.stages) || {};
-  const upload = st.upload || null;
-  const pilotUpload = PILOT && PILOT.upload ? PILOT.upload : null;
-  if (!upload) return pilotUpload;
-  if (!pilotUpload) return upload;
-  return Date.parse(pilotUpload.ts || 0) > Date.parse(upload.ts || 0) ? pilotUpload : upload;
+  return newestByTs([st.upload || null, PILOT && PILOT.upload ? PILOT.upload : null]);
+}
+
+function latestRealUpload() {
+  const st = (APP_STATUS && APP_STATUS.stages) || {};
+  const stored = APP_STATUS && APP_STATUS.lastRealUpload ? APP_STATUS.lastRealUpload : null;
+  const statusUpload = st.upload && st.upload.dryRun !== true ? st.upload : null;
+  const pilotUpload = PILOT && PILOT.upload && PILOT.upload.dryRun !== true ? PILOT.upload : null;
+  const real = newestByTs([stored, statusUpload, pilotUpload]);
+  if (real) return real;
+  return APP_STATUS && APP_STATUS.lastPublish
+    ? { ts: APP_STATUS.lastPublish, ok: true, files: [], source: 'real' }
+    : null;
 }
 
 function uploadResultHtml(upload, compact = false, opts = {}) {
@@ -594,8 +608,8 @@ function uploadResultHtml(upload, compact = false, opts = {}) {
   const title = opts.final && ok
     ? (simulated ? 'Comprobación correcta: todavía no se ha subido' : 'Subida completada: pantalla actualizada')
     : ok
-    ? (simulated ? 'Comprobación correcta' : 'Subida correcta')
-    : (upload.skipped ? 'No se subió' : 'Fallo al subir');
+    ? (simulated ? 'Comprobación correcta: no se envió a pantalla' : 'Envío real correcto')
+    : (upload.skipped ? 'No se subió' : (simulated ? 'Comprobación fallida' : 'Fallo al subir'));
   const source = uploadSourceLabel(upload.source, simulated);
   const files = Array.isArray(upload.files) ? upload.files : [];
   const parts = [];
@@ -612,6 +626,29 @@ function uploadResultHtml(upload, compact = false, opts = {}) {
     <div class="ur-head"><b>${esc(title)}</b><span>${esc(source)} · ${esc(fmtStamp(ts))}</span></div>
     <p>${esc(detail)}</p>${fileList}
   </div>`;
+}
+
+function statusStageLabel(key, value) {
+  const uploadDry = key === 'upload' && value && value.dryRun === true;
+  const map = {
+    import: 'Importación',
+    generate: 'Generación MP4',
+    sequence: 'Orden de 8 archivos',
+    upload: uploadDry ? 'Comprobación sin enviar' : 'Envío a pantalla',
+  };
+  return map[key] || key;
+}
+
+function statusStageDetail(key, value) {
+  if (!value) return '';
+  if (value.error) return value.error;
+  if (key === 'upload' && value.dryRun === true) {
+    return `${(value.files || []).length || 0} archivo(s) revisado(s). No se envió nada a pantalla.`;
+  }
+  if (key === 'upload') return `${(value.files || []).length || 0} archivo(s) enviados al FTP`;
+  if (key === 'sequence') return `${(value.files || []).length || value.count || 0} archivo(s) finales`;
+  if (key === 'generate') return `${value.count || 0} MP4 preparado(s)${value.reused ? `, ${value.reused} reutilizado(s)` : ''}`;
+  return '';
 }
 
 function renderTodayPanel() {
@@ -638,7 +675,7 @@ function renderTodayPanel() {
       <button type="button" class="ghost" data-today-action="review" ${reviewDisabled ? 'disabled' : ''}>Vista previa</button>
       <button type="button" class="primary" data-today-action="publish" ${publishDisabled ? 'disabled' : ''}>Subir</button>
     </div>
-    ${uploadResultHtml(latestUpload(), true)}`;
+    ${uploadResultHtml(latestUploadActivity(), true)}`;
 }
 
 function esc(s){return String(s ?? '').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
@@ -1127,29 +1164,43 @@ function renderPilotMatrix() {
   const uploadOn = PILOT.enabled && PILOT.mode === 'publish';
   const first = PILOT.enabled ? `primer pase ${PILOT.time || '08:00'}` : 'apagada';
   const syncEvery = syncOn ? `cada ${PILOT.syncEveryMinutes} min` : 'sin vigilancia continua';
+  const ftpReady = !PILOT.preflight || PILOT.preflight.ftpConfigured !== false;
+  const uploadMain = uploadOn ? (ftpReady ? 'ACTIVA' : 'REVISAR FTP') : 'INACTIVA';
+  const uploadDetail = uploadOn
+    ? (ftpReady ? `${first}; envía los 8 MP4 al FTP solo cuando la secuencia cambia` : `${first}; falta FTP: hará comprobaciones, pero no enviará a pantalla`)
+    : 'Modo revisar: prepara los MP4, pero no los sube solo.';
   $('#pilotMatrix').innerHTML = [
     stateCard('Auto actualización', updateOn ? 'ACTIVA' : 'INACTIVA', PILOT.enabled ? `${first}; ${syncEvery}; tiempo y calidad del aire cada hora; MP4 solo si cambia` : 'Activa el piloto para actualizar datos, escaleta y MP4 automáticamente.', updateOn, updateOn ? 'ACTIVA' : 'INACTIVA'),
-    stateCard('Auto subida', uploadOn ? 'ACTIVA' : 'INACTIVA', uploadOn ? `${first}; sube al FTP solo cuando la secuencia cambia` : 'Modo revisar: prepara los MP4, pero no los sube solo.', uploadOn, uploadOn ? 'ACTIVA' : 'MANUAL'),
+    stateCard('Auto subida', uploadMain, uploadDetail, uploadOn && ftpReady, uploadOn ? (ftpReady ? 'ACTIVA' : 'SIN FTP') : 'MANUAL'),
   ].join('');
 }
 
 function renderPilotHistory() {
   const gen = PILOT.generate || null;
   const sync = PILOT.sync || null;
-  const upload = PILOT.upload || null;
+  const upload = latestUploadActivity();
+  const realUpload = latestRealUpload();
   const lastCycle = (sync && sync.ts) ? sync : ((PILOT.last && PILOT.last.ts) ? PILOT.last : gen);
   const cycleOk = !lastCycle || lastCycle.ok !== false;
   const cycleDetail = lastCycle
     ? (`${lastCycle.cards ? lastCycle.cards + ' cartelas' : ''}${lastCycle.count ? lastCycle.count + ' MP4' : ''}${lastCycle.reused ? ' · ' + lastCycle.reused + ' reutilizados' : ''}${lastCycle.unchanged ? ' · sin cambios, no sube' : ''}`.trim() || 'OK')
     : 'Aún no ha corrido el piloto.';
-  const uploadOk = !upload || upload.ok !== false;
-  const uploadDetail = upload
-    ? (upload.ok === false ? (upload.error || 'Falló FTP') : `${(upload.files || []).length} archivo(s)${upload.dryRun ? ' · simulada' : ' · FTP OK'}`)
-    : 'Sin envío FTP registrado.';
-  $('#pilotHistory').innerHTML = [
+  const cards = [
     stateCard('Último ciclo del piloto', fmtStamp(lastCycle && lastCycle.ts), cycleOk ? cycleDetail : (lastCycle.error || 'Falló; mira Estado'), cycleOk, cycleOk ? 'OK' : 'ERROR'),
-    stateCard('Último envío a pantalla', fmtStamp(upload && upload.ts), uploadDetail, uploadOk, upload ? (uploadOk ? 'OK' : 'ERROR') : 'SIN ENVÍO'),
-  ].join('');
+  ];
+  if (upload && upload.dryRun === true) {
+    const checkOk = upload.ok !== false;
+    const checkDetail = checkOk
+      ? `${(upload.files || []).length} archivo(s) revisado(s). No se envió nada a la pantalla.`
+      : (upload.error || 'Falló la comprobación.');
+    cards.push(stateCard('Última comprobación sin enviar', fmtStamp(upload.ts), checkDetail, checkOk, checkOk ? 'OK' : 'ERROR'));
+  }
+  const realOk = !!realUpload && realUpload.ok !== false;
+  const realDetail = realUpload
+    ? `${(realUpload.files || []).length || 8} archivo(s) enviados al FTP. Pantalla actualizada.`
+    : 'Todavía no hay ningún envío real registrado.';
+  cards.push(stateCard('Último envío real a pantalla', fmtStamp(realUpload && realUpload.ts), realDetail, realOk, realUpload ? (realOk ? 'OK' : 'ERROR') : 'SIN ENVÍO REAL'));
+  $('#pilotHistory').innerHTML = cards.join('');
 }
 
 function auditTypeLabel(type) {
@@ -1337,8 +1388,9 @@ $('#pilotPublishNow').addEventListener('click', async (e) => {
   try {
     await api('/autopilot/run', { method: 'POST', body: JSON.stringify({ publish: true, sync: true }) });
     await loadStatus();
-    const up = latestUpload();
+    const up = latestUploadActivity();
     if (up && up.ok !== false && !up.dryRun) toast(`Subida correcta: ${(up.files || []).length} archivo(s)`);
+    else if (up && up.dryRun) toast('Comprobación correcta, pero no se envió a pantalla.');
     else toast(up && up.error ? `Fallo al subir: ${up.error}` : 'No se pudo publicar. Mira el resultado.');
     await load();
     loadPilot();
@@ -3080,20 +3132,21 @@ async function loadStatus(full) {
     APP_STATUS = st;
     showActivity();
     renderTodayPanel();
-    const last = st.lastPublish ? new Date(st.lastPublish).toLocaleString('es-ES') : 'nunca';
+    const lastReal = latestRealUpload();
+    const last = lastReal && lastReal.ts ? new Date(lastReal.ts).toLocaleString('es-ES') : 'nunca';
     const op = s.operation || null;
     const opText = op
       ? ` · <b style="color:#ffd98a">Trabajando ahora:</b> ${esc(op.owner || 'emisión')} desde ${esc(new Date(op.startedAt).toLocaleTimeString('es-ES'))}`
       : '';
     $('#statusLine').innerHTML =
       `Pantalla ${s.screen.width}×${s.screen.height} · FTP ${s.ftpConfigured ? '<b>configurado</b>' : '<b style="color:#e0a106">sin configurar</b>'} · Última publicación real: <b>${last}</b>${opText}` +
-      uploadResultHtml(latestUpload(), true);
+      uploadResultHtml(latestUploadActivity(), true);
     if (full) {
       const busyHtml = op
         ? `<div>⏳ <b>Operación en curso</b> · ${esc(op.owner || 'emisión')} · empezó ${esc(new Date(op.startedAt).toLocaleString('es-ES'))}</div>`
         : '<div>✅ <b>Sin operación en curso</b> · se puede preparar o subir</div>';
       const stageHtml = Object.entries(st.stages || {}).map(([k, v]) =>
-        `<div>${v.ok ? '✅' : '❌'} <b>${k}</b> · ${new Date(v.ts).toLocaleTimeString('es-ES')}${v.error ? ' · ' + esc(v.error) : ''}</div>`).join('') || 'Sin actividad aún.';
+        `<div>${v.ok ? '✅' : '❌'} <b>${esc(statusStageLabel(k, v))}</b> · ${new Date(v.ts).toLocaleTimeString('es-ES')}${statusStageDetail(k, v) ? ' · ' + esc(statusStageDetail(k, v)) : ''}</div>`).join('') || 'Sin actividad aún.';
       $('#statusBox').innerHTML = busyHtml + stageHtml;
       const audit = await api('/operations?n=12');
       $('#auditBox').innerHTML = renderAudit(audit);

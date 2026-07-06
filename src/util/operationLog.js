@@ -138,7 +138,7 @@ function fallbackFromStatus() {
       steps: [
         gen.ts ? step('MP4', `${gen.count || 0} preparado(s), ${gen.reused || 0} reutilizado(s)`, gen.ok !== false) : null,
         seq.ts ? step('Secuencia', `${(seq.files || []).length || seq.count || 0} archivo(s) finales`, seq.ok !== false) : null,
-        up.ts ? step('FTP', up.ok === false ? (up.error || 'Fallo') : `${(up.files || []).length || 0} archivo(s) ${up.dryRun ? 'simulado(s)' : 'subido(s)'}`, up.ok !== false) : null,
+        up.ts ? step('FTP', up.ok === false ? (up.error || 'Fallo') : `${(up.files || []).length || 0} archivo(s) ${up.dryRun ? 'comprobado(s), no enviado(s)' : 'subido(s)'}`, up.ok !== false) : null,
       ].filter(Boolean),
       files: up.files || seq.files || [],
       omitted: seq.omitted || [],
