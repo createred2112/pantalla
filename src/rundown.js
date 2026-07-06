@@ -276,6 +276,14 @@ function pickMapFor(rundown, date) {
   return out;
 }
 
+function emissionLimit() {
+  const fixed = cfg.naming && Array.isArray(cfg.naming.fixedFiles)
+    ? cfg.naming.fixedFiles.filter(Boolean)
+    : [];
+  const n = fixed.length || Number(cfg.screenProfile && cfg.screenProfile.requiredCount) || 0;
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+}
+
 function save(rundown, options = {}) {
   const next = {
     title: rundown.title || 'Escaleta',
@@ -571,6 +579,8 @@ function shouldMaterialize(slot, library, date, pickMap = {}) {
 function report(rundown, library, date) {
   const skip = skipSetFor(rundown, date);
   const pick = pickMapFor(rundown, date);
+  const limit = emissionLimit();
+  let emissionOrder = 0;
   return (rundown.slots || []).map((slot, i) => {
     const s = normalizeSlot(slot);
     const p = slotPayload(s, library, date, { pickIndex: pick[s.id] });
@@ -578,9 +588,20 @@ function report(rundown, library, date) {
     const skippedToday = skip.has(s.id);
     const autoSkipped = s.source === 'library' && s.libraryKey === 'agendaEventos' && (p.missing || (!p.title && !p.body));
     const missing = s.enabled && !skippedToday && !autoSkipped && (p.missing || !p.title);
+    const eligible = !skippedToday && shouldMaterialize(s, library, date, pick);
+    let inEmission = false;
+    let slotEmissionOrder = null;
+    if (eligible) {
+      emissionOrder++;
+      inEmission = !limit || emissionOrder <= limit;
+      slotEmissionOrder = emissionOrder;
+    }
     return {
       id: s.id,
       order: i + 1,
+      emissionOrder: slotEmissionOrder,
+      inEmission,
+      omitted: Boolean(eligible && !inEmission),
       label: s.label,
       enabled: s.enabled,
       source: s.source,
@@ -603,14 +624,19 @@ function materialize(options = {}) {
   const { rundown, library, activeDate, report: rep } = read(options);
   const skip = skipSetFor(rundown, activeDate);
   const pick = pickMapFor(rundown, activeDate);
-  const active = (rundown.slots || []).filter((s) => !skip.has(String(s.id)) && shouldMaterialize(s, library, activeDate, pick));
+  const eligible = (rundown.slots || []).filter((s) => !skip.has(String(s.id)) && shouldMaterialize(s, library, activeDate, pick));
+  const limit = emissionLimit();
+  const active = limit ? eligible.slice(0, limit) : eligible;
+  const omitted = limit && eligible.length > limit
+    ? eligible.slice(limit).map((s) => ({ id: String(s.id), label: String(s.label || s.id || '') }))
+    : [];
   const theme = dayTheme(activeDate, rundown);
   const generated = active.map((slot, i) => toCard(slot, library, i + 1, activeDate, pick, theme));
   const manual = store.list()
     .filter((card) => card.source !== 'rundown')
     .map((card, i) => ({ ...card, order: generated.length + i + 1 }));
   store.save({ cards: [...generated, ...manual] });
-  return { ok: true, count: generated.length, cards: generated, report: rep };
+  return { ok: true, count: generated.length, requiredCount: limit || undefined, omitted, cards: generated, report: rep };
 }
 
 function pick(date, slotId, itemIndex) {

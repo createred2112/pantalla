@@ -74,7 +74,7 @@ function renderHash(card) {
   try { tplLayout = require('../templateLayouts').get(card.template, theme.key); } catch {}
   const tplBumpers = templateBumpersFor(card);
   const src = {
-    v: 25, // subir al cambiar el diseño de las plantillas en código
+    v: 26, // subir al cambiar el diseño de las plantillas en código
     template: card.template || '',
     theme,
     layout: card.layout || null,

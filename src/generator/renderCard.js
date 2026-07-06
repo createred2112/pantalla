@@ -333,10 +333,10 @@ function isAirBodyCandidate(el, card, band) {
   return overlap >= Math.min(Math.max(1, h), Math.max(1, bh)) * 0.45;
 }
 
-function airBodyElement(card, ctx, band) {
+function airBodyElement(card, ctx, band, base = null) {
   const { W, H, theme } = ctx;
   const pad = Math.round(W * 0.05);
-  return applyReadableColor({
+  const fallback = {
     id: 'el_air_body_guard',
     type: 'text',
     bind: 'body',
@@ -353,7 +353,21 @@ function airBodyElement(card, ctx, band) {
     valign: 'center',
     lineHeight: 1,
     autofit: { min: Math.round(H * 0.04), max: Math.round(H * 0.075), lines: 1 },
-  }, ctx, band.color || theme.accent, theme.accentText);
+  };
+  const next = {
+    ...fallback,
+    ...(base || {}),
+    id: (base && base.id) || fallback.id,
+    type: 'text',
+    bind: 'body',
+    text: String(card.body || '').toUpperCase(),
+    font: (base && base.font) || fallback.font,
+    weight: (base && base.weight) || fallback.weight,
+    color: (base && base.color) || fallback.color,
+    colorTheme: (base && base.colorTheme) || fallback.colorTheme,
+    autofit: (base && base.autofit) || fallback.autofit,
+  };
+  return applyReadableColor(next, ctx, band.color || theme.accent, next.color || theme.accentText);
 }
 
 function repairAirFrame(card, ctx, frame, opts = {}) {
@@ -381,10 +395,7 @@ function repairAirFrame(card, ctx, frame, opts = {}) {
       };
       elements.splice(idx, 0, band);
     }
-    const body = {
-      ...airBodyElement(card, ctx, band),
-      id: originalBody.id || 'el_air_body_guard',
-    };
+    const body = airBodyElement(card, ctx, band, originalBody);
     elements = elements.filter((el) => el === band || !isAirBodyCandidate(el, card, band));
     const bandIndex = elements.indexOf(band);
     elements.splice(Math.max(0, bandIndex + 1), 0, body);
@@ -412,7 +423,7 @@ function repairAirFrame(card, ctx, frame, opts = {}) {
     delete band.colorFixed;
   }
 
-  const body = idx >= 0 ? { ...airBodyElement(card, ctx, band), id: elements[idx].id || 'el_air_body_guard' } : airBodyElement(card, ctx, band);
+  const body = idx >= 0 ? airBodyElement(card, ctx, band, elements[idx]) : airBodyElement(card, ctx, band);
   elements = elements.filter((el) => el === band || !isAirBodyCandidate(el, card, band));
   const bandIndex = elements.indexOf(band);
   elements.splice(Math.max(0, bandIndex + 1), 0, body);
@@ -443,10 +454,10 @@ function weatherIconElement(card, ctx) {
   };
 }
 
-function weatherBandTextElement(card, ctx, band) {
+function weatherBandTextElement(card, ctx, band, base = null) {
   const { W, H, theme } = ctx;
   const pad = Math.round(W * 0.05);
-  return {
+  const fallback = {
     id: 'el_weather_band_text_guard',
     type: 'text',
     bind: 'weatherSummary',
@@ -465,6 +476,20 @@ function weatherBandTextElement(card, ctx, band) {
     letterSpacingEm: 0,
     autofit: { min: Math.round(H * 0.045), max: Math.round(H * 0.08), lines: 1 },
   };
+  const next = {
+    ...fallback,
+    ...(base || {}),
+    id: (base && base.id) || fallback.id,
+    type: 'text',
+    bind: 'weatherSummary',
+    text: weatherSummary(card).toUpperCase(),
+    font: (base && base.font) || fallback.font,
+    weight: (base && base.weight) || fallback.weight,
+    color: (base && base.color) || fallback.color,
+    colorTheme: (base && base.colorTheme) || fallback.colorTheme,
+    autofit: (base && base.autofit) || fallback.autofit,
+  };
+  return applyReadableColor(next, ctx, band.color || theme.accent, next.color || theme.accentText);
 }
 
 function overlapsY(el, y, h) {
@@ -473,7 +498,7 @@ function overlapsY(el, y, h) {
   return bottom > y && top < y + h;
 }
 
-function repairWeatherFrame(card, ctx, frame) {
+function repairWeatherFrame(card, ctx, frame, opts = {}) {
   const { W, H, theme } = ctx;
   const elements = Array.isArray(frame.elements) ? [...frame.elements] : [];
 
@@ -511,7 +536,19 @@ function repairWeatherFrame(card, ctx, frame) {
       band.colorTheme = 'accent';
       delete band.colorFixed;
     }
-    const bandText = weatherBandTextElement(card, ctx, band);
+    const bandY = Number(band.y || 0);
+    const bandH = Number(band.h || 0);
+    const layoutText = opts.preserveLayout ? elements.find((el) => {
+      if (el.type !== 'text') return false;
+      const isWeatherText = el.bind === 'weatherSummary' ||
+        el.bind === 'subtitle' ||
+        el.bind === 'body' ||
+        sameText(el.text, card.subtitle) ||
+        sameText(el.text, card.body) ||
+        sameText(el.text, summary);
+      return isWeatherText && overlapsY(el, bandY, bandH);
+    }) : null;
+    const bandText = weatherBandTextElement(card, ctx, band, layoutText);
     for (let i = elements.length - 1; i >= 0; i--) {
       const el = elements[i];
       if (el === band || el.type !== 'text') continue;
@@ -521,7 +558,7 @@ function repairWeatherFrame(card, ctx, frame) {
         sameText(el.text, card.subtitle) ||
         sameText(el.text, card.body) ||
         sameText(el.text, summary);
-      if (isWeatherText || overlapsY(el, Number(band.y || 0), Number(band.h || 0))) elements.splice(i, 1);
+      if (isWeatherText || overlapsY(el, bandY, bandH)) elements.splice(i, 1);
     }
     const bandIndex = elements.indexOf(band);
     elements.splice(Math.max(0, bandIndex + 1), 0, bandText);
@@ -566,7 +603,7 @@ function repairForecastFrame(card, ctx, frame) {
 
 function repairFrameForCard(card, ctx, frame, opts = {}) {
   if (card && card.template === 'aire') return repairAirFrame(card, ctx, frame, opts);
-  if (card && card.template === 'clima') return repairWeatherFrame(card, ctx, frame);
+  if (card && card.template === 'clima') return repairWeatherFrame(card, ctx, frame, opts);
   if (card && card.template === 'prevision') return repairForecastFrame(card, ctx, frame);
   return frame;
 }

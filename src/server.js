@@ -87,6 +87,19 @@ app.use((req, res, next) => {
 });
 
 // A partir de aquí, todo requiere sesión válida.
+function sendVersionedHtml(res, file) {
+  const full = path.join(PUBLIC, file);
+  if (!fs.existsSync(full)) return res.status(404).end();
+  const html = fs.readFileSync(full, 'utf8')
+    .replace(/src="([^":]+\.js)"/g, `src="$1?v=${PKG.version}"`);
+  res.type('html').send(html);
+}
+
+app.get(['/', '/index.html'], (req, res) => sendVersionedHtml(res, 'index.html'));
+app.get('/review.html', (req, res) => sendVersionedHtml(res, 'review.html'));
+app.get('/editor.html', (req, res) => sendVersionedHtml(res, 'editor.html'));
+app.get('/galeria.html', (req, res) => sendVersionedHtml(res, 'galeria.html'));
+
 app.use(express.static(PUBLIC));
 app.use('/media/uploads', express.static(paths.uploads));
 app.use('/media/inbox', express.static(paths.workerInbox));
