@@ -498,6 +498,14 @@ function overlapsY(el, y, h) {
   return bottom > y && top < y + h;
 }
 
+function isProtectedWeatherText(el, card) {
+  if (!el || el.type !== 'text') return false;
+  return el.bind === 'title' ||
+    el.bind === 'date' ||
+    sameText(el.text, card.title) ||
+    sameText(el.text, card.date);
+}
+
 function repairWeatherFrame(card, ctx, frame, opts = {}) {
   const { W, H, theme } = ctx;
   const elements = Array.isArray(frame.elements) ? [...frame.elements] : [];
@@ -558,7 +566,7 @@ function repairWeatherFrame(card, ctx, frame, opts = {}) {
         sameText(el.text, card.subtitle) ||
         sameText(el.text, card.body) ||
         sameText(el.text, summary);
-      if (isWeatherText || overlapsY(el, bandY, bandH)) elements.splice(i, 1);
+      if (isWeatherText || (!isProtectedWeatherText(el, card) && overlapsY(el, bandY, bandH))) elements.splice(i, 1);
     }
     const bandIndex = elements.indexOf(band);
     elements.splice(Math.max(0, bandIndex + 1), 0, bandText);
