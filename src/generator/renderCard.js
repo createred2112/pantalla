@@ -90,6 +90,37 @@ function themeValue(ctx, key) {
   return theme[key] || null;
 }
 
+function dynamicText(card, bind) {
+  if (!bind) return null;
+  if (bind === 'weatherSummary') return weatherSummary(card).toUpperCase();
+  if (card[bind] == null) return null;
+  return String(card[bind]);
+}
+
+function refreshDynamicElement(el, card, ctx, svgOrder) {
+  const next = { ...el };
+  if (next.bind) {
+    const text = dynamicText(card, next.bind);
+    if (text != null) next.text = next.transform === 'upper' ? String(text).toUpperCase() : String(text);
+  }
+  if (next.type === 'svg' && /<svg/i.test(String(next.svg || ''))) {
+    const clima = require('./templates/clima');
+    if (card.template === 'clima') {
+      const key = clima.keyOf(card.subtitle);
+      next.anim = clima.animFor(key);
+      next.svg = clima.iconSvg(key, clima.iconColor(ctx.theme));
+    } else if (card.template === 'prevision') {
+      const days = forecastDays(card);
+      const day = days[svgOrder.count] || days[0] || null;
+      svgOrder.count++;
+      const key = clima.keyOf(day && day.cond);
+      next.anim = clima.animFor(key);
+      next.svg = clima.iconSvg(key, clima.iconColor(ctx.theme));
+    }
+  }
+  return next;
+}
+
 // Diseños ANTIGUOS (guardados antes de que el editor anotara colorTheme):
 // se deduce con qué tema de la paleta se guardó el layout (el que explique más
 // colores) y se re-ligan esos colores a sus roles (bg, texto, acento...) del
@@ -139,14 +170,14 @@ function applyLayout(layout, card, ctx) {
   };
   const bg = layout.background ? { ...layout.background } : undefined;
   if (bg && bg.color) bg.color = live(bg.colorTheme, bg.color, bg.colorFixed);
+  const svgOrder = { count: 0 };
   const elements = (layout.elements || []).map((e) => {
-    const el = { ...e };
-    if (el.bind && card[el.bind] != null) el.text = el.transform === 'upper' ? String(card[el.bind]).toUpperCase() : String(card[el.bind]);
+    const el = refreshDynamicElement(e, card, ctx, svgOrder);
     if (el.color) el.color = live(el.colorTheme, el.color, el.colorFixed);
     if (el.bg) el.bg = live(el.bgTheme, el.bg, el.bgFixed);
     return el;
   });
-  return repairFrameForCard(card, ctx, { background: bg, elements }, { preserveLayout: true });
+  return { background: bg, elements };
 }
 
 function sameText(a, b) {
