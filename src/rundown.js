@@ -117,9 +117,12 @@ function normalizeLibraryItem(item, defaults) {
     ? item.weekdays
     : String((item && item.weekdays) || '').split(',');
   let template = String((item && item.template) || defaults.template || 'noticia');
-  if (defaults.key === 'datosCuriosos' && template === 'dato') template = 'datocurioso';
+  const title = String((item && item.title) || '');
+  const shortFigure = title.replace(/\s+/g, '').length <= 9;
+  if (defaults.key === 'datosCuriosos') template = 'datocurioso';
+  if (defaults.key === 'datosUtiles' && shortFigure) template = 'dato';
   return {
-    title: String((item && item.title) || ''),
+    title,
     subtitle: String((item && item.subtitle) || ''),
     body: String((item && item.body) || ''),
     template,

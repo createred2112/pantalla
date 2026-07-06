@@ -1,8 +1,7 @@
 'use strict';
-// DATO — la pieza insignia del sistema: CIFRA a media pantalla + BANDA de
-// acento a todo el ancho con la etiqueta dentro. Lectura en 2 segundos incluso
-// a baja resolución: primero el número, luego la banda de color dice qué es.
-// Si el título es una frase (no una cifra), envuelve en hasta 3 líneas grandes.
+// DATO — cifras o teléfonos útiles. Debe entenderse desde el primer segundo:
+// etiqueta arriba, número protagonista y contexto en una banda clara.
+// Si el título es una frase, envuelve en hasta 3 líneas grandes.
 module.exports = {
   id: 'dato',
   label: 'Dato / Cifra (número gigante)',
@@ -18,15 +17,25 @@ module.exports = {
     const isFigure = title.replace(/\s+/g, '').length <= 9;
     const hasBody = Boolean(String(card.body || '').trim());
     const subtitle = String(card.subtitle || '').trim();
-    const showBand = Boolean(subtitle && !/^(gasteizberri|gasteizberri\.com)$/i.test(subtitle));
+    const usefulSubtitle = Boolean(subtitle && !/^(gasteizberri|gasteizberri\.com)$/i.test(subtitle));
+    const showBand = usefulSubtitle || (isFigure && hasBody);
 
-    // La cifra (o frase) domina el lienzo superior.
+    if (isFigure && subtitle) {
+      els.push({
+        type: 'text', x: pad, y: Math.round(H * 0.055), w, h: Math.round(H * 0.13),
+        text: subtitle.toUpperCase(), font: 'display', weight: 800, color: theme.text,
+        align: 'center', valign: 'center', lineHeight: 1, letterSpacingEm: 0.025,
+        autofit: { min: Math.round(H * 0.045), max: Math.round(H * 0.095), lines: 1 },
+      });
+    }
+
+    // La cifra (o frase) domina el lienzo central.
     els.push({
-      type: 'text', x: pad, y: Math.round(H * 0.05), w, h: Math.round(H * 0.58),
+      type: 'text', x: pad, y: Math.round(H * (isFigure ? 0.17 : 0.05)), w, h: Math.round(H * (isFigure ? 0.42 : 0.58)),
       text: title.toUpperCase(), font: 'display', weight: 800, color: theme.text,
-      align: 'center', valign: 'center', lineHeight: isFigure ? 1 : 0.96, letterSpacingEm: -0.01,
+      align: 'center', valign: 'center', lineHeight: isFigure ? 0.92 : 0.96, letterSpacingEm: -0.01,
       autofit: isFigure
-        ? { min: Math.round(H * 0.16), max: Math.round(H * 0.5), lines: 1 }
+        ? { min: Math.round(H * 0.18), max: Math.round(H * 0.42), lines: 1 }
         : { min: Math.round(H * 0.07), max: Math.round(H * 0.16), lines: 3 },
     });
 
@@ -39,21 +48,22 @@ module.exports = {
       });
     }
 
-    // Banda de acento a sangre: la etiqueta vive dentro. Firma visual de la casa.
-    if (showBand) {
-      const bandY = Math.round(H * 0.67);
-      const bandH = Math.round(H * 0.14);
+    // Banda de acento a sangre: en cifras muestra contexto; en frases, etiqueta.
+    const bandText = isFigure ? (String(card.body || '').trim() || (usefulSubtitle ? subtitle : '')) : subtitle;
+    if (bandText && showBand) {
+      const bandY = Math.round(H * 0.62);
+      const bandH = Math.round(H * 0.17);
       els.push({ type: 'rect', x: 0, y: bandY, w: W, h: bandH, color: theme.accent });
       els.push({
         type: 'text', x: pad, y: bandY, w, h: bandH,
-        text: subtitle.toUpperCase(), font: 'display', weight: 800, color: theme.accentText,
-        align: 'center', valign: 'center', lineHeight: 1, letterSpacingEm: 0.02,
-        autofit: { min: Math.round(H * 0.04), max: Math.round(H * 0.075), lines: 1 },
+        text: bandText.toUpperCase(), font: 'display', weight: 800, color: theme.accentText,
+        align: 'center', valign: 'center', lineHeight: 1.02, letterSpacingEm: isFigure ? 0.01 : 0.02,
+        autofit: { min: Math.round(H * 0.04), max: Math.round(H * (isFigure ? 0.082 : 0.075)), lines: isFigure ? 2 : 1 },
       });
     }
 
     // Pie: contexto + actualización, abajo a la derecha (el logo va a la izquierda).
-    const foot = [isFigure ? card.body : '', card.date].filter(Boolean).join('  ·  ');
+    const foot = [isFigure ? '' : card.body, card.date].filter(Boolean).join('  ·  ');
     if (foot) {
       els.push({
         type: 'text', x: Math.round(W * 0.3), y: Math.round(H * 0.875), w: Math.round(W * 0.7) - pad, h: Math.round(H * 0.07),
