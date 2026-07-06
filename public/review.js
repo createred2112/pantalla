@@ -226,6 +226,7 @@ function renderPlayer(items, cardsById) {
   }
   $('#loading').style.display = 'none';
   $('#player').classList.add('ready');
+  $('#btnExport').disabled = false;
   renderStrip();
   renderList();
   playing = true;
@@ -254,6 +255,7 @@ async function load(force) {
   slides = [];
   index = 0;
   $('#btnReload').disabled = true;
+  $('#btnExport').disabled = true;
   $('#loading').style.display = '';
   $('#player').classList.remove('ready');
   $('#content').innerHTML = '';
@@ -281,6 +283,21 @@ async function load(force) {
 }
 
 $('#btnReload').addEventListener('click', () => load(true));
+$('#btnExport').addEventListener('click', async () => {
+  const b = $('#btnExport');
+  b.disabled = true;
+  const prev = b.textContent;
+  b.textContent = 'Exportando...';
+  try {
+    const r = await api('/review/export', { method: 'POST' });
+    $('#status').innerHTML = `Histórico guardado: <a class="button" href="${esc(r.url)}" download="${esc(r.file)}">${esc(r.file)}</a> · ${r.count} pieza(s), 240px.`;
+  } catch (e) {
+    $('#status').textContent = e.message;
+  } finally {
+    b.textContent = prev;
+    b.disabled = !slides.length;
+  }
+});
 $('#btnPrev').addEventListener('click', prevSlide);
 $('#btnNext').addEventListener('click', nextSlide);
 $('#btnPlay').addEventListener('click', togglePlay);

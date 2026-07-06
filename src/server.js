@@ -4,6 +4,8 @@ const express = require('express');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const { spawn } = require('child_process');
+const ffmpeg = require('ffmpeg-static');
 const { cfg, paths, env, ensureDirs, ROOT, abs } = require('./config');
 const sharp = require('sharp');
 const store = require('./store');
@@ -700,6 +702,108 @@ app.post('/api/review', async (req, res) => {
   const at = new Date().toISOString();
   if (result.ok) _reviewCache = { hash: reviewHash(), result, at };
   res.json({ fresh: Boolean(result.ok), at, result, cards: store.list() });
+});
+
+function reviewExportSource(item, cardsById) {
+  const card = cardsById.get(item.id);
+  if (!card) return null;
+  if (card.type === 'generated') {
+    const wantVideo = /\.mp4$/i.test(item.file || '') || card.video === true || ((cfg.screenProfile || {}).forceVideo === true);
+    const fresh = renderMeta.isFresh({ ...card, video: wantVideo ? true : card.video }, { wantVideo });
+    if (fresh && fs.existsSync(fresh.file)) return fresh.file;
+    const ext = wantVideo ? 'mp4' : (cfg.screen.format || 'jpg');
+    const fallback = path.join(paths.output, `${card.id}.${ext}`);
+    return fs.existsSync(fallback) ? fallback : null;
+  }
+  if (!card.file) return null;
+  const fp = path.resolve(abs(card.file));
+  return fp.startsWith(ROOT + path.sep) && fs.existsSync(fp) ? fp : null;
+}
+
+function runFfmpeg(args, timeoutMs = 120000) {
+  return new Promise((resolve, reject) => {
+    const p = spawn(ffmpeg, args, { windowsHide: true });
+    let err = '';
+    let done = false;
+    const timer = setTimeout(() => {
+      if (done) return;
+      done = true;
+      try { p.kill('SIGKILL'); } catch {}
+      reject(new Error('La exportación del histórico tardó demasiado.'));
+    }, timeoutMs);
+    p.stderr.on('data', (d) => { err += d; });
+    p.on('error', (e) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      reject(e);
+    });
+    p.on('close', (code) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      code === 0 ? resolve() : reject(new Error('ffmpeg ' + code + ': ' + err.slice(-700)));
+    });
+  });
+}
+
+function stampName() {
+  const d = new Date();
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
+}
+
+app.post('/api/review/export', async (req, res) => {
+  try {
+    if (!_reviewCache || _reviewCache.hash !== reviewHash() || !_reviewCache.result || !_reviewCache.result.ok) {
+      return res.status(409).json({ error: 'Primero actualiza la vista previa. Así el histórico sale de la simulación vigente, sin regenerar a ciegas.' });
+    }
+    const manifest = (_reviewCache.result.steps.sequence && _reviewCache.result.steps.sequence.manifest) || [];
+    if (!manifest.length) return res.status(400).json({ error: 'La vista previa no tiene cartelas para exportar.' });
+    const cardsById = new Map(store.list().map((c) => [c.id, c]));
+    const inputs = manifest.map((item) => {
+      const file = reviewExportSource(item, cardsById);
+      const ext = path.extname(file || '').toLowerCase();
+      return {
+        item,
+        file,
+        image: ['.jpg', '.jpeg', '.png', '.webp'].includes(ext),
+        duration: Math.max(1, Number(item.duration || 8)),
+      };
+    });
+    const missing = inputs.filter((i) => !i.file);
+    if (missing.length) return res.status(400).json({ error: `Faltan ${missing.length} archivo(s) ya preparados. Regenera la vista previa y vuelve a exportar.` });
+
+    const historyDir = path.join(paths.output, 'history');
+    fs.mkdirSync(historyDir, { recursive: true });
+    const name = `historico-${stampName()}-240p.mp4`;
+    const out = path.join(historyDir, name);
+    const args = ['-y'];
+    for (const input of inputs) {
+      if (input.image) args.push('-loop', '1', '-t', String(input.duration));
+      args.push('-i', input.file);
+    }
+    const filters = inputs.map((_, i) =>
+      `[${i}:v]scale=240:136:force_original_aspect_ratio=decrease,pad=240:136:(ow-iw)/2:(oh-ih)/2:black,setsar=1,fps=10,format=yuv420p[v${i}]`
+    );
+    filters.push(inputs.map((_, i) => `[v${i}]`).join('') + `concat=n=${inputs.length}:v=1:a=0[v]`);
+    args.push('-filter_complex', filters.join(';'), '-map', '[v]', '-an', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '30', '-movflags', '+faststart', out);
+    await runFfmpeg(args);
+    const st = fs.statSync(out);
+    log.info('review', `Histórico exportado: ${name} (${inputs.length} pieza(s))`);
+    res.json({
+      ok: true,
+      file: name,
+      url: `/media/output/history/${encodeURIComponent(name)}`,
+      count: inputs.length,
+      width: 240,
+      durationSeconds: Math.round(inputs.reduce((sum, i) => sum + i.duration, 0) * 10) / 10,
+      size: st.size,
+    });
+  } catch (e) {
+    log.error('review', `Fallo exportando histórico: ${e.message}`);
+    res.status(500).json({ error: e.message });
+  }
 });
 
 app.post('/api/publish', async (req, res) => {
