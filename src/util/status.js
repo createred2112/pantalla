@@ -23,7 +23,7 @@ function set(stage, result) {
   const state = read();
   state.stages[stage] = {
     ts: new Date().toISOString(),
-    ok: result.ok !== false,
+    ok: result.ok == null ? null : result.ok !== false,
     ...result,
   };
   if (stage === 'upload' && result.ok !== false && !result.dryRun) {

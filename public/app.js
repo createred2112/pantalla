@@ -8,7 +8,13 @@ const $ = (s) => document.querySelector(s);
 const api = async (path, opts = {}) => {
   const r = await fetch('/api' + path, { headers: H, ...opts });
   if (r.status === 401) { location.href = '/login'; throw new Error('sesión expirada'); }
-  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || r.status);
+  if (!r.ok) {
+    const body = await r.json().catch(() => ({}));
+    const msg = body.error || (r.status === 502
+      ? 'El servidor cortó la generación por tardar demasiado. Reintenta; si vuelve a pasar, queda registrado en Estado.'
+      : r.status);
+    throw new Error(msg);
+  }
   return r.json();
 };
 
@@ -1047,6 +1053,7 @@ $('#list').addEventListener('click', async (e) => {
       toast('Error: ' + err.message);
       LOCAL_ACTIVITY = null;
       showActivity(false);
+      loadStatus();
       b.disabled = false;
     }
   }

@@ -14,6 +14,14 @@ const renderGuard = require('../util/renderGuard');
 const mediaDuration = require('../util/mediaDuration');
 const log = require('../util/logger');
 
+const MAX_RENDER_MS = Number(process.env.PANTALLA_VIDEO_TIMEOUT_MS || 55000);
+const MAX_FULL_FPS = Number(process.env.PANTALLA_VIDEO_MAX_FPS || 15);
+
+function timeoutError(card, phase) {
+  const title = card.title || card.id || 'cartela';
+  return new Error(`La generación de "${title}" tardó demasiado (${phase}). No se queda colgada: vuelve a intentarlo o baja duración/cortinillas.`);
+}
+
 // Se inyecta en la página: crea una coreografía completa (en pausa) y expone
 // __setT(ms). No usa azar: el MP4 se renderiza igual en cada ejecución.
 // Estilo BROADCAST (informativos): cortina de color que descubre la cartela,
@@ -201,18 +209,36 @@ function setupAnim(durMs, motion) {
   };
 }
 
-function runFfmpeg(args) {
+function runFfmpeg(args, opts = {}) {
   return new Promise((resolve, reject) => {
-    const p = spawn(ffmpeg, args);
+    const p = spawn(ffmpeg, args, { windowsHide: true });
     let err = '';
+    let done = false;
+    const timer = opts.timeoutMs > 0 ? setTimeout(() => {
+      if (done) return;
+      done = true;
+      try { p.kill('SIGKILL'); } catch {}
+      reject(opts.timeoutError || new Error('ffmpeg tardó demasiado'));
+    }, opts.timeoutMs) : null;
     p.stderr.on('data', (d) => { err += d; });
-    p.on('close', (code) => code === 0 ? resolve() : reject(new Error('ffmpeg ' + code + ': ' + err.slice(-500))));
+    p.on('error', (e) => {
+      if (done) return;
+      done = true;
+      if (timer) clearTimeout(timer);
+      reject(e);
+    });
+    p.on('close', (code) => {
+      if (done) return;
+      done = true;
+      if (timer) clearTimeout(timer);
+      code === 0 ? resolve() : reject(new Error('ffmpeg ' + code + ': ' + err.slice(-500)));
+    });
   });
 }
 
-async function encode(dir, fps, out) {
+async function encode(dir, fps, out, opts = {}) {
   await runFfmpeg(['-y', '-framerate', String(fps), '-i', path.join(dir, 'f%05d.jpg'),
-    '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'veryfast', '-movflags', '+faststart', out]);
+    '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'veryfast', '-movflags', '+faststart', out], opts);
   return out;
 }
 
@@ -220,17 +246,17 @@ function concatLine(file) {
   return `file '${file.replace(/\\/g, '/').replace(/'/g, "'\\''")}'`;
 }
 
-async function normalizeClip(input, out, W, H, fps) {
+async function normalizeClip(input, out, W, H, fps, opts = {}) {
   await runFfmpeg([
     '-y', '-i', input, '-an',
     '-vf', `scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H},setsar=1,fps=${fps},format=yuv420p`,
     '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'veryfast', '-movflags', '+faststart',
     out,
-  ]);
+  ], opts);
   return out;
 }
 
-async function stitchClips(inputs, out, dir, W, H, fps) {
+async function stitchClips(inputs, out, dir, W, H, fps, opts = {}) {
   if (inputs.length === 1) {
     fs.copyFileSync(inputs[0], out);
     return out;
@@ -238,12 +264,12 @@ async function stitchClips(inputs, out, dir, W, H, fps) {
   const normalized = [];
   for (let i = 0; i < inputs.length; i++) {
     const n = path.join(dir, `seg${String(i).padStart(2, '0')}.mp4`);
-    await normalizeClip(inputs[i], n, W, H, fps);
+    await normalizeClip(inputs[i], n, W, H, fps, opts);
     normalized.push(n);
   }
   const list = path.join(dir, 'concat.txt');
   fs.writeFileSync(list, normalized.map(concatLine).join('\n'));
-  await runFfmpeg(['-y', '-f', 'concat', '-safe', '0', '-i', list, '-c', 'copy', '-movflags', '+faststart', out]);
+  await runFfmpeg(['-y', '-f', 'concat', '-safe', '0', '-i', list, '-c', 'copy', '-movflags', '+faststart', out], opts);
   return out;
 }
 
@@ -264,12 +290,19 @@ function bumperPath(card, field, label) {
 // Renderiza la cartela a un MP4 en output/. Devuelve { file, ext:'mp4' }.
 async function renderVideoToFile(card) {
   renderGuard.assertCanUseChrome('video');
+  const startedAt = Date.now();
+  const deadline = startedAt + Math.max(15000, Number(card._timeoutMs || MAX_RENDER_MS));
+  const timeLeft = () => Math.max(1, deadline - Date.now());
+  const checkTime = (phase) => {
+    if (Date.now() > deadline) throw timeoutError(card, phase);
+  };
   const prep = prepare(card);
   if (!prep) throw new Error('plantilla no animable');
   const { ctx, tpl, frame } = prep;
   const { W, H } = ctx;
   const duration = Math.max(2, Math.min(20, Number(card.duration) || 6));
-  const fps = card._previewVideo ? Math.min(12, Number(cfg.video && cfg.video.fps) || 25) : (Number(cfg.video && cfg.video.fps) || 25);
+  const configuredFps = Number(cfg.video && cfg.video.fps) || 25;
+  const fps = card._previewVideo ? Math.min(12, configuredFps) : Math.min(Math.max(8, MAX_FULL_FPS), configuredFps);
   const frames = Math.round(duration * fps);
 
   const html = await buildHtml(card, ctx, tpl, frame);
@@ -290,6 +323,7 @@ async function renderVideoToFile(card) {
       seed,
     });
     for (let i = 0; i < frames; i++) {
+      checkTime('capturando fotogramas');
       await page.evaluate((ms) => window.__setT(ms), (i / fps) * 1000);
       await page.screenshot({ path: path.join(dir, 'f' + String(i).padStart(5, '0') + '.jpg'), type: 'jpeg', quality: 92, clip: { x: 0, y: 0, width: W, height: H } });
       if (i > 0 && i % Math.max(1, Math.floor(frames / 4)) === 0) {
@@ -297,7 +331,7 @@ async function renderVideoToFile(card) {
       }
     }
     fs.mkdirSync(paths.output, { recursive: true });
-    const posterFrame = Math.min(frames - 1, Math.max(0, Math.round(fps * Math.min(1.2, duration * 0.35))));
+    const posterFrame = Math.min(frames - 1, Math.max(0, Math.round(fps * Math.min(2.4, duration * 0.5))));
     const posterSrc = path.join(dir, 'f' + String(posterFrame).padStart(5, '0') + '.jpg');
     if (!card._previewVideo && fs.existsSync(posterSrc)) {
       fs.copyFileSync(posterSrc, path.join(paths.output, card.id + '.jpg'));
@@ -305,11 +339,14 @@ async function renderVideoToFile(card) {
     const out = path.join(paths.output, card.id + '.mp4');
     const main = path.join(dir, 'main.mp4');
     log.info('video', `Codificando ${card.id}`);
-    await encode(dir, fps, main);
+    checkTime('antes de codificar');
+    const ffmpegOpts = { timeoutMs: timeLeft(), timeoutError: timeoutError(card, 'codificando MP4') };
+    await encode(dir, fps, main, ffmpegOpts);
     const intro = bumperPath(card, 'videoIntro', 'de entrada');
     const outro = bumperPath(card, 'videoOutro', 'de salida');
     if (intro || outro) log.info('video', `Uniendo cortinillas ${card.id}: ${intro ? 'entrada' : ''}${intro && outro ? ' + ' : ''}${outro ? 'salida' : ''}`);
-    await stitchClips([intro, main, outro].filter(Boolean), out, dir, W, H, fps);
+    checkTime('antes de unir cortinillas');
+    await stitchClips([intro, main, outro].filter(Boolean), out, dir, W, H, fps, { timeoutMs: timeLeft(), timeoutError: timeoutError(card, 'uniendo cortinillas') });
     log.info('video', `MP4 listo ${card.id}: ${path.basename(out)}`);
     return { file: out, ext: 'mp4', durationSeconds: mediaDuration.roundedDuration(out) };
     });

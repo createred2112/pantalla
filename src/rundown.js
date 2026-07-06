@@ -426,9 +426,9 @@ function slotPayload(slot, library, date, options = {}) {
 function toCard(slot, library, order, date, pickMap = {}) {
   const s = normalizeSlot(slot);
   const p = slotPayload(s, library, date, { pickIndex: pickMap[s.id] });
-  // La plantilla/tema fijados EN EL BLOQUE mandan sobre la pieza o el dato
-  // automático. Si quedan vacíos, cada pieza conserva su estilo propio.
-  const tplOverride = s.template;
+  // La plantilla/tema fijados EN EL BLOQUE mandan sobre piezas manuales.
+  // En workers con plantilla propia (luz, aire, combustible), manda el dato.
+  const tplOverride = s.source === 'worker' && p.template ? '' : s.template;
   const themeOverride = s.theme;
   if (s.source === 'file') {
     return store.normalize({

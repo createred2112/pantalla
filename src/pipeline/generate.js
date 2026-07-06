@@ -76,6 +76,7 @@ async function generate(opts = {}) {
     } catch (e) {
       results.push({ id: card.id, ok: false, error: e.message });
       log.error('generate', `FALLO ${card.id}: ${e.message}`);
+      status.set('generate', { ok: false, running: false, count: cards.length, done: i, current: null, reused, error: e.message, results });
     }
   }
   try { await require('../generator/htmlRender').close(); } catch {}
