@@ -238,6 +238,29 @@
     text-decoration:none;color:var(--muted);background:transparent;border:1px solid var(--line);white-space:nowrap}
   .navbtn:hover{color:var(--txt);background:rgba(38,65,105,.35)}
   .navbtn .ico{font-size:14px;line-height:1}
+  body.simple-mode #who::after{content:" · modo simple";color:#8ff0c0;font-weight:800}
+  body.simple-mode a[href="/galeria.html"],
+  body.simple-mode #btnSettings,
+  body.simple-mode #btnImport,
+  body.simple-mode #btnRefresh,
+  body.simple-mode #btnAdd,
+  body.simple-mode #btnDry,
+  body.simple-mode #pilotToggle,
+  body.simple-mode .pilot-grid,
+  body.simple-mode .pilot-actions,
+  body.simple-mode #pilotPlan,
+  body.simple-mode button[data-up],
+  body.simple-mode button[data-down],
+  body.simple-mode button[data-edit],
+  body.simple-mode button[data-render],
+  body.simple-mode button[data-design],
+  body.simple-mode button[data-del]{display:none!important}
+  body.simple-mode .bar{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  body.simple-mode .tool{min-height:74px}
+  body.simple-mode .footbar #btnReview{flex:1}
+  body.simple-mode .footbar #btnPublish{flex:1.6}
+  body.simple-mode .simple-notice{display:block}
+  .simple-notice{display:none;margin:0 0 12px;border:1px solid rgba(43,182,115,.55);background:rgba(43,182,115,.12);border-radius:12px;padding:10px 12px;color:#d8ffe9;font-size:13px;line-height:1.35}
 
   /* Herramientas: la Escaleta manda */
   .bar{gap:10px;align-items:stretch}
@@ -423,6 +446,7 @@
     </button>
     <button class="tool sq" id="btnRefresh" title="Refrescar la lista">↻</button>
   </div>
+  <div class="simple-notice">Modo simple: prepara la escaleta, revisa la vista previa y sube a pantalla.</div>
   <div class="today-panel" id="todayPanel"></div>
   <div class="pilot" id="pilotBar" style="display:none">
     <div class="pilot-top">

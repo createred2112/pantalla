@@ -114,6 +114,10 @@ btnMatrix.addEventListener('click', () => {
 });
 
 fetch('/api/whoami').then((r) => r.json()).then((w) => {
+  if (w.simpleMode) {
+    location.href = '/';
+    return;
+  }
   document.getElementById('ver').textContent = w.version ? ('v' + w.version) : '';
 }).catch(() => {});
 load();

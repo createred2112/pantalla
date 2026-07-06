@@ -15,6 +15,11 @@ async function loadFonts() {
   try { const css = await (await fetch('/api/fontcss')).text(); const s = document.createElement('style'); s.textContent = css; document.head.appendChild(s); } catch {}
 }
 async function load() {
+  const who = await fetch('/api/whoami').then((r) => r.json()).catch(() => null);
+  if (who && who.simpleMode) {
+    location.href = '/';
+    return;
+  }
   await loadFonts();
   const r = await fetch('/api/frame/' + ID);
   if (!r.ok) { if (r.status === 401) location.href = '/login'; $('#hint').textContent = 'no se pudo cargar'; return; }

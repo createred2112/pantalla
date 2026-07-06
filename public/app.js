@@ -39,6 +39,8 @@ let LIBRARY_CATEGORY = 'datosUtiles';
 let APP_STATUS = null;
 let VIDEO_LIBRARY = [];
 let LOCAL_ACTIVITY = null;
+let CURRENT_USER = null;
+let SIMPLE_MODE = false;
 
 // Galería visual de plantillas (probar varias con los datos actuales).
 let galleryOpen = false;
@@ -413,11 +415,28 @@ $('#btnLogout').addEventListener('click', async () => {
   location.href = '/login';
 });
 
+function applyUserMode(w) {
+  CURRENT_USER = w || null;
+  SIMPLE_MODE = Boolean(w && w.simpleMode);
+  document.body.classList.toggle('simple-mode', SIMPLE_MODE);
+  $('#who').textContent = w && w.user ? w.user : '';
+  $('#versionBadge').textContent = w && w.version ? 'v' + w.version : 'v?';
+  if (SIMPLE_MODE) {
+    const rundownTitle = $('#btnRundown b');
+    const rundownHelp = $('#btnRundown small');
+    const breakingTitle = $('#btnBreaking b');
+    const breakingHelp = $('#btnBreaking small');
+    if (rundownTitle) rundownTitle.textContent = 'Crear emisión';
+    if (rundownHelp) rundownHelp.textContent = 'Elegir los 8 huecos';
+    if (breakingTitle) breakingTitle.textContent = 'Aviso urgente';
+    if (breakingHelp) breakingHelp.textContent = 'Publicar una alerta';
+  }
+}
+
 async function load() {
-  api('/whoami').then((w) => {
-    $('#who').textContent = w.user || '';
-    $('#versionBadge').textContent = w.version ? 'v' + w.version : 'v?';
-  }).catch(() => {});
+  try {
+    applyUserMode(await api('/whoami'));
+  } catch {}
   cards = await api('/cards');
   cards.sort((a, b) => (a.order || 0) - (b.order || 0));
   render();
@@ -1092,6 +1111,10 @@ $('#btnSaveRender').addEventListener('click', () => saveEditor({ renderAfter: tr
 // --- Delegación de eventos de la lista ---
 $('#list').addEventListener('click', async (e) => {
   const b = e.target.closest('button'); if (!b) return;
+  if (SIMPLE_MODE && (b.dataset.up != null || b.dataset.down != null || b.dataset.edit || b.dataset.render || b.dataset.design || b.dataset.del)) {
+    toast('Modo simple: cambia la emisión desde Crear emisión.');
+    return;
+  }
   if (b.dataset.up != null) move(+b.dataset.up, -1);
   else if (b.dataset.down != null) move(+b.dataset.down, +1);
   else if (b.dataset.edit) openEditor(cards.find(c => c.id === b.dataset.edit));

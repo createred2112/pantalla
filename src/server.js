@@ -49,7 +49,7 @@ app.post('/api/login', (req, res) => {
   auth.noteSuccess(ip);
   auth.setSessionCookie(req, res, auth.createToken(ok));
   log.info('auth', `Login OK: ${ok} desde ${ip}`);
-  res.json({ ok: true, user: ok });
+  res.json({ ok: true, user: ok, mode: auth.modeOf(ok), simpleMode: auth.modeOf(ok) === 'simple' });
 });
 
 app.post('/api/logout', (req, res) => {
@@ -61,12 +61,25 @@ app.post('/api/logout', (req, res) => {
 const PKG = require('../package.json');
 app.get('/api/whoami', (req, res) => {
   const u = auth.userOf(req);
-  res.json({ authenticated: Boolean(u), user: u ? u.user : null, hasAdmins: auth.hasAdmins(), version: PKG.version });
+  res.json({
+    authenticated: Boolean(u),
+    user: u ? u.user : null,
+    mode: u ? (u.mode || 'full') : null,
+    simpleMode: Boolean(u && u.simpleMode),
+    hasAdmins: auth.hasAdmins(),
+    version: PKG.version,
+  });
 });
 
 // --- Muro de autenticación para todo lo demás ---
 app.use((req, res, next) => {
-  if (auth.userOf(req)) return next();
+  const u = auth.userOf(req);
+  if (u) {
+    if (u.simpleMode && (req.path === '/editor.html' || req.path === '/galeria.html')) {
+      return res.redirect('/');
+    }
+    return next();
+  }
   // Petición de API -> 401 JSON; navegación -> redirección a /login.
   if (req.path.startsWith('/api/')) return res.status(401).json({ error: 'no autenticado' });
   if (req.accepts('html')) return res.redirect('/login');

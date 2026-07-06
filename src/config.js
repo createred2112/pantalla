@@ -113,6 +113,10 @@ const env = {
   },
   port: Number(process.env.PORT || 8080),
   panelToken: process.env.PANEL_TOKEN || '',
+  simpleUsers: String(process.env.SIMPLE_USERS || 'jon')
+    .split(',')
+    .map((u) => u.trim().toLowerCase())
+    .filter(Boolean),
 };
 
 function ftpConfig() {

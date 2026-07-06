@@ -71,6 +71,10 @@ function removeAdmin(user) {
 function listAdmins() {
   return loadAdmins().map((a) => ({ user: a.user, createdAt: a.createdAt }));
 }
+function modeOf(user) {
+  const name = String(user || '').trim().toLowerCase();
+  return env.simpleUsers.includes(name) ? 'simple' : 'full';
+}
 function verifyCredentials(user, password) {
   user = String(user || '').trim().toLowerCase();
   const a = loadAdmins().find((x) => x.user === user);
@@ -148,11 +152,13 @@ function userOf(req) {
   }
   const cookies = parseCookies(req);
   const u = verifyToken(cookies[COOKIE]);
-  return u ? { user: u } : null;
+  if (!u) return null;
+  const mode = modeOf(u);
+  return { user: u, mode, simpleMode: mode === 'simple' };
 }
 
 module.exports = {
   COOKIE, addAdmin, removeAdmin, listAdmins, verifyCredentials,
   createToken, verifyToken, parseCookies, setSessionCookie, clearSessionCookie,
-  throttle, noteFailure, noteSuccess, userOf, hasAdmins: () => loadAdmins().length > 0,
+  throttle, noteFailure, noteSuccess, userOf, modeOf, hasAdmins: () => loadAdmins().length > 0,
 };
