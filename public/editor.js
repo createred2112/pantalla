@@ -10,21 +10,44 @@ let FONT_DISPLAY = "'Anton',sans-serif", FONT_TEXT = "'Oswald',sans-serif";
 
 function toast(m) { const t = $('#toast'); t.textContent = m; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 1800); }
 function mediaUrl(p) { return p ? '/media/' + p.replace('data/uploads/', 'uploads/').replace('data/worker-inbox/', 'inbox/') : ''; }
+async function requestJson(url, opts = {}, timeoutMs = 8000) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const r = await fetch(url, { ...opts, signal: ctrl.signal });
+    const data = await r.json().catch(() => ({}));
+    if (r.status === 401) {
+      location.href = '/login';
+      throw new Error('La sesión ha caducado. Vuelve a entrar.');
+    }
+    if (!r.ok) throw new Error(data.error || 'No se pudo completar la acción.');
+    return data;
+  } catch (e) {
+    if (e && e.name === 'AbortError') throw new Error('El servidor no ha respondido. No se ha cambiado nada.');
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+async function withBusy(btn, label, fn) {
+  const old = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = label;
+  try {
+    return await fn();
+  } finally {
+    btn.disabled = false;
+    btn.textContent = old;
+  }
+}
 
 async function loadFonts() {
   try { const css = await (await fetch('/api/fontcss')).text(); const s = document.createElement('style'); s.textContent = css; document.head.appendChild(s); } catch {}
 }
-async function load() {
-  const who = await fetch('/api/whoami').then((r) => r.json()).catch(() => null);
-  if (who && who.simpleMode) {
-    location.href = '/';
-    return;
-  }
-  await loadFonts();
-  const r = await fetch('/api/frame/' + ID);
-  if (!r.ok) { if (r.status === 401) location.href = '/login'; $('#hint').textContent = 'no se pudo cargar'; return; }
-  FRAME = await r.json();
+function applyFrame(frame) {
+  FRAME = frame;
   ELS = FRAME.elements;
+  if (SEL >= ELS.length) SEL = -1;
   FONT_DISPLAY = FRAME.fontDisplay || FONT_DISPLAY;
   FONT_TEXT = FRAME.fontText || FONT_TEXT;
   $('#hint').textContent = FRAME.template + ' · ' + FRAME.W + '×' + FRAME.H;
@@ -39,6 +62,24 @@ async function load() {
     $('#btnDefaultAll').textContent = 'Base bloqueada';
   }
   fit(); build();
+  panel();
+}
+async function refreshFrame() {
+  applyFrame(await requestJson('/api/frame/' + ID));
+}
+async function load() {
+  const who = await fetch('/api/whoami').then((r) => r.json()).catch(() => null);
+  if (who && who.simpleMode) {
+    location.href = '/';
+    return;
+  }
+  await loadFonts();
+  try {
+    await refreshFrame();
+  } catch (e) {
+    $('#hint').textContent = e.message || 'no se pudo cargar';
+    toast($('#hint').textContent);
+  }
 }
 
 function fit() {
@@ -337,8 +378,17 @@ function layoutPayload() {
   return { background: bg, elements };
 }
 $('#btnSave').addEventListener('click', async () => {
-  const r = await fetch('/api/cards/' + ID + '/layout', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ layout: layoutPayload() }) });
-  toast(r.ok ? 'Diseño guardado en esta cartela y su bloque ✓' : 'Error al guardar');
+  const btn = $('#btnSave');
+  try {
+    await withBusy(btn, 'Guardando...', () => requestJson('/api/cards/' + ID + '/layout', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ layout: layoutPayload() }),
+    }));
+    toast('Diseño guardado en esta cartela y su bloque ✓');
+  } catch (e) {
+    toast(e.message || 'Error al guardar');
+  }
 });
 $('#btnDefault').addEventListener('click', async () => {
   if (FRAME.template === 'agenda') {
@@ -372,8 +422,18 @@ $('#btnResetDefault').addEventListener('click', async () => {
 });
 $('#btnReset').addEventListener('click', async () => {
   if (!confirm('¿Volver al diseño por defecto de la plantilla? Se perderán los cambios de esta cartela.')) return;
-  await fetch('/api/cards/' + ID + '/layout', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ layout: null }) });
-  location.reload();
+  const btn = $('#btnReset');
+  try {
+    await withBusy(btn, 'Restableciendo...', () => requestJson('/api/cards/' + ID + '/layout', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ layout: null }),
+    }));
+    toast('Cartela restablecida sin regenerar ✓');
+    await refreshFrame();
+  } catch (e) {
+    toast(e.message || 'No se pudo restablecer');
+  }
 });
 window.addEventListener('resize', () => { fit(); });
 load();
