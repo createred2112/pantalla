@@ -26,15 +26,19 @@ function get(id, theme) {
   return (key && entry.themes && entry.themes[key]) || entry.default || null;
 }
 
-function set(id, theme, layout) {
+function set(id, theme, layout, options = {}) {
   const d = load();
   const key = String(theme || '').trim();
   const entry = entryFor(d, id) || { default: null, themes: {} };
   if (key) {
     if (layout && Array.isArray(layout.elements)) entry.themes[key] = layout;
     else delete entry.themes[key];
-  } else if (layout && Array.isArray(layout.elements)) entry.default = layout;
-  else entry.default = null;
+  } else if (layout && Array.isArray(layout.elements)) {
+    entry.default = layout;
+    if (options.clearThemes === true) entry.themes = {};
+  } else {
+    entry.default = null;
+  }
   if (entry.default || Object.keys(entry.themes).length) d[id] = entry;
   else delete d[id];
   require('./util/atomicWrite').writeJsonAtomic(FILE, d);

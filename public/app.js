@@ -1028,8 +1028,9 @@ async function saveEditor({ renderAfter = false } = {}) {
   const renderSavedCard = async (cardId) => {
     if (!renderAfter || !cardId) return;
     setBusy('Generando archivo...');
-    toast('Generando archivo; puede tardar si es MP4');
-    await api('/cards/' + cardId + '/render', { method: 'POST' });
+    toast('Preparando archivo; se reutiliza si ya existe');
+    const r = await api('/cards/' + cardId + '/render', { method: 'POST', body: JSON.stringify({ force: false }) });
+    if (r && r.reused) toast('Archivo reutilizado desde caché');
   };
   setBusy(renderAfter ? 'Guardando...' : 'Guardando...');
   // Cartela de carrusel: se guarda el BLOQUE (cadencia, piezas, duración) y se
@@ -2255,8 +2256,9 @@ const wizardDlg = $('#wizardDlg');
 let WZ = null;
 
 async function openWizard() {
-  RUNDOWN = await api('/rundown'); // trae almacén, workers y claves
-  WZ = { step: 1, days: 3, sel: new Set(PLAN_TYPES.filter((t) => t.def).map((t) => t.id)), manual: {}, adds: {}, picks: {}, error: '', agenda: initialAgendaMoments() };
+  const date = localDatePart();
+  RUNDOWN = await api('/rundown?date=' + encodeURIComponent(date)); // trae almacén, workers y claves
+  WZ = { step: 1, date, days: 3, sel: new Set(PLAN_TYPES.filter((t) => t.def).map((t) => t.id)), manual: {}, adds: {}, picks: {}, error: '', agenda: initialAgendaMoments() };
   renderWizard();
   wizardDlg.showModal();
 }
@@ -2291,7 +2293,7 @@ function addMinutesLocal(dt, minutes) {
 }
 
 function agendaBaseDate() {
-  return (RUNDOWN && RUNDOWN.activeDate) || localDatePart();
+  return (WZ && WZ.date) || (RUNDOWN && RUNDOWN.activeDate) || localDatePart();
 }
 
 function blankAgendaMoment(afterIndex = -1) {
@@ -2329,8 +2331,8 @@ function agendaMomentHtml(m, i) {
     <div class="agenda-quick">
       <button type="button" class="ghost" data-wz-agenda-quick="now" data-i="${i}">Sale ahora</button>
       <button type="button" class="ghost" data-wz-agenda-quick="tonight" data-i="${i}">Hasta las 22:00</button>
-      <button type="button" class="ghost" data-wz-agenda-quick="tomorrow1320" data-i="${i}">Mañana 13:20</button>
-      <button type="button" class="ghost" data-wz-agenda-quick="tomorrow1342" data-i="${i}">Mañana 13:42</button>
+      <button type="button" class="ghost" data-wz-agenda-quick="day1320" data-i="${i}">Día elegido 13:20</button>
+      <button type="button" class="ghost" data-wz-agenda-quick="day1342" data-i="${i}">Día elegido 13:42</button>
     </div>
     <div class="agenda-grid">
       <label>Título<input data-wz-agenda-field="title" value="${esc(m.title || '')}" placeholder="Agenda"></label>
@@ -2443,6 +2445,17 @@ function normalizeAgendaMoments(items) {
   return out;
 }
 
+function retargetAgendaMoments(items, fromDate, toDate) {
+  if (!fromDate || !toDate || fromDate === toDate) return items || [];
+  return (items || []).map((m) => {
+    const next = { ...m };
+    for (const key of ['startAt', 'endAt']) {
+      if (String(next[key] || '').startsWith(fromDate)) next[key] = toDate + String(next[key]).slice(10);
+    }
+    return next;
+  });
+}
+
 function renderWizard() {
   const total = 3;
   const count = wizardCountState();
@@ -2454,10 +2467,18 @@ function renderWizard() {
   const chosen = PLAN_TYPES.filter((t) => WZ.sel.has(t.id));
 
   if (WZ.step === 1) {
+    const today = localDatePart();
+    const tomorrow = addDays(today, 1);
     $('#wzBody').innerHTML = `
       ${wizardErrorHtml()}
       <p class="hint" style="margin-top:0">Elige los 8 huecos de emisión. Pueden ser automáticos, carruseles, noticias propias o un MP4 promo ya listo.</p>
       ${wizardCountHtml()}
+      <label>Día de emisión</label>
+      <input id="wzDate" type="date" value="${esc(WZ.date || today)}">
+      <div class="slot-tools" style="margin:8px 0 10px">
+        <button type="button" class="ghost" data-wz-date="${today}">Hoy</button>
+        <button type="button" class="ghost" data-wz-date="${tomorrow}">Mañana</button>
+      </div>
       <label>Días a cubrir</label>
       <input id="wzDays" type="number" min="1" max="14" value="${WZ.days}">
       <label>Tipos de cartela</label>
@@ -2527,6 +2548,8 @@ function renderWizard() {
 
 // Recoger lo tecleado antes de cambiar de paso
 function wzCollect() {
+  const dateInput = $('#wzDate');
+  if (dateInput) WZ.date = dateInput.value || localDatePart();
   const d = $('#wzDays');
   if (d) WZ.days = Math.max(1, Math.min(14, Number(d.value) || 3));
   const agendaBoxes = [...$('#wzBody').querySelectorAll('[data-wz-agenda]')];
@@ -2573,7 +2596,7 @@ async function wizardFinish() {
       return s;
     });
     const lib = RUNDOWN.library || {};
-    const activeDate = (RUNDOWN && RUNDOWN.activeDate) || localDatePart();
+    const activeDate = (WZ && WZ.date) || (RUNDOWN && RUNDOWN.activeDate) || localDatePart();
     if (WZ.sel.has('agenda')) {
       const meta = (RUNDOWN.libraryKeys || []).find((k) => k.key === 'agendaEventos') || { key: 'agendaEventos', template: 'agenda', theme: 'blanco' };
       lib.agendaEventos = normalizeAgendaMoments(WZ.agenda || [])
@@ -2606,10 +2629,10 @@ async function wizardFinish() {
       if (activeIndex >= 0) pick[slots[i].id] = activeIndex;
     });
     const days = Object.keys(pick).length ? { [activeDate]: { pick } } : {};
-    await api('/rundown', { method: 'PUT', body: JSON.stringify({ title: `Guion (${WZ.days} días)`, slots, days }) });
+    await api('/rundown?date=' + encodeURIComponent(activeDate), { method: 'PUT', body: JSON.stringify({ title: `Guion (${WZ.days} días)`, slots, days }) });
     await api('/rundown/library', { method: 'PUT', body: JSON.stringify(lib) });
     await api('/workers/refresh', { method: 'POST' }).catch(() => {});
-    await api('/rundown/materialize', { method: 'POST', body: JSON.stringify({}) });
+    await api('/rundown/materialize', { method: 'POST', body: JSON.stringify({ date: activeDate }) });
     RD_PLAN_DAYS = WZ.days;
     wizardDlg.close();
     toast('Guion guardado y cartelas creadas · abriendo la vista previa');
@@ -2627,18 +2650,17 @@ function applyAgendaQuick(i, kind) {
   wzCollect();
   const m = (WZ.agenda || [])[i];
   if (!m) return;
-  const today = agendaBaseDate();
-  const tomorrow = addDays(today, 1);
+  const day = agendaBaseDate();
   if (kind === 'now') m.startAt = localDateTimePart();
-  if (kind === 'tonight') m.endAt = dateAtTime(today, '22:00');
-  if (kind === 'tomorrow1320') {
-    m.subtitle = m.subtitle || 'Mañana';
-    m.startAt = dateAtTime(tomorrow, '13:20');
+  if (kind === 'tonight') m.endAt = dateAtTime(day, '22:00');
+  if (kind === 'day1320' || kind === 'tomorrow1320') {
+    m.subtitle = m.subtitle || (day === localDatePart() ? 'Hoy' : 'Mañana');
+    m.startAt = dateAtTime(day, '13:20');
     m.endAt = '';
   }
-  if (kind === 'tomorrow1342') {
-    m.subtitle = m.subtitle || 'Mañana';
-    m.startAt = dateAtTime(tomorrow, '13:42');
+  if (kind === 'day1342' || kind === 'tomorrow1342') {
+    m.subtitle = m.subtitle || (day === localDatePart() ? 'Hoy' : 'Mañana');
+    m.startAt = dateAtTime(day, '13:42');
     m.endAt = '';
   }
   WZ.agenda = normalizeAgendaMoments(WZ.agenda);
@@ -2650,6 +2672,15 @@ $('#wzClose').addEventListener('click', () => wizardDlg.close());
 $('#wzAdvanced').addEventListener('click', () => { wizardDlg.close(); openRundown(); });
 $('#wzBack').addEventListener('click', () => { wzCollect(); WZ.step = Math.max(1, WZ.step - 1); renderWizard(); });
 $('#wzBody').addEventListener('click', (e) => {
+  const dateBtn = e.target.closest('[data-wz-date]');
+  if (dateBtn) {
+    wzCollect();
+    const oldDate = WZ.date || localDatePart();
+    WZ.date = dateBtn.dataset.wzDate || localDatePart();
+    WZ.agenda = normalizeAgendaMoments(retargetAgendaMoments(WZ.agenda || [], oldDate, WZ.date));
+    renderWizard();
+    return;
+  }
   const quick = e.target.closest('[data-wz-agenda-quick]');
   if (quick) {
     applyAgendaQuick(Number(quick.dataset.i), quick.dataset.wzAgendaQuick);
@@ -2705,6 +2736,13 @@ $('#wzBody').addEventListener('click', (e) => {
   }
 });
 $('#wzBody').addEventListener('change', async (e) => {
+  if (e.target && e.target.id === 'wzDate') {
+    const oldDate = WZ.date || localDatePart();
+    wzCollect();
+    WZ.agenda = normalizeAgendaMoments(retargetAgendaMoments(WZ.agenda || [], oldDate, WZ.date));
+    renderWizard();
+    return;
+  }
   if (e.target && e.target.matches('[data-wz-pick]')) {
     wzCollect();
     renderWizard();

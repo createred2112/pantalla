@@ -329,8 +329,9 @@ app.put('/api/templates/:id/layout', (req, res) => {
     return res.status(400).json({ error: 'La plantilla Agenda no permite predeterminado global: usa diseño propio por cartela.' });
   }
   const theme = String((req.body && req.body.theme) || req.query.theme || '').trim();
-  require('./templateLayouts').set(req.params.id, theme, req.body && req.body.layout ? req.body.layout : null);
-  log.info('editor', `Layout predeterminado guardado en plantilla ${req.params.id}${theme ? ' / tema ' + theme : ''}`);
+  const clearThemes = !theme && req.body && req.body.clearThemes === true;
+  require('./templateLayouts').set(req.params.id, theme, req.body && req.body.layout ? req.body.layout : null, { clearThemes });
+  log.info('editor', `Layout predeterminado guardado en plantilla ${req.params.id}${theme ? ' / tema ' + theme : ''}${clearThemes ? ' / sin excepciones de color' : ''}`);
   res.json({ ok: true });
 });
 
@@ -367,15 +368,16 @@ app.post('/api/cards/:id/render', async (req, res) => {
   const card = store.list().find((c) => c.id === req.params.id);
   if (!card) return res.status(404).json({ error: 'no existe' });
   if (card.type !== 'generated') return res.status(400).json({ error: 'solo cartelas generadas' });
+  const force = !(req.body && req.body.force === false);
   try {
     const out = await pipelineLock.withLock('Regeneración manual de cartela', async () => {
-      // El botón ⟳ es la orden EXPLÍCITA del usuario: regenera siempre.
+      // Por defecto el botón ⟳ regenera siempre; el editor puede pedir usar caché.
       status.set('generate', { ok: null, running: true, count: 1, done: 0, current: card.id, currentTitle: card.title || card.id, manual: true, results: [] });
-      const r = await require('./pipeline/generate').renderOne(card, { force: true });
+      const r = await require('./pipeline/generate').renderOne(card, { force });
       try { await require('./generator/htmlRender').close(); } catch {}
       status.set('generate', { ok: true, running: false, count: 1, done: 1, current: null, manual: true, results: [{ id: card.id, file: r.file, ok: true, reused: r.reused, durationSeconds: r.durationSeconds || null }] });
-      log.info('generate', `Render manual ${card.id} -> ${r.file}`);
-      return { ok: true, file: r.file, rendered: renderedInfo(card) };
+      log.info('generate', `${r.reused ? 'Render manual reutilizado' : 'Render manual'} ${card.id} -> ${r.file}`);
+      return { ok: true, file: r.file, reused: r.reused === true, rendered: renderedInfo(card) };
     }, { staleMs: 10 * 60 * 1000 });
     res.json(out);
   } catch (e) {

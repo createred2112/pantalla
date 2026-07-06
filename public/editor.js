@@ -31,9 +31,12 @@ async function load() {
   $('#scope').innerHTML = `Editando <b>${FRAME.hasOwnLayout ? 'esta cartela' : 'plantilla base'}</b> · tema <b>${FRAME.theme && FRAME.theme.key ? FRAME.theme.key : 'auto'}</b>`;
   if (FRAME.template === 'agenda') {
     $('#btnDefault').disabled = true;
+    $('#btnDefaultAll').disabled = true;
     $('#btnResetDefault').disabled = true;
     $('#btnDefault').title = 'Agenda cambia mucho segun tenga horas o solo frases. Guarda el diseno solo en esta cartela.';
+    $('#btnDefaultAll').title = 'Agenda cambia mucho segun tenga horas o solo frases. Guarda el diseno solo en esta cartela.';
     $('#btnDefault').textContent = 'Predeterminado bloqueado';
+    $('#btnDefaultAll').textContent = 'Base bloqueada';
   }
   fit(); build();
 }
@@ -160,11 +163,40 @@ canvas.addEventListener('mousedown', (e) => { if (e.target === canvas) { SEL = -
 // --- Panel de propiedades ---
 function num(label, val, on) { return `<label>${label}</label><input type="number" value="${Math.round(val || 0)}" data-k="${on}">`; }
 function colorInput(label, val, key) { return `<label>${label}</label><input type="color" data-k="${key}" value="${hex(val)}">`; }
+function roleOptions(selected, fixed) {
+  const current = fixed ? '' : selected;
+  const labels = { bg: 'Fondo del tema', bg2: 'Fondo 2', text: 'Texto', textMuted: 'Texto suave', accent: 'Acento', accentText: 'Texto sobre acento', logoAccent: 'Logo/acento' };
+  return `<select class="role-select" data-k="colorRole">
+    <option value="" ${!current ? 'selected' : ''}>Color fijo</option>
+    ${Object.keys(labels).map((key) => `<option value="${key}" ${current === key ? 'selected' : ''}>${labels[key]}</option>`).join('')}
+  </select>`;
+}
+function bgRoleOptions(selected, fixed) {
+  const current = fixed ? '' : selected;
+  return `<select class="role-select" data-k="backgroundRole">
+    <option value="" ${!current ? 'selected' : ''}>Color fijo</option>
+    <option value="bg" ${current === 'bg' ? 'selected' : ''}>Fondo del tema</option>
+    <option value="bg2" ${current === 'bg2' ? 'selected' : ''}>Fondo 2</option>
+    <option value="accent" ${current === 'accent' ? 'selected' : ''}>Acento</option>
+  </select>`;
+}
+function elementTools(el) {
+  if (!el || el.type === 'chip') return '';
+  return `<h2 style="margin-top:16px">Centrar y alinear</h2>
+    <div class="toolgrid">
+      <button type="button" class="ghost" data-tool="alignLeft" title="Alinear al borde izquierdo">Izq</button>
+      <button type="button" class="ghost" data-tool="centerX" title="Centrar horizontalmente">Centro X</button>
+      <button type="button" class="ghost" data-tool="alignRight" title="Alinear al borde derecho">Der</button>
+      <button type="button" class="ghost" data-tool="alignTop" title="Alinear arriba">Arriba</button>
+      <button type="button" class="ghost" data-tool="centerY" title="Centrar verticalmente">Centro Y</button>
+      <button type="button" class="ghost" data-tool="alignBottom" title="Alinear abajo">Abajo</button>
+    </div>`;
+}
 function panel() {
   const p = $('#panel');
   if (SEL < 0) {
     const bg = FRAME.background || {};
-    p.innerHTML = `<h2>Fondo</h2>${colorInput('Color de fondo', bg.color || '#000000', 'backgroundColor')}<div class="empty" style="margin-top:18px">Haz clic en un elemento para editarlo.</div>`;
+    p.innerHTML = `<h2>Fondo</h2>${colorInput('Color de fondo', bg.color || '#000000', 'backgroundColor')}${bgRoleOptions(bg.colorTheme, bg.colorFixed)}<div class="empty" style="margin-top:18px">Haz clic en un elemento para editarlo.</div>`;
     p.querySelectorAll('[data-k]').forEach((inp) => inp.addEventListener('input', () => apply(inp)));
     return;
   }
@@ -174,8 +206,8 @@ function panel() {
     h += `<label>Texto</label><input data-k="text" value="${(el.text || '').replace(/"/g, '&quot;')}">`;
     if (el.bind) h += `<div style="font-size:10px;color:#6f86ad;margin-top:3px">Vinculado a "${el.bind}": se actualiza con el dato de la cartela.</div>`;
     h += `<label>Fuente</label><select data-k="font"><option value="display"${el.font === 'display' ? ' selected' : ''}>Titular (Anton)</option><option value="text"${el.font !== 'display' ? ' selected' : ''}>Texto (Oswald)</option></select>`;
-    h += `<div class="row"><div>${colorInput('Color texto', el.color, 'color')}</div><div><label>Peso</label><select data-k="weight"><option ${el.weight == 400 ? 'selected' : ''}>400</option><option ${el.weight == 600 ? 'selected' : ''}>600</option><option ${el.weight == 700 ? 'selected' : ''}>700</option><option ${el.weight == 800 ? 'selected' : ''}>800</option></select></div></div>`;
-    if (el.type === 'chip') h += colorInput('Color de caja', el.bg || '#000000', 'bg');
+    h += `<div class="row"><div>${colorInput('Color texto', el.color, 'color')}${roleOptions(el.colorTheme, el.colorFixed)}</div><div><label>Peso</label><select data-k="weight"><option ${el.weight == 400 ? 'selected' : ''}>400</option><option ${el.weight == 600 ? 'selected' : ''}>600</option><option ${el.weight == 700 ? 'selected' : ''}>700</option><option ${el.weight == 800 ? 'selected' : ''}>800</option></select></div></div>`;
+    if (el.type === 'chip') h += colorInput('Color de caja', el.bg || '#000000', 'bg') + roleOptions(el.bgTheme, el.bgFixed).replace('data-k="colorRole"', 'data-k="bgRole"');
     h += `<div class="row"><div><label>Alineación</label><select data-k="align"><option value="left"${el.align === 'left' ? ' selected' : ''}>Izq</option><option value="center"${el.align === 'center' ? ' selected' : ''}>Centro</option><option value="right"${el.align === 'right' ? ' selected' : ''}>Der</option></select></div><div><label>Interletra (em)</label><input type="number" step="0.01" value="${el.letterSpacingEm || 0}" data-k="letterSpacingEm"></div></div>`;
     if (el.autofit) h += `<div class="row"><div>${num('Tamaño mín', el.autofit.min, 'afmin')}</div><div>${num('Tamaño máx', el.autofit.max, 'afmax')}</div></div>`;
     else h += num('Tamaño', el.size, 'size');
@@ -183,22 +215,66 @@ function panel() {
   if (el.type === 'logo') {
     h += `<div class="empty">Logo de esta cartela. Puedes moverlo y cambiar su tamaño. La imagen se actualiza desde Ajustes.</div>`;
   }
-  if (el.type === 'rect' || el.type === 'band') h += colorInput('Color', el.color, 'color');
+  if (el.type === 'rect' || el.type === 'band') h += colorInput('Color', el.color, 'color') + roleOptions(el.colorTheme, el.colorFixed);
+  h += elementTools(el);
   h += `<h2 style="margin-top:16px">Posición y tamaño</h2><div class="row"><div>${num('X', el.x, 'x')}</div><div>${num('Y', el.y, 'y')}</div></div>`;
   if (el.type !== 'chip') h += `<div class="row"><div>${num('Ancho', el.w, 'w')}</div><div>${num('Alto', el.h, 'h')}</div></div>`;
   h += `<button class="ghost" id="btnHide" style="margin-top:14px;width:100%">${el.hidden ? 'Mostrar' : 'Ocultar'} elemento</button>`;
   p.innerHTML = h;
   p.querySelectorAll('[data-k]').forEach((inp) => inp.addEventListener('input', () => apply(inp)));
+  p.querySelectorAll('[data-tool]').forEach((btn) => btn.addEventListener('click', () => alignSelected(btn.dataset.tool)));
   $('#btnHide').addEventListener('click', () => { el.hidden = !el.hidden; build(); panel(); });
 }
 function hex(c) { return (c && c[0] === '#') ? c.slice(0, 7) : '#ffffff'; }
+function bindColor(target, colorKey, roleKey, fixedKey, value) {
+  target[colorKey] = value;
+  const token = themeTokenFor(value);
+  if (token) {
+    target[roleKey] = token;
+    target[fixedKey] = false;
+  } else {
+    delete target[roleKey];
+    target[fixedKey] = true;
+  }
+}
+function setRole(target, colorKey, roleKey, fixedKey, token) {
+  if (token && FRAME.theme && FRAME.theme[token]) {
+    target[colorKey] = FRAME.theme[token];
+    target[roleKey] = token;
+    target[fixedKey] = false;
+  } else {
+    delete target[roleKey];
+    target[fixedKey] = true;
+  }
+}
+function alignSelected(action) {
+  if (SEL < 0) return;
+  const el = ELS[SEL];
+  const margin = Math.round((FRAME.W || 1920) * 0.04);
+  const W = FRAME.W || 1920;
+  const H = FRAME.H || 1080;
+  if (action === 'alignLeft') el.x = margin;
+  if (action === 'alignRight') el.x = Math.max(0, W - margin - (el.w || 0));
+  if (action === 'centerX') el.x = Math.round((W - (el.w || 0)) / 2);
+  if (action === 'alignTop') el.y = margin;
+  if (action === 'alignBottom') el.y = Math.max(0, H - margin - (el.h || 0));
+  if (action === 'centerY') el.y = Math.round((H - (el.h || 0)) / 2);
+  build();
+  panel();
+}
 function apply(inp) {
   if (inp.dataset.k === 'backgroundColor') {
     FRAME.background = FRAME.background || { type: 'solid' };
-    FRAME.background.color = inp.value;
-    FRAME.background.colorFixed = true;
-    delete FRAME.background.colorTheme;
+    bindColor(FRAME.background, 'color', 'colorTheme', 'colorFixed', inp.value);
     build();
+    panel();
+    return;
+  }
+  if (inp.dataset.k === 'backgroundRole') {
+    FRAME.background = FRAME.background || { type: 'solid' };
+    setRole(FRAME.background, 'color', 'colorTheme', 'colorFixed', inp.value);
+    build();
+    panel();
     return;
   }
   const el = ELS[SEL], k = inp.dataset.k, v = inp.value;
@@ -206,10 +282,22 @@ function apply(inp) {
   else if (k === 'afmax') el.autofit.max = +v;
   else if (['x', 'y', 'w', 'h', 'size', 'weight'].includes(k)) el[k] = +v;
   else if (k === 'letterSpacingEm') el.letterSpacingEm = +v;
+  else if (k === 'color') bindColor(el, 'color', 'colorTheme', 'colorFixed', v);
+  else if (k === 'bg') bindColor(el, 'bg', 'bgTheme', 'bgFixed', v);
+  else if (k === 'colorRole') {
+    setRole(el, 'color', 'colorTheme', 'colorFixed', v);
+    build();
+    panel();
+    return;
+  }
+  else if (k === 'bgRole') {
+    setRole(el, 'bg', 'bgTheme', 'bgFixed', v);
+    build();
+    panel();
+    return;
+  }
   else {
     el[k] = v;
-    if (k === 'color') { delete el.colorTheme; el.colorFixed = true; }
-    if (k === 'bg') { delete el.bgTheme; el.bgFixed = true; }
   }
   const div = canvas.querySelector(`.el[data-idx="${SEL}"]`);
   if (div) div.replaceWith(renderEl(el, SEL));
@@ -261,6 +349,15 @@ $('#btnDefault').addEventListener('click', async () => {
   if (!confirm('¿Aplicar este diseño como PREDETERMINADO de la plantilla "' + FRAME.template + '" SOLO para el tema "' + theme + '"?')) return;
   const r = await fetch('/api/templates/' + FRAME.template + '/layout', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ theme, layout: layoutPayload() }) });
   toast(r.ok ? 'Guardado como plantilla + color ✓' : 'Error');
+});
+$('#btnDefaultAll').addEventListener('click', async () => {
+  if (FRAME.template === 'agenda') {
+    toast('Agenda no tiene predeterminado global');
+    return;
+  }
+  if (!confirm('¿Aplicar esta composición como PLANTILLA BASE para todos los colores de "' + FRAME.template + '"? Se borran excepciones de color de esa plantilla y los colores vinculados seguirán cambiando con cada tema.')) return;
+  const r = await fetch('/api/templates/' + FRAME.template + '/layout', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ theme: '', layout: layoutPayload(), clearThemes: true }) });
+  toast(r.ok ? 'Guardado como plantilla base ✓' : 'Error');
 });
 $('#btnResetDefault').addEventListener('click', async () => {
   if (FRAME.template === 'agenda') {
