@@ -2124,25 +2124,13 @@ function blankAgendaMoment(afterIndex = -1) {
   return { title: 'Agenda', subtitle: 'Hoy', body: '', startAt, endAt };
 }
 
+function freshAgendaMoment() {
+  const startAt = dateAtTime(agendaBaseDate(), '08:00');
+  return { title: 'Agenda', subtitle: 'Hoy', body: '', startAt, endAt: addMinutesLocal(startAt, 60) };
+}
+
 function initialAgendaMoments() {
-  const today = agendaBaseDate();
-  const items = (((RUNDOWN || {}).library || {}).agendaEventos || [])
-    .filter((it) => it && it.enabled !== false)
-    .map((it) => {
-      const hasSchedule = Boolean(it.startAt || it.endAt || it.start || it.end || (Array.isArray(it.dates) && it.dates.length));
-      return {
-        title: it.title || 'Agenda',
-        subtitle: it.subtitle || 'Hoy',
-        body: it.body || '',
-        startAt: it.startAt || (hasSchedule ? '' : dateAtTime(today, '08:00')),
-        endAt: it.endAt || (hasSchedule ? '' : dateAtTime(today, '22:00')),
-        start: it.start || '',
-        end: it.end || '',
-        dates: Array.isArray(it.dates) ? it.dates : [],
-      };
-    });
-  if (items.length) return items;
-  return [blankAgendaMoment()];
+  return [freshAgendaMoment()];
 }
 
 function agendaMomentSummary(m) {
@@ -2179,7 +2167,7 @@ function agendaMomentHtml(m, i) {
 }
 
 function renderAgendaWizard() {
-  return `<div class="status"><b>Agenda viva:</b> crea tantos mensajes como necesites y decide cuándo empieza y cuándo desaparece cada uno.</div>
+  return `<div class="status"><b>Agenda viva nueva:</b> empieza vacía para no arrastrar eventos antiguos. Las agendas guardadas siguen en Modo avanzado si quieres recuperarlas.</div>
     <div class="agenda-wizard">${(WZ.agenda || []).map(agendaMomentHtml).join('')}</div>
     <button type="button" class="ghost agenda-add" data-wz-agenda-add>Añadir otro momento de agenda</button>`;
 }
