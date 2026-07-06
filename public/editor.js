@@ -67,6 +67,23 @@ function renderEl(el, i) {
     d.innerHTML = el.svg || '';
     if (el.decorative) d.style.pointerEvents = 'none';
   }
+  else if (el.type === 'logo') {
+    d.style.display = 'flex';
+    d.style.alignItems = 'center';
+    d.style.justifyContent = el.src ? 'center' : 'flex-start';
+    if (el.src) d.innerHTML = `<img src="${el.src}" style="width:100%;height:100%;object-fit:${el.fit || 'contain'};display:block">`;
+    else {
+      const span = document.createElement('div');
+      span.textContent = el.text || '';
+      span.style.fontFamily = el.font === 'display' ? FONT_DISPLAY : FONT_TEXT;
+      span.style.fontWeight = el.weight || 900;
+      span.style.color = el.color || '#fff';
+      span.style.fontSize = (el.size || Math.max(18, (el.h || 80) * 0.56)) + 'px';
+      span.style.lineHeight = 1;
+      span.style.whiteSpace = 'nowrap';
+      d.appendChild(span);
+    }
+  }
   else if (el.type === 'image') d.style.background = '#1a2a44';
 
   if (d.style.pointerEvents !== 'none') d.addEventListener('mousedown', (e) => startDrag(e, i));
@@ -158,6 +175,9 @@ function panel() {
     if (el.autofit) h += `<div class="row"><div>${num('Tamaño mín', el.autofit.min, 'afmin')}</div><div>${num('Tamaño máx', el.autofit.max, 'afmax')}</div></div>`;
     else h += num('Tamaño', el.size, 'size');
   }
+  if (el.type === 'logo') {
+    h += `<div class="empty">Logo de esta cartela. Puedes moverlo y cambiar su tamaño. La imagen se actualiza desde Ajustes.</div>`;
+  }
   if (el.type === 'rect' || el.type === 'band') h += colorInput('Color', el.color, 'color');
   h += `<h2 style="margin-top:16px">Posición y tamaño</h2><div class="row"><div>${num('X', el.x, 'x')}</div><div>${num('Y', el.y, 'y')}</div></div>`;
   if (el.type !== 'chip') h += `<div class="row"><div>${num('Ancho', el.w, 'w')}</div><div>${num('Alto', el.h, 'h')}</div></div>`;
@@ -212,6 +232,7 @@ function layoutPayload() {
   }
   const elements = ELS.map((src) => {
     const el = { ...src };
+    if (el.type === 'logo') { delete el.src; delete el.text; }
     const colorToken = themeTokenFor(el.color);
     const bgToken = themeTokenFor(el.bg);
     if (el.colorFixed) delete el.colorTheme;

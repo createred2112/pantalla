@@ -75,6 +75,58 @@ function buildCtx(card, tpl) {
   };
 }
 
+function defaultLogoElement(ctx, tpl) {
+  if (!ctx || !tpl || tpl.logo === false || cfg.brand.logoMode === 'none') return null;
+  const uri = ctx._onDark ? (ctx.logo && (ctx.logo.light || ctx.logo.dark)) : (ctx.logo && (ctx.logo.dark || ctx.logo.light));
+  const text = cfg.brand.website || [cfg.brand.wordmark && cfg.brand.wordmark.a, cfg.brand.wordmark && cfg.brand.wordmark.b].filter(Boolean).join('') || cfg.brand.name || '';
+  if (!uri && !text) return null;
+  const { W, H } = ctx;
+  const pos = tpl.logoPos || 'bl';
+  const h = Math.round(H * ((Number(cfg.brand.logoWidth) || 9) / 100));
+  const w = Math.round(W * 0.24);
+  const mx = Math.round(W * 0.045);
+  const my = Math.round(H * 0.05);
+  return {
+    id: 'brand_logo',
+    type: 'logo',
+    x: pos.includes('r') ? W - mx - w : mx,
+    y: pos.includes('t') ? my : H - my - h,
+    w,
+    h,
+    src: uri,
+    text,
+    color: ctx._onDark ? '#FFFFFF' : (ctx.theme.logoAccent || ctx.theme.text),
+    colorTheme: ctx._onDark ? null : (ctx.theme.logoAccent ? 'logoAccent' : 'text'),
+    fit: 'contain',
+    font: 'text',
+    weight: 900,
+  };
+}
+
+function ensureLogoElement(frame, ctx, tpl) {
+  if (!frame || !Array.isArray(frame.elements) || tpl.logo === false) return frame;
+  const elements = [...frame.elements];
+  const idx = elements.findIndex((el) => el.type === 'logo' || el.id === 'brand_logo');
+  const fresh = defaultLogoElement(ctx, tpl);
+  if (!fresh) {
+    if (idx >= 0) elements.splice(idx, 1);
+    return { ...frame, elements };
+  }
+  if (idx >= 0) {
+    elements[idx] = {
+      ...elements[idx],
+      src: fresh.src,
+      text: fresh.text,
+      color: elements[idx].colorFixed ? elements[idx].color : fresh.color,
+      colorTheme: elements[idx].colorFixed ? elements[idx].colorTheme : fresh.colorTheme,
+      fit: elements[idx].fit || 'contain',
+    };
+  } else {
+    elements.push(fresh);
+  }
+  return { ...frame, elements };
+}
+
 // Deduce a qué campo (title/subtitle/body/date) corresponde un texto generado.
 function inferBind(el, card) {
   if (el.type !== 'text' && el.type !== 'chip') return null;
@@ -162,7 +214,7 @@ function legacyTokenMap(layout, currentTheme) {
 
 // Aplica un layout (elementos) a los datos de la cartela (refresca texto vinculado
 // y mantiene vivos los colores ligados al tema cuando el editor los guardó así).
-function applyLayout(layout, card, ctx) {
+function applyLayout(layout, card, ctx, tpl) {
   const legacy = legacyTokenMap(layout, ctx && ctx.theme);
   const live = (explicitToken, rawColor, fixed) => {
     const token = explicitToken || (fixed ? null : legacy[norm(rawColor)]);
@@ -177,7 +229,7 @@ function applyLayout(layout, card, ctx) {
     if (el.bg) el.bg = live(el.bgTheme, el.bg, el.bgFixed);
     return el;
   });
-  return { background: bg, elements };
+  return ensureLogoElement({ background: bg, elements }, ctx, tpl || { id: card.template });
 }
 
 function sameText(a, b) {
@@ -414,12 +466,12 @@ function repairFrameForCard(card, ctx, frame, opts = {}) {
 // Frame resuelto, por prioridad: layout propio de la cartela > layout por defecto
 // de la plantilla > el que genera la plantilla en código.
 function resolveFrame(card, ctx, tpl) {
-  if (card.layout && Array.isArray(card.layout.elements)) return applyLayout(card.layout, card, ctx);
+  if (card.layout && Array.isArray(card.layout.elements)) return applyLayout(card.layout, card, ctx, tpl);
   const tl = require('../templateLayouts').get(card.template, ctx.theme && ctx.theme.key);
-  if (tl && Array.isArray(tl.elements)) return applyLayout(tl, card, ctx);
+  if (tl && Array.isArray(tl.elements)) return applyLayout(tl, card, ctx, tpl);
   const frame = tpl.build(card, ctx) || { elements: [] };
   frame.elements = (frame.elements || []).map((e, i) => Object.assign({ id: 'el' + i, bind: inferBind(e, card) }, e));
-  return repairFrameForCard(card, ctx, frame);
+  return ensureLogoElement(repairFrameForCard(card, ctx, frame), ctx, tpl);
 }
 
 // Resuelve el frame para el editor (sin renderizar): { W, H, background, elements }.

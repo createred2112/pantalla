@@ -178,6 +178,7 @@ function logoUri(p) {
 
 // Convierte un elemento del esquema en HTML.
 async function elHtml(el, ctx) {
+  if (el.hidden) return '';
   const { W, H } = ctx;
   const scale = Number(cfg.brand.textScale) || 1;
   const attrs = `class="el el-${el.type || 'item'}" data-kind="${el.type || 'item'}"${el.anim ? ` data-anim="${el.anim}"` : ''}`;
@@ -190,6 +191,17 @@ async function elHtml(el, ctx) {
     const uri = await imgDataUri(el.src, el.w, el.h, el.fit);
     if (!uri) return '';
     return `<div ${attrs} style="${box}"><img src="${uri}" style="width:100%;height:100%;object-fit:${el.fit || 'cover'};display:block"/></div>`;
+  }
+  if (el.type === 'logo') {
+    const fam = famOf(el.font || 'text');
+    const color = el.color || '#fff';
+    if (!el.src) {
+      const size = Math.round((el.size || Math.max(18, (el.h || H * 0.08) * 0.56)) * (Number(cfg.brand.textScale) || 1));
+      return `<div ${attrs} style="${box}display:flex;align-items:center;justify-content:flex-start;">` +
+        `<div style="font-family:${fam};font-weight:${el.weight || 900};font-size:${size}px;line-height:1;color:${color};white-space:nowrap;">${esc(el.text || '')}</div></div>`;
+    }
+    return `<div ${attrs} style="${box}display:flex;align-items:center;justify-content:center;">` +
+      `<img src="${el.src}" style="max-width:100%;max-height:100%;width:100%;height:100%;object-fit:${el.fit || 'contain'};display:block"/></div>`;
   }
   if (el.type === 'text') {
     const fam = famOf(el.font);
@@ -293,7 +305,7 @@ async function buildHtml(card, ctx, tpl, frame, opts = {}) {
     parts.push(await elHtml(el, ctx));
   }
   ctx._elBg = null;
-  parts.push(await logoHtml(ctx, tpl));
+  if (!_all.some((el) => el && el.type === 'logo')) parts.push(await logoHtml(ctx, tpl));
 
   return `<!doctype html><html><head><meta charset="utf-8"><style>` +
     fontFaceCss() +
