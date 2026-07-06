@@ -320,6 +320,7 @@ app.get('/api/frame/:id', (req, res) => {
 app.put('/api/cards/:id/layout', (req, res) => {
   const c = store.update(req.params.id, { layout: req.body && req.body.layout ? req.body.layout : null });
   if (!c) return res.status(404).json({ error: 'no existe' });
+  try { rundown.rememberCardEdit(c, { layout: c.layout }); } catch (e) { log.warn('rundown', `No se pudo recordar layout de ${req.params.id}: ${e.message}`); }
   log.info('editor', `Layout guardado en ${req.params.id}`);
   res.json({ ok: true });
 });
@@ -348,6 +349,7 @@ app.post('/api/cards', (req, res) => res.json(store.add(req.body)));
 app.put('/api/cards/:id', (req, res) => {
   const c = store.update(req.params.id, req.body);
   if (!c) return res.status(404).json({ error: 'no existe' });
+  try { rundown.rememberCardEdit(c, req.body || {}); } catch (e) { log.warn('rundown', `No se pudo recordar cambios de ${req.params.id}: ${e.message}`); }
   res.json(c);
 });
 

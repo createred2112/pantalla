@@ -829,6 +829,7 @@ async function loadEditorRundown(card) {
       return;
     }
     ED_SLOT = slot;
+    if (card.layout && !ED_SLOT.layout) ED_SLOT.layout = card.layout;
     box.style.display = '';
     if (slot.source === 'library') {
       // Plantilla y tema quedan editables (se guardan en el bloque, persisten);
@@ -846,7 +847,7 @@ async function loadEditorRundown(card) {
       const isAgendaLib = slot.libraryKey === 'agendaEventos';
       box.innerHTML = `
         <div class="status">Producida por el bloque <b>«${esc(slot.label)}»</b> · carrusel: <b>${esc(catLabel)}</b>.
-          La plantilla y el tema elegidos abajo se aplican a TODO el bloque (vacío = cada pieza con el suyo).</div>
+          La plantilla, el tema y el diseño se mantienen en este bloque aunque rote la pieza (vacío = cada pieza con el suyo).</div>
         <label>Cambia de pieza<select id="edSlotRotation">
           <option value="dia" ${slot.rotation !== 'hora' ? 'selected' : ''}>Cada día</option>
           <option value="hora" ${slot.rotation === 'hora' ? 'selected' : ''}>Cada hora</option>
@@ -862,7 +863,7 @@ async function loadEditorRundown(card) {
       renderSwatches();
       box.innerHTML = `
         <div class="status">Producida por el bloque <b>«${esc(slot.label)}»</b> del guion${slot.source === 'worker' ? ' (dato automático)' : ''}.
-          La plantilla, el tema, la duración y la animación se guardan en el bloque para que no los pise el próximo pase.</div>
+          La plantilla, el tema, el diseño, la duración y la animación se guardan en el bloque para que no los pise el próximo pase.</div>
         <button type="button" class="ghost" id="edOpenRundown" style="margin-top:8px;width:100%">Abrir el guion (modo avanzado)</button>`;
     }
     $('#edOpenRundown').addEventListener('click', async () => {

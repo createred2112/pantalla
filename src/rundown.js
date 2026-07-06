@@ -328,6 +328,7 @@ function normalizeSlot(slot) {
     type: slot.type === 'video' || slot.type === 'image' ? slot.type : 'generated',
     file: slot.file || '',
     photo: slot.photo || '',
+    layout: slot.layout && typeof slot.layout === 'object' ? slot.layout : null,
     videoIntro: slot.videoIntro || '',
     videoOutro: slot.videoOutro || '',
     bumperKey: slot.bumperKey || '',
@@ -501,6 +502,7 @@ function toCard(slot, library, order, date, pickMap = {}, dayThemeKey = '') {
     date: p.date || s.date || '',
     data: p.data || null,
     photo: s.photo || p.photo || null,
+    layout: s.layout || null,
     duration: s.duration || p.duration || 8,
     video: wantsVideo,
     videoIntro: s.videoIntro || null,
@@ -512,6 +514,48 @@ function toCard(slot, library, order, date, pickMap = {}, dayThemeKey = '') {
     slug: s.id,
     rundownSlot: s.id,
   });
+}
+
+function rememberCardEdit(card, patch = {}) {
+  if (!card || card.source !== 'rundown' || !card.rundownSlot) return null;
+  ensureFiles();
+  const data = readJson(RUNDOWN_FILE, DEFAULT_RUNDOWN);
+  upgradeRundown(data);
+  const slot = (data.slots || []).find((s) => String(s.id) === String(card.rundownSlot));
+  if (!slot) return null;
+  const source = slot.source || card.source;
+  const setIfPresent = (key, value) => {
+    if (Object.prototype.hasOwnProperty.call(patch, key)) slot[key] = value;
+  };
+
+  setIfPresent('enabled', card.enabled !== false);
+  setIfPresent('template', card.template || '');
+  setIfPresent('theme', card.theme || '');
+  setIfPresent('photo', card.photo || '');
+  setIfPresent('layout', card.layout || null);
+  setIfPresent('duration', Number(card.duration) || 8);
+  setIfPresent('video', card.video === true);
+  setIfPresent('videoIntro', card.videoIntro || '');
+  setIfPresent('videoOutro', card.videoOutro || '');
+  setIfPresent('bumperKey', card.bumperKey || slot.bumperKey || '');
+  if (source === 'file') {
+    setIfPresent('type', card.type === 'image' ? 'image' : 'video');
+    setIfPresent('file', card.file || '');
+  }
+  // En carruseles y workers, el contenido vivo manda; se conserva la
+  // presentación. En bloques manuales, el contenido editado también es parte
+  // del bloque y debe sobrevivir al piloto.
+  if (source !== 'library' && source !== 'worker') {
+    setIfPresent('title', card.title || '');
+    setIfPresent('subtitle', card.subtitle || '');
+    setIfPresent('body', card.body || '');
+    setIfPresent('date', card.date || '');
+  }
+
+  data.slots = (data.slots || []).map(normalizeSlot);
+  data.updatedAt = new Date().toISOString();
+  writeJson(RUNDOWN_FILE, data);
+  return read();
 }
 
 function shouldMaterialize(slot, library, date, pickMap = {}) {
@@ -584,4 +628,4 @@ function pick(date, slotId, itemIndex) {
   return save(data, { date: day });
 }
 
-module.exports = { read, save, saveLibrary, saveDay, reset, materialize, pick, dayTheme, RUNDOWN_FILE, LIBRARY_FILE };
+module.exports = { read, save, saveLibrary, saveDay, reset, materialize, pick, rememberCardEdit, dayTheme, RUNDOWN_FILE, LIBRARY_FILE };

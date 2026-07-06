@@ -338,7 +338,7 @@ function layoutPayload() {
 }
 $('#btnSave').addEventListener('click', async () => {
   const r = await fetch('/api/cards/' + ID + '/layout', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ layout: layoutPayload() }) });
-  toast(r.ok ? 'Diseño guardado SOLO en esta cartela ✓' : 'Error al guardar');
+  toast(r.ok ? 'Diseño guardado en esta cartela y su bloque ✓' : 'Error al guardar');
 });
 $('#btnDefault').addEventListener('click', async () => {
   if (FRAME.template === 'agenda') {
