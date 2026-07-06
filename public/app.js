@@ -32,6 +32,7 @@ let RUNDOWN_SELECTED = 0;
 let LIBRARY_CATEGORY = 'datosUtiles';
 let APP_STATUS = null;
 let VIDEO_LIBRARY = [];
+let LOCAL_ACTIVITY = null;
 
 // Galería visual de plantillas (probar varias con los datos actuales).
 let galleryOpen = false;
@@ -494,6 +495,35 @@ function mediaUrl(file) {
   if (f.startsWith('data/worker-inbox/')) return '/media/' + f.replace('data/worker-inbox/', 'inbox/');
   if (/^[A-Za-z0-9_.-]+\.mp4$/i.test(f)) return '/media/project-videos/' + encodeURIComponent(f);
   return '';
+}
+
+function activityFromStatus(st) {
+  const gen = st && st.stages && st.stages.generate;
+  if (!gen || gen.running !== true) return null;
+  const done = Number(gen.done) || 0;
+  const count = Number(gen.count) || 0;
+  const title = gen.currentTitle || gen.current || 'cartelas';
+  return {
+    title: 'Generando MP4',
+    detail: count ? `${done}/${count} · ${title}` : String(title),
+  };
+}
+
+function showActivity(activity) {
+  const box = $('#systemActivity');
+  if (!box) return;
+  if (activity === false) {
+    box.hidden = true;
+    return;
+  }
+  const active = activity || LOCAL_ACTIVITY || activityFromStatus(APP_STATUS);
+  if (!active) {
+    box.hidden = true;
+    return;
+  }
+  $('#activityTitle').textContent = active.title || 'Trabajando';
+  $('#activityDetail').textContent = active.detail || 'Preparando archivo...';
+  box.hidden = false;
 }
 
 function uploadSourceLabel(source, dryRun) {
@@ -1000,13 +1030,23 @@ $('#list').addEventListener('click', async (e) => {
   else if (b.dataset.edit) openEditor(cards.find(c => c.id === b.dataset.edit));
   else if (b.dataset.render) {
     b.disabled = true;
+    const card = cards.find((c) => c.id === b.dataset.render);
+    LOCAL_ACTIVITY = {
+      title: 'Regenerando cartela',
+      detail: card && (card.title || card.subtitle) ? (card.title || card.subtitle) : 'Preparando MP4...',
+    };
+    showActivity();
     toast('Generando archivo...');
     try {
       await api('/cards/' + b.dataset.render + '/render', { method: 'POST' });
       toast('Archivo generado');
+      LOCAL_ACTIVITY = null;
+      showActivity(false);
       load();
     } catch (err) {
       toast('Error: ' + err.message);
+      LOCAL_ACTIVITY = null;
+      showActivity(false);
       b.disabled = false;
     }
   }
@@ -3007,6 +3047,7 @@ async function loadStatus(full) {
     const s = await api('/status');
     const st = s.status;
     APP_STATUS = st;
+    showActivity();
     renderTodayPanel();
     const last = st.lastPublish ? new Date(st.lastPublish).toLocaleString('es-ES') : 'nunca';
     const op = s.operation || null;

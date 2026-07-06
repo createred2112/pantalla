@@ -354,12 +354,15 @@ app.post('/api/cards/:id/render', async (req, res) => {
   if (card.type !== 'generated') return res.status(400).json({ error: 'solo cartelas generadas' });
   try {
     // El botón ⟳ es la orden EXPLÍCITA del usuario: regenera siempre.
+    status.set('generate', { ok: null, running: true, count: 1, done: 0, current: card.id, currentTitle: card.title || card.id, manual: true, results: [] });
     const r = await require('./pipeline/generate').renderOne(card, { force: true });
     try { await require('./generator/htmlRender').close(); } catch {}
+    status.set('generate', { ok: true, running: false, count: 1, done: 1, current: null, manual: true, results: [{ id: card.id, file: r.file, ok: true, reused: r.reused, durationSeconds: r.durationSeconds || null }] });
     log.info('generate', `Render manual ${card.id} -> ${r.file}`);
     res.json({ ok: true, file: r.file, rendered: renderedInfo(card) });
   } catch (e) {
     try { await require('./generator/htmlRender').close(); } catch {}
+    status.set('generate', { ok: false, running: false, count: 1, done: 0, current: null, manual: true, error: e.message, results: [{ id: card.id, ok: false, error: e.message }] });
     log.error('generate', `FALLO render manual ${card.id}: ${e.message}`);
     res.status(500).json({ error: e.message });
   }
