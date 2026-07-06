@@ -4,6 +4,7 @@
 const fs = require('fs');
 const path = require('path');
 const store = require('./store');
+const { cfg } = require('./config');
 
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const RUNDOWN_FILE = path.join(DATA_DIR, 'rundown.json');
@@ -329,6 +330,7 @@ function normalizeSlot(slot) {
     photo: slot.photo || '',
     videoIntro: slot.videoIntro || '',
     videoOutro: slot.videoOutro || '',
+    bumperKey: slot.bumperKey || '',
     duration: Number(slot.duration) || 8,
     video: slot.video === true,
     // Cadencia del carrusel: 'dia' (una pieza por día) u 'hora' (cambia cada hora).
@@ -433,9 +435,37 @@ function slotPayload(slot, library, date, options = {}) {
   return s;
 }
 
+function bumperKeysForSlot(slot, payload = {}) {
+  const keys = [];
+  const add = (key) => { if (key && !keys.includes(key)) keys.push(key); };
+  add(slot.bumperKey || defaultBumperKeyForSlot(slot));
+  if (slot.source === 'library') add(`library:${slot.libraryKey}`);
+  if (slot.source === 'worker') add(`worker:${slot.workerKey}`);
+  add(payload.template || slot.template);
+  return keys;
+}
+
+function defaultBumperKeyForSlot(slot) {
+  if (slot.source === 'library' && slot.libraryKey) return `library:${slot.libraryKey}`;
+  if (slot.source === 'worker' && slot.workerKey) return `worker:${slot.workerKey}`;
+  return '';
+}
+
+function bumperForSlot(slot, payload = {}) {
+  const all = cfg.templateBumpers || {};
+  for (const key of bumperKeysForSlot(slot, payload)) {
+    const b = all[key];
+    if (b && (b.intro || b.outro)) return { intro: b.intro || '', outro: b.outro || '', key };
+  }
+  return { intro: '', outro: '', key: '' };
+}
+
 function toCard(slot, library, order, date, pickMap = {}, dayThemeKey = '') {
   const s = normalizeSlot(slot);
   const p = slotPayload(s, library, date, { pickIndex: pickMap[s.id] });
+  const semanticBumperKey = s.bumperKey || defaultBumperKeyForSlot(s);
+  const bumper = bumperForSlot(s, p);
+  const wantsVideo = s.video === true || Boolean(s.videoIntro || s.videoOutro || bumper.intro || bumper.outro);
   // La plantilla/tema fijados EN EL BLOQUE mandan sobre piezas manuales.
   // En workers con plantilla propia (luz, aire, combustible), manda el dato.
   const tplOverride = s.source === 'worker' && p.template ? '' : s.template;
@@ -472,9 +502,12 @@ function toCard(slot, library, order, date, pickMap = {}, dayThemeKey = '') {
     data: p.data || null,
     photo: s.photo || p.photo || null,
     duration: s.duration || p.duration || 8,
-    video: s.video === true,
+    video: wantsVideo,
     videoIntro: s.videoIntro || null,
     videoOutro: s.videoOutro || null,
+    bumperKey: semanticBumperKey || null,
+    rundownLibraryKey: s.libraryKey || null,
+    rundownWorkerKey: s.workerKey || null,
     source: 'rundown',
     slug: s.id,
     rundownSlot: s.id,

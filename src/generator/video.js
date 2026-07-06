@@ -275,8 +275,19 @@ async function stitchClips(inputs, out, dir, W, H, fps, opts = {}) {
 
 function bumperRef(card, field) {
   if (card[field]) return card[field];
-  const b = (cfg.templateBumpers || {})[card.template] || {};
-  return field === 'videoIntro' ? b.intro : b.outro;
+  const all = cfg.templateBumpers || {};
+  const keys = [
+    card.bumperKey,
+    card.rundownLibraryKey ? `library:${card.rundownLibraryKey}` : '',
+    card.rundownWorkerKey ? `worker:${card.rundownWorkerKey}` : '',
+    card.template,
+  ].filter(Boolean);
+  for (const key of keys) {
+    const b = all[key] || {};
+    const ref = field === 'videoIntro' ? b.intro : b.outro;
+    if (ref) return ref;
+  }
+  return '';
 }
 
 function bumperPath(card, field, label) {

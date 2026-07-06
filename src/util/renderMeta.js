@@ -47,7 +47,13 @@ function fileSig(p) {
 
 function templateBumpersFor(card) {
   const all = cfg.templateBumpers || {};
-  const b = all[card.template] || {};
+  const keys = [
+    card.bumperKey,
+    card.rundownLibraryKey ? `library:${card.rundownLibraryKey}` : '',
+    card.rundownWorkerKey ? `worker:${card.rundownWorkerKey}` : '',
+    card.template,
+  ].filter(Boolean);
+  const b = keys.map((key) => all[key]).find((item) => item && (item.intro || item.outro)) || {};
   return {
     intro: b.intro || '',
     outro: b.outro || '',
@@ -68,7 +74,7 @@ function renderHash(card) {
   try { tplLayout = require('../templateLayouts').get(card.template, theme.key); } catch {}
   const tplBumpers = templateBumpersFor(card);
   const src = {
-    v: 23, // subir al cambiar el diseño de las plantillas en código
+    v: 24, // subir al cambiar el diseño de las plantillas en código
     template: card.template || '',
     theme,
     layout: card.layout || null,

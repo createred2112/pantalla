@@ -141,6 +141,7 @@ app.get('/api/config', (req, res) => {
     defaults: cfg.defaults,
     templates: templates.list(),
     palette: cfg.palette || {},
+    templateBumpers: cfg.templateBumpers || {},
     safety: renderGuard.safetyInfo(),
   });
 });

@@ -106,6 +106,79 @@ function videoNameForPath(path) {
   return item ? videoLabel(item) : path;
 }
 
+const BUMPER_TYPE_ROWS = [
+  { id: 'library:avisosMeteorologicos', label: 'Aviso meteorológico', hint: 'Tiene prioridad sobre la plantilla meteoaviso.' },
+  { id: 'library:consejosMeteorologicos', label: 'Consejo meteorológico', hint: 'Puede usar otra cortinilla aunque comparta plantilla.' },
+  { id: 'library:agendaEventos', label: 'Agenda viva' },
+  { id: 'library:datosCuriosos', label: 'Dato curioso' },
+  { id: 'library:datosUtiles', label: 'Aviso útil / dato útil' },
+  { id: 'worker:weather', label: 'Tiempo ahora' },
+  { id: 'worker:forecast', label: 'Previsión 3 días' },
+  { id: 'worker:airQuality', label: 'Calidad del aire' },
+  { id: 'worker:powerPrice', label: 'Precio de la luz' },
+  { id: 'worker:fuel', label: 'Gasolina' },
+];
+
+function bumperConfig() {
+  return (SETTINGS && SETTINGS.templateBumpers) || (CONFIG && CONFIG.templateBumpers) || {};
+}
+
+function workerTemplate(workerKey) {
+  return ({
+    weather: 'clima',
+    forecast: 'prevision',
+    airQuality: 'aire',
+    powerPrice: 'luz',
+    fuel: 'gasolina',
+    poolCapacity: 'dato',
+  })[workerKey] || '';
+}
+
+function defaultTemplateForSlot(slot) {
+  if (!slot) return '';
+  if (slot.template) return slot.template;
+  if (slot.source === 'worker') return workerTemplate(slot.workerKey);
+  if (slot.source === 'library') {
+    const meta = (RUNDOWN && RUNDOWN.libraryKeys || []).find((k) => k.key === slot.libraryKey);
+    return (meta && meta.template) || '';
+  }
+  return '';
+}
+
+function defaultBumperKeyForSlot(slot) {
+  if (!slot) return '';
+  if (slot.bumperKey) return slot.bumperKey;
+  if (slot.source === 'library' && slot.libraryKey) return `library:${slot.libraryKey}`;
+  if (slot.source === 'worker' && slot.workerKey) return `worker:${slot.workerKey}`;
+  return '';
+}
+
+function bumperKeysForSlot(slot) {
+  const keys = [];
+  const add = (key) => { if (key && !keys.includes(key)) keys.push(key); };
+  add(slot && slot.bumperKey);
+  add(defaultBumperKeyForSlot(slot));
+  add(defaultTemplateForSlot(slot));
+  return keys;
+}
+
+function bumperForSlot(slot) {
+  const all = bumperConfig();
+  for (const key of bumperKeysForSlot(slot)) {
+    const b = all[key];
+    if (b && (b.intro || b.outro)) return { intro: b.intro || '', outro: b.outro || '', key };
+  }
+  return { intro: '', outro: '', key: '' };
+}
+
+function bumperSummary(b) {
+  if (!b || (!b.intro && !b.outro)) return 'Sin cortinilla automática';
+  const parts = [];
+  if (b.intro) parts.push('entrada: ' + videoNameForPath(b.intro));
+  if (b.outro) parts.push('salida: ' + videoNameForPath(b.outro));
+  return parts.join(' · ');
+}
+
 function fillVideoSelect(sel, selected, placeholder) {
   if (!sel) return;
   sel.innerHTML = videoOptions(selected || '', placeholder);
@@ -228,13 +301,13 @@ function buildBumperEditor() {
   const bumpers = SETTINGS.templateBumpers || {};
   const chosen = ['clima', 'prevision', 'meteoaviso', 'agenda', 'luz', 'aire', 'gasolina', 'dato', 'alerta', 'noticia', 'mensaje'];
   const list = chosen.map((id) => TEMPLATES.find((t) => t.id === id)).filter(Boolean);
-  $('#setTemplateBumpers').innerHTML = list.map((t) => {
-    const b = bumpers[t.id] || {};
-    return `<div data-bumper-template="${esc(t.id)}" style="padding:10px;margin:8px 0;background:#0a1a30;border:1px solid var(--line);border-radius:10px">
-      <b style="font-size:13px">${esc(t.label)}</b>
+  const rowHtml = ({ id, label, hint }, placeholderIn = 'Sin entrada', placeholderOut = 'Sin salida') => {
+    const b = bumpers[id] || {};
+    return `<div data-bumper-template="${esc(id)}" style="padding:10px;margin:8px 0;background:#0a1a30;border:1px solid var(--line);border-radius:10px">
+      <b style="font-size:13px">${esc(label)}</b>${hint ? `<div class="hint">${esc(hint)}</div>` : ''}
       <div class="mini2" style="margin-top:8px">
         <label style="margin-top:0">Entrada
-          <select data-bumper-pick="intro" class="video-pick">${videoOptions(b.intro || '', 'Sin entrada')}</select>
+          <select data-bumper-pick="intro" class="video-pick">${videoOptions(b.intro || '', placeholderIn)}</select>
         </label>
         <label style="margin-top:0">Subir entrada nueva
           <input type="file" data-bumper-file="intro" accept="video/mp4,video/*">
@@ -244,7 +317,7 @@ function buildBumperEditor() {
       <div class="hint" data-bumper-current="intro">Entrada actual: ${esc(videoNameForPath(b.intro || ''))}</div>
       <div class="mini2" style="margin-top:8px">
         <label style="margin-top:0">Salida
-          <select data-bumper-pick="outro" class="video-pick">${videoOptions(b.outro || '', 'Sin salida')}</select>
+          <select data-bumper-pick="outro" class="video-pick">${videoOptions(b.outro || '', placeholderOut)}</select>
         </label>
         <label style="margin-top:0">Subir salida nueva
           <input type="file" data-bumper-file="outro" accept="video/mp4,video/*">
@@ -253,7 +326,12 @@ function buildBumperEditor() {
       <input type="hidden" data-bumper-path="outro" value="${esc(b.outro || '')}">
       <div class="hint" data-bumper-current="outro">Salida actual: ${esc(videoNameForPath(b.outro || ''))}</div>
     </div>`;
-  }).join('');
+  };
+  $('#setTemplateBumpers').innerHTML =
+    `<div class="hint" style="margin:4px 0 10px"><b>Tipos de escaleta:</b> se aplican solos al crear una secuencia. Si están vacíos, heredan la cortinilla de la plantilla visual.</div>` +
+    BUMPER_TYPE_ROWS.map((row) => rowHtml(row, 'Heredar / sin entrada', 'Heredar / sin salida')).join('') +
+    `<div class="hint" style="margin:14px 0 10px"><b>Plantillas visuales:</b> respaldo general para cualquier cartela que use esa plantilla.</div>` +
+    list.map((t) => rowHtml({ id: t.id, label: t.label })).join('');
 }
 
 function collectTemplateBumpers() {
@@ -366,7 +444,10 @@ function showFtpTest(msg, ok) {
 }
 
 $('#btnSetPreview').addEventListener('click', async () => {
-  await api('/settings', { method: 'PUT', body: JSON.stringify(collectSettings()) });
+  const next = collectSettings();
+  await api('/settings', { method: 'PUT', body: JSON.stringify(next) });
+  SETTINGS.templateBumpers = next.templateBumpers;
+  CONFIG.templateBumpers = next.templateBumpers;
   DV = Date.now();
   const r = await fetch('/api/preview', { method: 'POST', headers: H, body: JSON.stringify({ template: 'mensaje', title: 'Vitoria en verde.', theme: 'lima' }) });
   const img = $('#setPreview'); img.src = URL.createObjectURL(await r.blob()); img.style.display = 'block';
@@ -377,7 +458,10 @@ $('#btnFtpTest').addEventListener('click', async () => {
   btn.disabled = true;
   showFtpTest('Guardando ajustes y probando FTP...', true);
   try {
-    await api('/settings', { method: 'PUT', body: JSON.stringify(collectSettings()) });
+    const next = collectSettings();
+    await api('/settings', { method: 'PUT', body: JSON.stringify(next) });
+    SETTINGS.templateBumpers = next.templateBumpers;
+    CONFIG.templateBumpers = next.templateBumpers;
     const r = await fetch('/api/ftp-test', { method: 'POST', headers: H });
     const j = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(j.error || 'No se pudo conectar');
@@ -412,7 +496,10 @@ $('#btnFontUpload').addEventListener('click', async () => {
 });
 $('#btnSetSave').addEventListener('click', async () => {
   try {
-    await api('/settings', { method: 'PUT', body: JSON.stringify(collectSettings()) });
+    const next = collectSettings();
+    await api('/settings', { method: 'PUT', body: JSON.stringify(next) });
+    SETTINGS.templateBumpers = next.templateBumpers;
+    CONFIG.templateBumpers = next.templateBumpers;
     DV = Date.now(); toast('Ajustes guardados'); settingsDlg.close(); load();
   } catch (e) { toast('Error: ' + e.message); }
 });
@@ -1645,6 +1732,25 @@ function slotEditHtml(s, i) {
   const isLib = s.source === 'library';
   const isWorker = s.source === 'worker';
   const isFile = s.source === 'file';
+  const inheritedBumper = bumperForSlot(s);
+  const bumperBlock = !isFile ? (() => {
+    const autoIntro = inheritedBumper.intro ? `Auto: ${videoNameForPath(inheritedBumper.intro)}` : 'Auto: sin entrada';
+    const autoOutro = inheritedBumper.outro ? `Auto: ${videoNameForPath(inheritedBumper.outro)}` : 'Auto: sin salida';
+    const keyText = inheritedBumper.key ? ` · regla: ${inheritedBumper.key}` : '';
+    return `<div class="slot-wide status">
+        <b>Cortinillas de este bloque</b>${keyText}<br>
+        ${esc(bumperSummary(inheritedBumper))}
+        <div class="mini2" style="margin-top:8px">
+          <label style="margin-top:0">Entrada
+            <select data-rd-current="videoIntro" class="video-pick">${videoOptions(s.videoIntro || '', autoIntro)}</select>
+          </label>
+          <label style="margin-top:0">Salida
+            <select data-rd-current="videoOutro" class="video-pick">${videoOptions(s.videoOutro || '', autoOutro)}</select>
+          </label>
+        </div>
+        <div class="hint">Déjalo en Auto para que use la cortinilla configurada en Ajustes para este tipo de cartela.</div>
+      </div>`;
+  })() : '';
   const tplSelect = `<label>Plantilla<select data-rd-current="template">
       <option value="">Auto</option>
       ${TEMPLATES.map((t) => `<option value="${esc(t.id)}" ${t.id === s.template ? 'selected' : ''}>${esc(t.label)}</option>`).join('')}
@@ -1704,6 +1810,7 @@ function slotEditHtml(s, i) {
       <label>Duración base (segundos)<input type="number" min="1" data-rd-current="duration" value="${Number(s.duration) || 8}"></label>
       <label><input type="checkbox" data-rd-toggle="enabled" ${s.enabled !== false ? 'checked' : ''} style="width:auto;margin-right:8px"> Activa (todos los días)</label>
       <label><input type="checkbox" data-rd-toggle="video" ${s.video ? 'checked' : ''} style="width:auto;margin-right:8px"> Animada (MP4)</label>
+      ${bumperBlock}
       <label class="slot-wide" style="color:#ffd98a"><input type="checkbox" data-rd-skipday ${((((RUNDOWN.rundown || {}).days || {})[RUNDOWN.activeDate] || {}).skip || []).includes(s.id) ? 'checked' : ''} style="width:auto;margin-right:8px">
         No emitir SOLO el ${esc(RUNDOWN.activeDate || 'día elegido')} (el resto de días sale con normalidad)</label>
     </div>
@@ -2399,6 +2506,18 @@ function wizardLibraryPlaceholder(key) {
   return 'Título | firma | texto';
 }
 
+function slotForPlanType(t) {
+  const s = { ...(t.slot || {}) };
+  s.bumperKey = defaultBumperKeyForSlot(s);
+  return s;
+}
+
+function wizardBumperLine(t) {
+  const b = bumperForSlot(slotForPlanType(t));
+  if (!b.intro && !b.outro) return '';
+  return `<div class="hint" style="margin-top:4px">Cortinilla automática: ${esc(bumperSummary(b))}</div>`;
+}
+
 function wizardLibraryHtml(t) {
   const key = t.slot.libraryKey;
   const meta = libraryMetaForKey(key);
@@ -2506,13 +2625,13 @@ function renderWizard() {
       <input id="wzDays" type="number" min="1" max="14" value="${WZ.days}">
       <label>Tipos de cartela</label>
       <div style="display:grid;gap:2px">${PLAN_TYPES.map((t) =>
-        `<label class="chk"><input type="checkbox" data-wz-type="${t.id}" ${WZ.sel.has(t.id) ? 'checked' : ''}>${t.label}</label>`).join('')}</div>`;
+        `<label class="chk" style="display:block"><input type="checkbox" data-wz-type="${t.id}" ${WZ.sel.has(t.id) ? 'checked' : ''}>${t.label}${wizardBumperLine(t)}</label>`).join('')}</div>`;
     return;
   }
 
   if (WZ.step === 2) {
     const sections = chosen.map((t) => {
-      const head = `<h3 style="margin:14px 0 4px;font-size:14px">${t.label}</h3>`;
+      const head = `<h3 style="margin:14px 0 4px;font-size:14px">${t.label}</h3>${wizardBumperLine(t)}`;
       if (t.slot.source === 'worker' && t.slot.workerKey !== 'poolCapacity') {
         return head + `<div class="status">${esc(wzWorkerLine(t.slot.workerKey))}</div>`;
       }
@@ -2555,6 +2674,12 @@ function renderWizard() {
   const agendaMoments = WZ.sel.has('agenda')
     ? (WZ.agenda || []).filter((m) => String(m.body || '').trim() || (String(m.title || '').trim() && String(m.title || '').trim() !== 'Agenda')).length
     : 0;
+  const bumperRows = chosen
+    .map((t) => {
+      const b = bumperForSlot(slotForPlanType(t));
+      return (b.intro || b.outro) ? `${esc(t.slot.label)}: ${esc(bumperSummary(b))}` : '';
+    })
+    .filter(Boolean);
   $('#wzBody').innerHTML = `
     ${wizardErrorHtml()}
     <p class="hint" style="margin-top:0">Resumen antes de confirmar:</p>
@@ -2565,6 +2690,7 @@ function renderWizard() {
       Cobertura: <b>${WZ.days}</b> día(s); el carrusel cambia a diario sin repetir<br>
       ${agendaMoments ? `Agenda viva: <b>${agendaMoments}</b> mensaje(s) programado(s)<br>` : ''}
       ${newPieces ? `Se incorporan <b>${newPieces}</b> pieza(s) nuevas al carrusel<br>` : ''}
+      ${bumperRows.length ? `Cortinillas automáticas:<br>${bumperRows.join('<br>')}<br>` : ''}
       Se generan las cartelas y se abre la vista previa del bucle<br>
       La publicación requiere confirmación manual o la publicación automática programada
     </div>`;
@@ -2618,6 +2744,7 @@ async function wizardFinish() {
     const slots = chosen.map((t) => {
       const s = { id: `plan_${t.id}_${stamp}`, enabled: t.enabled !== false, duration: t.duration || 8, video: false, theme: '', title: '', subtitle: '', body: '', date: '', template: '', libraryKey: '', workerKey: '', ...t.slot };
       Object.assign(s, WZ.manual[t.id] || {});
+      s.bumperKey = defaultBumperKeyForSlot(s);
       s.duration = Number(s.duration) || 8;
       return s;
     });

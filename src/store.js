@@ -62,6 +62,9 @@ function normalize(card) {
     source: card.source || 'manual', // manual | worker | rundown
     slug: card.slug || null,
     rundownSlot: card.rundownSlot || null,
+    bumperKey: card.bumperKey || null,
+    rundownLibraryKey: card.rundownLibraryKey || null,
+    rundownWorkerKey: card.rundownWorkerKey || null,
     updatedAt: new Date().toISOString(),
   };
 }
