@@ -57,6 +57,7 @@ async function loadConfig() {
     $('#edTemplate').innerHTML = TEMPLATES.map((t) => `<option value="${t.id}">${t.label}</option>`).join('');
     $('#edTheme').innerHTML = '<option value="">Auto (según plantilla)</option>' +
       Object.keys(PALETTE).map((k) => `<option value="${k}">${k}</option>`).join('');
+    if ($('#rundownTheme')) $('#rundownTheme').innerHTML = dayThemeOptions('');
     if (SAFETY.safeMode) {
       $('#btnGallery').textContent = 'Galería desactivada en modo seguro';
       $('#btnGallery').disabled = true;
@@ -65,6 +66,12 @@ async function loadConfig() {
     }
     await loadVideoLibrary();
   } catch {}
+}
+
+function dayThemeOptions(selected) {
+  const auto = selected ? '' : ' selected';
+  return `<option value=""${auto}>Automático rotativo</option>` +
+    Object.keys(PALETTE || {}).map((k) => `<option value="${esc(k)}" ${k === selected ? 'selected' : ''}>${esc(k)}</option>`).join('');
 }
 
 async function loadVideoLibrary() {
@@ -1560,6 +1567,9 @@ function renderRundown() {
   if (RUNDOWN_SELECTED >= slots.length) RUNDOWN_SELECTED = -1;
   $('#rundownTitle').value = rd.title || 'Escaleta';
   $('#rundownDate').value = RUNDOWN.activeDate || localDatePart();
+  const dayRec = ((rd.days || {})[RUNDOWN.activeDate] || {});
+  const visibleDayTheme = dayRec.theme || RUNDOWN.autoDayTheme || RUNDOWN.dayTheme || '';
+  if ($('#rundownTheme')) $('#rundownTheme').innerHTML = dayThemeOptions(dayRec.theme || '');
   const rep = RUNDOWN.report || [];
   const emits = (s, i) => s.enabled !== false && !(rep[i] && (rep[i].skippedToday || rep[i].autoSkipped));
   const active = slots.filter(emits).length;
@@ -1575,7 +1585,7 @@ function renderRundown() {
     `La pantalla dará una vuelta de <b>${secs}s</b> con <b>${active}</b> bloques` +
     countMsg +
     (missing ? ` · <b style="color:#e0a106">⚠ ${missing} sin contenido</b>` : ' · <b style="color:#bff0d5">todo listo ✓</b>') +
-    (RUNDOWN.dayTheme ? ` · color del día: <b>${esc(RUNDOWN.dayTheme)}</b>` : '');
+    (visibleDayTheme ? ` · color del día: <b>${esc(visibleDayTheme)}</b>` : '');
   $('#slotList').innerHTML = slots.length
     ? slots.map((s, i) => sbCardHtml(s, i)).join('')
     : '<div class="empty" style="grid-column:1/-1">Añade un bloque para empezar.</div>';
@@ -2122,6 +2132,15 @@ function libraryItemHtml(meta, item, i) {
 function collectRundown() {
   const rd = RUNDOWN.rundown || { slots: [] };
   rd.title = $('#rundownTitle').value.trim() || 'Escaleta';
+  const themeSel = $('#rundownTheme');
+  if (themeSel) {
+    const d = RUNDOWN.activeDate || localDatePart();
+    if (!rd.days || typeof rd.days !== 'object') rd.days = {};
+    const rec = rd.days[d] && typeof rd.days[d] === 'object' ? rd.days[d] : {};
+    const theme = themeSel.value || '';
+    if (theme) rec.theme = theme; else delete rec.theme;
+    rd.days[d] = rec;
+  }
   const slot = selectedSlot();
   const wrap = slot && !$('#slotEditor').hidden ? $('#slotEditor') : null;
   if (slot && wrap) {
@@ -2258,7 +2277,8 @@ let WZ = null;
 async function openWizard() {
   const date = localDatePart();
   RUNDOWN = await api('/rundown?date=' + encodeURIComponent(date)); // trae almacén, workers y claves
-  WZ = { step: 1, date, days: 3, sel: new Set(PLAN_TYPES.filter((t) => t.def).map((t) => t.id)), manual: {}, adds: {}, picks: {}, error: '', agenda: initialAgendaMoments() };
+  const rec = (((RUNDOWN.rundown || {}).days || {})[date] || {});
+  WZ = { step: 1, date, theme: rec.theme || '', days: 3, sel: new Set(PLAN_TYPES.filter((t) => t.def).map((t) => t.id)), manual: {}, adds: {}, picks: {}, error: '', agenda: initialAgendaMoments() };
   renderWizard();
   wizardDlg.showModal();
 }
@@ -2479,6 +2499,9 @@ function renderWizard() {
         <button type="button" class="ghost" data-wz-date="${today}">Hoy</button>
         <button type="button" class="ghost" data-wz-date="${tomorrow}">Mañana</button>
       </div>
+      <label>Paleta del día</label>
+      <select id="wzTheme">${dayThemeOptions(WZ.theme || '')}</select>
+      <div class="hint" style="margin:5px 0 10px">Las cartelas en Auto usarán esta paleta. Si una cartela tiene color fijo, se respeta.</div>
       <label>Días a cubrir</label>
       <input id="wzDays" type="number" min="1" max="14" value="${WZ.days}">
       <label>Tipos de cartela</label>
@@ -2538,6 +2561,7 @@ function renderWizard() {
     <div class="status" style="line-height:1.7">
       Guion de <b>${chosen.length}</b> cartelas: ${chosen.map((t) => esc(t.slot.label)).join(' → ')}<br>
       ${wizardCountHtml()}
+      Paleta del día: <b>${esc(WZ.theme || 'Automático rotativo')}</b><br>
       Cobertura: <b>${WZ.days}</b> día(s); el carrusel cambia a diario sin repetir<br>
       ${agendaMoments ? `Agenda viva: <b>${agendaMoments}</b> mensaje(s) programado(s)<br>` : ''}
       ${newPieces ? `Se incorporan <b>${newPieces}</b> pieza(s) nuevas al carrusel<br>` : ''}
@@ -2550,6 +2574,8 @@ function renderWizard() {
 function wzCollect() {
   const dateInput = $('#wzDate');
   if (dateInput) WZ.date = dateInput.value || localDatePart();
+  const themeInput = $('#wzTheme');
+  if (themeInput) WZ.theme = themeInput.value || '';
   const d = $('#wzDays');
   if (d) WZ.days = Math.max(1, Math.min(14, Number(d.value) || 3));
   const agendaBoxes = [...$('#wzBody').querySelectorAll('[data-wz-agenda]')];
@@ -2628,7 +2654,8 @@ async function wizardFinish() {
       const activeIndex = selectedItem ? activeItems.indexOf(selectedItem) : -1;
       if (activeIndex >= 0) pick[slots[i].id] = activeIndex;
     });
-    const days = Object.keys(pick).length ? { [activeDate]: { pick } } : {};
+    const dayPack = { ...(Object.keys(pick).length ? { pick } : {}), ...(WZ.theme ? { theme: WZ.theme } : {}) };
+    const days = Object.keys(dayPack).length ? { [activeDate]: dayPack } : {};
     await api('/rundown?date=' + encodeURIComponent(activeDate), { method: 'PUT', body: JSON.stringify({ title: `Guion (${WZ.days} días)`, slots, days }) });
     await api('/rundown/library', { method: 'PUT', body: JSON.stringify(lib) });
     await api('/workers/refresh', { method: 'POST' }).catch(() => {});
@@ -2894,6 +2921,12 @@ $('#rundownDate').addEventListener('change', async () => {
   RUNDOWN = await api('/rundown?date=' + encodeURIComponent($('#rundownDate').value));
   LIB_OPEN = -1;
   rdSetDirty(false);
+  renderRundown();
+});
+$('#rundownTheme').addEventListener('change', () => {
+  if (!RUNDOWN) return;
+  collectRundown();
+  rdSetDirty(true);
   renderRundown();
 });
 // Storyboard: tocar una miniatura selecciona el bloque y abre su editor.

@@ -144,8 +144,14 @@ function dayNumber(date) {
 // LOOK DEL DÍA: tema rotativo por día de la semana (L..D) para los bloques y
 // piezas sin tema fijo ("Auto"). La pantalla cambia de paleta sola cada día.
 const DAY_THEMES = ['azul', 'lima', 'carbon', 'rojo', 'azul', 'lima', 'carbon'];
-function dayTheme(date) {
+function autoDayTheme(date) {
   return DAY_THEMES[(dayNumber(date || todayKey()) - 1) % DAY_THEMES.length];
+}
+function dayTheme(date, rundown) {
+  const day = String(date || todayKey()).slice(0, 10);
+  const rec = rundown && rundown.days && rundown.days[day];
+  const chosen = rec && String(rec.theme || '').trim();
+  return chosen || autoDayTheme(day);
 }
 
 function itemApplies(item, date) {
@@ -218,7 +224,7 @@ function read(options = {}) {
   if (!Array.isArray(rundown.slots)) rundown.slots = [];
   let workers = [];
   try { workers = require('./workers').state(); } catch {}
-  return { rundown, library, libraryKeys: LIBRARY_KEYS, activeDate: date, dayTheme: dayTheme(date), workers, daily: dailyPack(library, date), report: report(rundown, library, date) };
+  return { rundown, library, libraryKeys: LIBRARY_KEYS, activeDate: date, dayTheme: dayTheme(date, rundown), autoDayTheme: autoDayTheme(date), workers, daily: dailyPack(library, date), report: report(rundown, library, date) };
 }
 
 function upgradeRundown(rundown) {
@@ -241,12 +247,13 @@ function cleanDays(days) {
   const out = {};
   for (const [d, v] of Object.entries(days && typeof days === 'object' ? days : {})) {
     const skip = Array.isArray(v && v.skip) ? [...new Set(v.skip.map(String).filter(Boolean))] : [];
+    const theme = String((v && v.theme) || '').trim();
     const pick = {};
     for (const [slotId, idx] of Object.entries((v && v.pick && typeof v.pick === 'object') ? v.pick : {})) {
       const n = Number(idx);
       if (String(slotId).trim() && Number.isInteger(n) && n >= 0) pick[String(slotId)] = n;
     }
-    if (skip.length || Object.keys(pick).length) out[String(d).slice(0, 10)] = { skip, ...(Object.keys(pick).length ? { pick } : {}) };
+    if (skip.length || Object.keys(pick).length || theme) out[String(d).slice(0, 10)] = { skip, ...(theme ? { theme } : {}), ...(Object.keys(pick).length ? { pick } : {}) };
   }
   return out;
 }
@@ -423,7 +430,7 @@ function slotPayload(slot, library, date, options = {}) {
   return s;
 }
 
-function toCard(slot, library, order, date, pickMap = {}) {
+function toCard(slot, library, order, date, pickMap = {}, dayThemeKey = '') {
   const s = normalizeSlot(slot);
   const p = slotPayload(s, library, date, { pickIndex: pickMap[s.id] });
   // La plantilla/tema fijados EN EL BLOQUE mandan sobre piezas manuales.
@@ -454,7 +461,7 @@ function toCard(slot, library, order, date, pickMap = {}) {
     type: 'generated',
     template: tplOverride ? s.template : (p.template || s.template || 'noticia'),
     // Sin tema fijo → look del día (paleta rotativa determinista).
-    theme: themeOverride ? s.theme : (p.theme || s.theme || dayTheme(date)),
+    theme: themeOverride ? s.theme : (p.theme || s.theme || dayThemeKey || autoDayTheme(date)),
     title: p.title || s.title || s.label,
     subtitle: p.subtitle || s.subtitle || '',
     body: p.body || s.body || '',
@@ -517,7 +524,8 @@ function materialize(options = {}) {
   const skip = skipSetFor(rundown, activeDate);
   const pick = pickMapFor(rundown, activeDate);
   const active = (rundown.slots || []).filter((s) => !skip.has(String(s.id)) && shouldMaterialize(s, library, activeDate, pick));
-  const generated = active.map((slot, i) => toCard(slot, library, i + 1, activeDate, pick));
+  const theme = dayTheme(activeDate, rundown);
+  const generated = active.map((slot, i) => toCard(slot, library, i + 1, activeDate, pick, theme));
   const manual = store.list()
     .filter((card) => card.source !== 'rundown')
     .map((card, i) => ({ ...card, order: generated.length + i + 1 }));
