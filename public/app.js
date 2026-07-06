@@ -417,15 +417,18 @@ function render() {
     const shown = rendered || staleRendered;
     const thumb = c.type === 'generated'
       ? (shown && shown.url)
-      : (c.file ? '/media/' + c.file.replace('data/worker-inbox/', 'inbox/').replace('data/uploads/', 'uploads/') : '');
-    const isVideo = shown && shown.type === 'video';
+      : mediaUrl(c.file);
+    const isVideo = c.type === 'video' || (shown && shown.type === 'video') || /\.mp4(\?|$)/i.test(String(thumb || ''));
+    const poster = shown && shown.posterUrl ? shown.posterUrl : '';
     const staleOverlay = (c.type === 'generated' && !rendered && staleRendered)
       ? '<div class="thumb-overlay">Cambios sin aplicar · pulsa ⟳</div>' : '';
     const thumbHtml = thumb
       ? `<div class="thumb-wrap">${isVideo
-          ? `<video class="thumb" src="${thumb}" ${shown.posterUrl ? `poster="${shown.posterUrl}"` : ''} muted playsinline controls preload="${shown.posterUrl ? 'none' : 'metadata'}"></video>`
+          ? `<video class="thumb" src="${esc(thumb)}" ${poster ? `poster="${esc(poster)}"` : ''} muted playsinline controls preload="${poster ? 'none' : 'metadata'}"></video>`
           : `<img class="thumb" src="${thumb}" alt="" loading="lazy" onerror="this.style.opacity=.25">`}${staleOverlay}</div>`
-      : `<div class="thumb thumb-empty">Sin generar todavía<br><span>pulsa ⟳ para crear el archivo</span></div>`;
+      : c.type === 'generated'
+        ? `<div class="thumb thumb-empty">Sin generar todavía<br><span>pulsa ⟳ para crear el archivo</span></div>`
+        : `<div class="thumb thumb-empty">Archivo no localizado<br><span>revisa la ruta del MP4</span></div>`;
     const div = document.createElement('div');
     div.className = 'card' + (c.enabled === false ? ' is-off' : '');
     div.innerHTML = `
@@ -482,6 +485,15 @@ function cardDuration(card) {
 function durationLabel(seconds) {
   const n = Number(seconds) || 0;
   return Number.isInteger(n) ? `${n}s` : `${n.toFixed(1)}s`;
+}
+
+function mediaUrl(file) {
+  const f = String(file || '');
+  if (!f) return '';
+  if (f.startsWith('data/uploads/')) return '/media/' + f.replace('data/uploads/', 'uploads/');
+  if (f.startsWith('data/worker-inbox/')) return '/media/' + f.replace('data/worker-inbox/', 'inbox/');
+  if (/^[A-Za-z0-9_.-]+\.mp4$/i.test(f)) return '/media/project-videos/' + encodeURIComponent(f);
+  return '';
 }
 
 function uploadSourceLabel(source, dryRun) {
