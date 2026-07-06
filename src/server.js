@@ -444,7 +444,7 @@ const SAMPLE_DATA = {
   evento: { title: 'Kaldearte: Ballet Aéreo', subtitle: 'Espectáculo', body: 'Plaza de la Virgen Blanca', date: 'Sáb 28 · 21:30' },
   cita: { title: 'Volar sobre la ciudad cambia tu mirada', subtitle: 'Iñigo Naya' },
   clima: { title: '24º', subtitle: 'Soleado', body: '', date: 'AHORA', data: { max: 28, min: 14 } },
-  aire: { title: 'MUY BUENA', subtitle: 'Calidad del aire', body: 'Índice europeo: 19', date: 'Vitoria-Gasteiz · Open-Meteo' },
+  aire: { title: 'MUY BUENA', subtitle: 'Calidad del aire', body: 'Peor indicador: PM10', date: 'Vitoria-Gasteiz · Open-Meteo' },
   foto: { title: 'Atardecer sobre la Catedral', subtitle: 'Postal', date: '22:00' },
   agenda: { title: 'Agenda', body: '19:30 | Los Chunguitos Live | Jimmy Jazz\n20:00 | La Tremenda Pasarela | Teatro Félix Petite' },
   mensaje: { title: 'Vitoria en verde.' },

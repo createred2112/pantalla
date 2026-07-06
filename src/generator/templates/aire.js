@@ -4,7 +4,7 @@
 module.exports = {
   id: 'aire',
   label: 'Calidad del aire',
-  hint: { title: 'Estado (MUY BUENA, BUENA...)', subtitle: 'Etiqueta', body: 'Índice europeo', date: 'Fuente' },
+  hint: { title: 'Estado (MUY BUENA, BUENA...)', subtitle: 'Etiqueta', body: 'Peor indicador', date: 'Fuente' },
   defaultTheme: 'azul',
   logoPos: 'bl',
   build(card, ctx) {

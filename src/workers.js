@@ -87,18 +87,42 @@ async function forecast() {
 }
 
 // --- Proveedor: calidad del aire (Open-Meteo Air Quality, índice europeo) ---
+const AIR_POLLUTANTS = [
+  { key: 'european_aqi_pm2_5', valueKey: 'pm2_5', label: 'PM2,5', desc: 'partículas finas' },
+  { key: 'european_aqi_pm10', valueKey: 'pm10', label: 'PM10', desc: 'partículas' },
+  { key: 'european_aqi_nitrogen_dioxide', valueKey: 'nitrogen_dioxide', label: 'NO2', desc: 'dióxido de nitrógeno' },
+  { key: 'european_aqi_ozone', valueKey: 'ozone', label: 'OZONO', desc: 'ozono' },
+  { key: 'european_aqi_sulphur_dioxide', valueKey: 'sulphur_dioxide', label: 'SO2', desc: 'dióxido de azufre' },
+];
+
+function worstAirIndicator(current) {
+  const ranked = AIR_POLLUTANTS
+    .map((p) => ({ ...p, aqi: Number(current && current[p.key]), value: Number(current && current[p.valueKey]) }))
+    .filter((p) => Number.isFinite(p.aqi))
+    .sort((a, b) => b.aqi - a.aqi);
+  return ranked[0] || null;
+}
+
 async function airQuality() {
   const j = await fetchJson(
-    `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${LAT}&longitude=${LON}&current=european_aqi&timezone=Europe%2FMadrid`
+    `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${LAT}&longitude=${LON}` +
+    `&current=european_aqi,pm10,pm2_5,nitrogen_dioxide,sulphur_dioxide,ozone,` +
+    `european_aqi_pm2_5,european_aqi_pm10,european_aqi_nitrogen_dioxide,european_aqi_ozone,european_aqi_sulphur_dioxide` +
+    `&timezone=Europe%2FMadrid`
   );
   const v = Math.round(j.current.european_aqi);
   const label = v <= 20 ? 'MUY BUENA' : v <= 40 ? 'BUENA' : v <= 60 ? 'MODERADA' : v <= 80 ? 'MALA' : 'MUY MALA';
+  const worst = worstAirIndicator(j.current);
+  const body = worst
+    ? `Peor indicador: ${worst.label}`
+    : `Índice europeo: ${v}`;
   return {
     template: 'aire',
     title: label,
     subtitle: 'Calidad del aire',
-    body: `Índice europeo: ${v}`,
+    body,
     date: 'Vitoria-Gasteiz · Open-Meteo',
+    extra: { europeanAqi: v, worstIndicator: worst },
   };
 }
 
