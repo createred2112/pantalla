@@ -146,7 +146,7 @@ function applyLayout(layout, card, ctx) {
     if (el.bg) el.bg = live(el.bgTheme, el.bg, el.bgFixed);
     return el;
   });
-  return repairFrameForCard(card, ctx, { background: bg, elements });
+  return repairFrameForCard(card, ctx, { background: bg, elements }, { preserveLayout: true });
 }
 
 function sameText(a, b) {
@@ -176,10 +176,24 @@ function airBodyElement(card, ctx, band) {
   };
 }
 
-function repairAirFrame(card, ctx, frame) {
+function repairAirFrame(card, ctx, frame, opts = {}) {
   if (!String(card.body || '').trim()) return frame;
   const { W, H, theme } = ctx;
   const elements = Array.isArray(frame.elements) ? [...frame.elements] : [];
+  const idx = elements.findIndex((el) =>
+    (el.type === 'text' || el.type === 'chip') &&
+    (el.bind === 'body' || sameText(el.text, card.body))
+  );
+
+  if (opts.preserveLayout && idx >= 0) {
+    elements[idx] = {
+      ...elements[idx],
+      bind: 'body',
+      text: elements[idx].transform === 'upper' ? String(card.body || '').toUpperCase() : String(card.body || ''),
+    };
+    return { ...frame, elements };
+  }
+
   let band = elements.find((el) =>
     (el.type === 'rect' || el.type === 'band') &&
     Number(el.w || 0) >= W * 0.8 &&
@@ -207,10 +221,6 @@ function repairAirFrame(card, ctx, frame) {
     delete band.colorFixed;
   }
 
-  const idx = elements.findIndex((el) =>
-    (el.type === 'text' || el.type === 'chip') &&
-    (el.bind === 'body' || sameText(el.text, card.body))
-  );
   const body = idx >= 0 ? { ...elements[idx], ...airBodyElement(card, ctx, band) } : airBodyElement(card, ctx, band);
   if (idx >= 0) elements.splice(idx, 1);
   const bandIndex = elements.indexOf(band);
@@ -363,8 +373,8 @@ function repairForecastFrame(card, ctx, frame) {
   return { ...frame, elements };
 }
 
-function repairFrameForCard(card, ctx, frame) {
-  if (card && card.template === 'aire') return repairAirFrame(card, ctx, frame);
+function repairFrameForCard(card, ctx, frame, opts = {}) {
+  if (card && card.template === 'aire') return repairAirFrame(card, ctx, frame, opts);
   if (card && card.template === 'clima') return repairWeatherFrame(card, ctx, frame);
   if (card && card.template === 'prevision') return repairForecastFrame(card, ctx, frame);
   return frame;
