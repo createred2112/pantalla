@@ -69,17 +69,17 @@ module.exports = {
 
     const note = card.body || (cheap ? `Si puedes, programa lavadora y cargas desde las ${two(cheap.h)}:00.` : 'Consulta el precio antes de encender grandes consumos.');
     els.push({
-      type: 'text', x: pad, y: Math.round(H * 0.79), w: Math.round(W * 0.66), h: Math.round(H * 0.1),
+      type: 'text', x: pad, y: Math.round(H * 0.755), w: Math.round(W * 0.68), h: Math.round(H * 0.085),
       text: note, font: 'text', weight: 800, color: theme.text,
       align: 'left', valign: 'center', lineHeight: 1.04,
-      autofit: { min: Math.round(H * 0.046), max: Math.round(H * 0.074), lines: 2 },
+      autofit: { min: Math.round(H * 0.036), max: Math.round(H * 0.06), lines: 2 },
     });
 
     if (card.date) {
       els.push({
-        type: 'text', x: Math.round(W * 0.68), y: Math.round(H * 0.82), w: Math.round(W * 0.27), h: Math.round(H * 0.07),
+        type: 'text', x: Math.round(W * 0.68), y: Math.round(H * 0.825), w: Math.round(W * 0.27), h: Math.round(H * 0.055),
         text: card.date.toUpperCase(), font: 'text', weight: 800, color: theme.textMuted,
-        align: 'right', valign: 'center', size: Math.round(H * 0.038), lineHeight: 1.05,
+        align: 'right', valign: 'center', size: Math.round(H * 0.034), lineHeight: 1.05,
       });
     }
     return { background: { type: 'solid', color: theme.bg }, elements: els };

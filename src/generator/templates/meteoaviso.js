@@ -44,9 +44,9 @@ module.exports = {
     els.push({
       type: 'text',
       x: pad,
-      y: Math.round(H * 0.205),
+      y: Math.round(H * 0.19),
       w: W - pad * 2,
-      h: Math.round(H * 0.31),
+      h: Math.round(H * 0.3),
       text: title.toUpperCase(),
       font: 'display',
       weight: 800,
@@ -54,17 +54,17 @@ module.exports = {
       align: 'left',
       valign: 'center',
       lineHeight: 0.95,
-      autofit: { min: Math.round(H * 0.09), max: Math.round(H * 0.19), lines: 2 },
+      autofit: { min: Math.round(H * 0.055), max: Math.round(H * 0.16), lines: 3 },
     });
 
     if (body) {
-      els.push({ type: 'rect', x: pad, y: Math.round(H * 0.57), w: Math.round(W * 0.12), h: Math.max(7, Math.round(H * 0.012)), color: accent, radius: 3 });
+      els.push({ type: 'rect', x: pad, y: Math.round(H * 0.53), w: Math.round(W * 0.12), h: Math.max(7, Math.round(H * 0.012)), color: accent, radius: 3 });
       els.push({
         type: 'text',
         x: pad,
-        y: Math.round(H * 0.615),
+        y: Math.round(H * 0.57),
         w: W - pad * 2,
-        h: Math.round(H * 0.17),
+        h: Math.round(H * 0.22),
         text: body,
         font: 'text',
         weight: 800,
@@ -72,7 +72,7 @@ module.exports = {
         align: 'left',
         valign: 'top',
         lineHeight: 1.08,
-        autofit: { min: Math.round(H * 0.04), max: Math.round(H * 0.067), lines: 3 },
+        autofit: { min: Math.round(H * 0.032), max: Math.round(H * 0.058), lines: 4 },
       });
     }
 
@@ -80,16 +80,16 @@ module.exports = {
       els.push({
         type: 'text',
         x: Math.round(W * 0.37),
-        y: Math.round(H * 0.875),
+        y: Math.round(H * 0.81),
         w: Math.round(W * 0.58),
-        h: Math.round(H * 0.07),
+        h: Math.round(H * 0.055),
         text: date.toUpperCase(),
         font: 'text',
         weight: 900,
         color: ink,
         align: 'right',
         valign: 'center',
-        size: Math.round(H * 0.038),
+        size: Math.round(H * 0.034),
       });
     }
 
