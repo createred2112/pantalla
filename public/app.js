@@ -13,8 +13,13 @@ const api = async (path, opts = {}) => {
 };
 
 function toast(msg) {
-  const t = $('#toast'); t.textContent = msg; t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 2200);
+  const t = $('#toast');
+  const openDialog = document.querySelector('dialog[open]');
+  if (openDialog && t.parentElement !== openDialog) openDialog.appendChild(t);
+  if (!openDialog && t.parentElement !== document.body) document.body.appendChild(t);
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => t.classList.remove('show'), 2200);
 }
 
 let cards = [];
@@ -501,17 +506,22 @@ function latestUpload() {
   return Date.parse(pilotUpload.ts || 0) > Date.parse(upload.ts || 0) ? pilotUpload : upload;
 }
 
-function uploadResultHtml(upload, compact = false) {
+function uploadResultHtml(upload, compact = false, opts = {}) {
   if (!upload || !upload.ts) {
-    return `<div class="upload-result warn">
-      <div class="ur-head"><b>Sin subidas registradas</b><span>todavía</span></div>
-      <p>Cuando subas manualmente o el piloto suba solo, el resultado aparecerá aquí.</p>
-    </div>`;
+    if (!upload || !opts.now) {
+      return `<div class="upload-result warn">
+        <div class="ur-head"><b>Sin subidas registradas</b><span>todavía</span></div>
+        <p>Cuando subas manualmente o el piloto suba solo, el resultado aparecerá aquí.</p>
+      </div>`;
+    }
   }
+  upload = upload || {};
   const ok = upload.ok !== false;
   const simulated = upload.dryRun === true;
   const cls = ok ? (simulated ? 'warn' : 'ok') : 'err';
-  const title = ok
+  const title = opts.final && ok
+    ? (simulated ? 'Comprobación correcta: todavía no se ha subido' : 'Subida completada: pantalla actualizada')
+    : ok
     ? (simulated ? 'Comprobación correcta' : 'Subida correcta')
     : (upload.skipped ? 'No se subió' : 'Fallo al subir');
   const source = uploadSourceLabel(upload.source, simulated);
@@ -525,8 +535,9 @@ function uploadResultHtml(upload, compact = false) {
   const fileList = !compact && files.length
     ? `<p style="font-family:ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap">${files.map(esc).join('\n')}</p>`
     : '';
+  const ts = upload.ts || opts.ts || new Date().toISOString();
   return `<div class="upload-result ${cls}">
-    <div class="ur-head"><b>${esc(title)}</b><span>${esc(source)} · ${esc(fmtStamp(upload.ts))}</span></div>
+    <div class="ur-head"><b>${esc(title)}</b><span>${esc(source)} · ${esc(fmtStamp(ts))}</span></div>
     <p>${esc(detail)}</p>${fileList}
   </div>`;
 }
@@ -2878,12 +2889,17 @@ function setPublishBusy(on) {
   publishBusy = on;
   $('#btnPublish').disabled = on;
   $('#btnDry').disabled = on;
+  if (publishDlg && publishDlg.open) {
+    $('#btnPublishCancel').disabled = on;
+    $('#btnPublishCancelTop').disabled = on;
+  }
 }
 
 async function runPublish(dryRun) {
   setPublishBusy(true);
   toast(dryRun ? 'Probando…' : 'Publicando…');
   $('#dot').style.background = '#e0a106';
+  const startedAt = new Date().toISOString();
   try {
     const r = await api('/publish', { method: 'POST', body: JSON.stringify({ dryRun }) });
     $('#dot').style.background = r.ok ? '#2bb673' : '#e2231a';
@@ -2899,13 +2915,26 @@ async function runPublish(dryRun) {
     }
     await load();
     if (!dryRun && upload) {
-      $('#publishPlan').innerHTML = uploadResultHtml(upload, false);
-      publishDlg.showModal();
+      $('#publishPlan').innerHTML = uploadResultHtml(upload, false, { final: true, now: true, ts: startedAt });
+      $('#btnPublishConfirm').hidden = true;
+      $('#btnPublishCancel').textContent = 'Cerrar';
+      if (!publishDlg.open) publishDlg.showModal();
+    } else if (!dryRun && !r.ok) {
+      $('#publishPlan').innerHTML = `<div class="upload-result err"><div class="ur-head"><b>No se ha subido a pantalla</b><span>${esc(fmtStamp(startedAt))}</span></div><p>${esc(publishError(r))}</p></div>`;
+      $('#btnPublishConfirm').hidden = true;
+      $('#btnPublishCancel').textContent = 'Cerrar';
+      if (!publishDlg.open) publishDlg.showModal();
     }
     return r;
   } catch (e) {
     $('#dot').style.background = '#e2231a';
     toast('Error: ' + e.message);
+    if (!dryRun) {
+      $('#publishPlan').innerHTML = `<div class="upload-result err"><div class="ur-head"><b>No se ha subido a pantalla</b><span>${esc(fmtStamp(startedAt))}</span></div><p>${esc(e.message)}</p></div>`;
+      $('#btnPublishConfirm').hidden = true;
+      $('#btnPublishCancel').textContent = 'Cerrar';
+      if (!publishDlg.open) publishDlg.showModal();
+    }
     loadStatus();
     return null;
   } finally {
@@ -2953,7 +2982,7 @@ $('#btnPublishCancelTop').addEventListener('click', () => publishDlg.close());
 $('#btnPublishConfirm').addEventListener('click', async () => {
   $('#publishPlan').innerHTML = '<div class="upload-result warn"><div class="ur-head"><b>Subiendo a pantalla...</b><span>no cierres esta ventana</span></div><p>Estamos creando la tanda final y enviando los archivos al FTP.</p></div>';
   $('#btnPublishConfirm').hidden = true;
-  $('#btnPublishCancel').textContent = 'Cerrar';
+  $('#btnPublishCancel').textContent = 'Subiendo...';
   await runPublish(false);
 });
 
