@@ -556,22 +556,20 @@ function render() {
   cards.forEach((c, i) => {
     const rendered = c.rendered || null;
     const staleRendered = c.staleRendered || null;
-    // Miniatura: el render fresco; si la cartela cambió, se enseña el ANTIGUO
-    // con aviso (nunca se renderiza nada solo por pintar la lista).
-    const shown = rendered || staleRendered;
+    // Miniatura: solo render fresco. Enseñar el viejo "con aviso" confunde:
+    // parece que la app sigue mal aunque el archivo esté caducado.
+    const shown = rendered;
     const thumb = c.type === 'generated'
       ? (shown && shown.url)
       : mediaUrl(c.file);
     const isVideo = c.type === 'video' || (shown && shown.type === 'video') || /\.mp4(\?|$)/i.test(String(thumb || ''));
     const poster = shown && shown.posterUrl ? shown.posterUrl : '';
-    const staleOverlay = (c.type === 'generated' && !rendered && staleRendered)
-      ? '<div class="thumb-overlay">Cambios sin aplicar · pulsa ⟳</div>' : '';
     const thumbHtml = thumb
       ? `<div class="thumb-wrap">${isVideo
           ? `<video class="thumb" src="${esc(thumb)}" ${poster ? `poster="${esc(poster)}"` : ''} muted playsinline controls preload="${poster ? 'none' : 'metadata'}"></video>`
-          : `<img class="thumb" src="${thumb}" alt="" loading="lazy" onerror="this.style.opacity=.25">`}${staleOverlay}</div>`
+          : `<img class="thumb" src="${thumb}" alt="" loading="lazy" onerror="this.style.opacity=.25">`}</div>`
       : c.type === 'generated'
-        ? `<div class="thumb thumb-empty">Sin generar todavía<br><span>pulsa ⟳ para crear el archivo</span></div>`
+        ? `<div class="thumb thumb-empty">${staleRendered ? 'Cambios sin aplicar' : 'Sin generar todavía'}<br><span>pulsa ⟳ para crear el archivo nuevo</span></div>`
         : `<div class="thumb thumb-empty">Archivo no localizado<br><span>revisa la ruta del MP4</span></div>`;
     const div = document.createElement('div');
     div.className = 'card' + (c.enabled === false ? ' is-off' : '');
