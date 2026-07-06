@@ -85,13 +85,31 @@ app.get('/media/project-videos/:name', (req, res) => {
   res.sendFile(full);
 });
 
+function safeUploadName(file) {
+  const ext = path.extname(file.originalname).toLowerCase() || '.jpg';
+  const rawBase = path.basename(file.originalname || 'archivo', ext);
+  const base = rawBase
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 42) || 'archivo';
+  return `${base}-${Date.now()}${ext}`;
+}
+
+function videoLibraryLabel(name, st) {
+  if (!/^up_\d{10,}\.mp4$/i.test(name)) return name;
+  const stamp = Number((/^up_(\d{10,})\.mp4$/i.exec(name) || [])[1]);
+  const d = Number.isFinite(stamp) ? new Date(stamp) : st.mtime;
+  return 'Vídeo subido ' + d.toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+}
+
 // --- Subida de fotos (desde el móvil) ---
 const upload = multer({
   storage: multer.diskStorage({
     destination: (req, file, cb) => cb(null, paths.uploads),
     filename: (req, file, cb) => {
-      const ext = path.extname(file.originalname).toLowerCase() || '.jpg';
-      cb(null, `up_${Date.now()}${ext}`);
+      cb(null, safeUploadName(file));
     },
   }),
   limits: { fileSize: 250 * 1024 * 1024 },
@@ -369,6 +387,7 @@ app.get('/api/video-library', (req, res) => {
         const rel = path.join('data/uploads', name).replace(/\\/g, '/');
         return {
           name,
+          label: videoLibraryLabel(name, st),
           path: rel,
           url: `/media/uploads/${name}`,
           size: st.size,

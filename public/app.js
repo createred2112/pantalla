@@ -62,7 +62,14 @@ async function loadVideoLibrary() {
 }
 
 function videoLabel(v) {
+  if (v.label) return v.label;
+  const uploadStamp = /^up_(\d{10,})\.mp4$/i.exec(v.name || '');
   const date = v.mtime ? new Date(v.mtime).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }) : '';
+  if (uploadStamp) {
+    const d = new Date(Number(uploadStamp[1]));
+    const when = Number.isNaN(d.getTime()) ? date : d.toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+    return `Vídeo subido ${when}`;
+  }
   return `${v.name}${date ? ' · ' + date : ''}`;
 }
 
@@ -617,6 +624,9 @@ async function loadEditorRundown(card) {
         </div>
         <button type="button" class="ghost" id="edOpenRundown" style="margin-top:8px;width:100%">${isAgendaLib ? 'Editar Agenda viva' : 'Abrir carrusel en modo avanzado'}</button>`;
     } else {
+      $('#edTemplate').value = slot.template || card.template || $('#edTemplate').value;
+      $('#edTheme').value = slot.theme || '';
+      renderSwatches();
       box.innerHTML = `
         <div class="status">Producida por el bloque <b>«${esc(slot.label)}»</b> del guion${slot.source === 'worker' ? ' (dato automático)' : ''}.
           La plantilla, el tema, la duración y la animación se guardan en el bloque para que no los pise el próximo pase.</div>
@@ -2077,7 +2087,7 @@ let WZ = null;
 
 async function openWizard() {
   RUNDOWN = await api('/rundown'); // trae almacén, workers y claves
-  WZ = { step: 1, days: 3, sel: new Set(PLAN_TYPES.filter((t) => t.def).map((t) => t.id)), manual: {}, adds: {}, agenda: initialAgendaMoments() };
+  WZ = { step: 1, days: 3, sel: new Set(PLAN_TYPES.filter((t) => t.def).map((t) => t.id)), manual: {}, adds: {}, picks: {}, error: '', agenda: initialAgendaMoments() };
   renderWizard();
   wizardDlg.showModal();
 }
@@ -2172,6 +2182,78 @@ function renderAgendaWizard() {
     <button type="button" class="ghost agenda-add" data-wz-agenda-add>Añadir otro momento de agenda</button>`;
 }
 
+function wizardErrorHtml() {
+  return WZ && WZ.error ? `<div class="status wz-error"><b>No puedo seguir todavía:</b><br>${esc(WZ.error)}</div>` : '';
+}
+
+function libraryMetaForKey(key) {
+  return (RUNDOWN.libraryKeys || []).find((k) => k.key === key) || { key, label: key, template: 'noticia', theme: '' };
+}
+
+function wizardChosenLibraryIndex(t, items) {
+  if (!WZ.picks) WZ.picks = {};
+  if (Object.prototype.hasOwnProperty.call(WZ.picks, t.id)) return WZ.picks[t.id];
+  const activeDate = (RUNDOWN && RUNDOWN.activeDate) || localDatePart();
+  const active = clientLibraryItems(RUNDOWN.library || {}, t.slot.libraryKey, activeDate);
+  const auto = clientPickDaily(active, t.slot.label || t.id, activeDate);
+  const idx = auto ? items.indexOf(auto) : items.findIndex((it) => it && it.enabled !== false);
+  WZ.picks[t.id] = idx >= 0 ? idx : '';
+  return WZ.picks[t.id];
+}
+
+function wizardLibraryPlaceholder(key) {
+  if (key === 'avisosMeteorologicos') return 'AVISO NARANJA POR CALOR | TODO ÁLAVA | Hasta 38ºC';
+  if (key === 'consejosMeteorologicos') return 'Si sales, lleva la cabeza cubierta y busca la sombra | Consejo | Evita las horas centrales del día';
+  if (key === 'datosCuriosos') return 'El casco medieval tiene forma de almendra | Dato curioso |';
+  return 'Título | firma | texto';
+}
+
+function wizardLibraryHtml(t) {
+  const key = t.slot.libraryKey;
+  const meta = libraryMetaForKey(key);
+  const items = (RUNDOWN.library && Array.isArray(RUNDOWN.library[key])) ? RUNDOWN.library[key] : [];
+  const pick = wizardChosenLibraryIndex(t, items);
+  const selected = pick !== '' && Number.isInteger(Number(pick)) && items[Number(pick)] ? Number(pick) : -1;
+  const preview = items.slice(0, 6).map((p, i) => `· ${i === selected ? '<b>' : ''}${esc(p.title || p.body || '(sin título)')}${i === selected ? '</b>' : ''} <span class="hint">${esc(scheduleSummary(p))}</span>`).join('<br>');
+  const item = selected >= 0 ? items[selected] : null;
+  const edit = item ? `<div class="library-item wz-lib-edit">
+      <div class="mini">
+        <label>Título<input data-wz-lib-field="${esc(key)}:${selected}:title" value="${esc(item.title || '')}"></label>
+        <label>Cabecera/firma<input data-wz-lib-field="${esc(key)}:${selected}:subtitle" value="${esc(item.subtitle || '')}"></label>
+      </div>
+      <label>Texto<textarea data-wz-lib-field="${esc(key)}:${selected}:body">${esc(item.body || '')}</textarea></label>
+      <div class="mini">
+        <label>Plantilla<select data-wz-lib-field="${esc(key)}:${selected}:template">
+          ${TEMPLATES.map((tpl) => `<option value="${esc(tpl.id)}" ${tpl.id === (item.template || meta.template) ? 'selected' : ''}>${esc(tpl.label)}</option>`).join('')}
+        </select></label>
+        <label>Color<select data-wz-lib-field="${esc(key)}:${selected}:theme">
+          <option value="" ${!(item.theme || meta.theme) ? 'selected' : ''}>Auto</option>
+          ${Object.keys(PALETTE).map((name) => `<option value="${esc(name)}" ${name === (item.theme || meta.theme) ? 'selected' : ''}>${esc(name)}</option>`).join('')}
+        </select></label>
+      </div>
+      <div class="slot-tools">
+        <button type="button" class="ghost" data-wz-lib-quick="${esc(key)}:${selected}:now">Sale desde ahora</button>
+        <button type="button" class="ghost" data-wz-lib-quick="${esc(key)}:${selected}:midnight">Hasta las 23:59</button>
+        <button type="button" class="ghost" data-wz-lib-quick="${esc(key)}:${selected}:tomorrow">Mañana todo el día</button>
+      </div>
+      <div class="mini">
+        <label>Empieza<input type="datetime-local" data-wz-lib-field="${esc(key)}:${selected}:startAt" value="${esc(item.startAt || '')}"></label>
+        <label>Termina<input type="datetime-local" data-wz-lib-field="${esc(key)}:${selected}:endAt" value="${esc(item.endAt || '')}"></label>
+      </div>
+      <label class="chk"><input type="checkbox" data-wz-lib-field="${esc(key)}:${selected}:enabled" ${item.enabled !== false ? 'checked' : ''}> Activa en la biblioteca</label>
+    </div>` : '<div class="hint">Elige una pieza existente para editarla aquí, o añade una nueva abajo.</div>';
+  return `<div class="status"><b>${items.length}</b> pieza(s) en el carrusel${items.length ? ':<br>' + preview + (items.length > 6 ? '<br>…' : '') : ''}</div>
+    <label>Qué pieza quieres usar ahora
+      <select data-wz-pick="${esc(t.id)}">
+        <option value="">Automático: que rote el carrusel</option>
+        ${items.map((p, i) => `<option value="${i}" ${i === selected ? 'selected' : ''}>${esc(p.title || p.body || '(sin título)')} · ${esc(scheduleSummary(p))}</option>`).join('')}
+      </select>
+    </label>
+    ${edit}
+    <label>Añadir nuevas piezas (una por línea: Título | firma | texto)</label>
+    <textarea data-wz-add="${esc(key)}" placeholder="${esc(wizardLibraryPlaceholder(key))}">${esc(WZ.adds[key] || '')}</textarea>`;
+}
+
 function orderedAgendaMoments(items) {
   return (items || [])
     .map((m) => ({ ...m }))
@@ -2204,6 +2286,7 @@ function renderWizard() {
 
   if (WZ.step === 1) {
     $('#wzBody').innerHTML = `
+      ${wizardErrorHtml()}
       <p class="hint" style="margin-top:0">Elige los 8 huecos de emisión. Pueden ser automáticos, carruseles, noticias propias o un MP4 promo ya listo.</p>
       ${wizardCountHtml()}
       <label>Días a cubrir</label>
@@ -2246,16 +2329,11 @@ function renderWizard() {
         return head + `<div class="status">Reservado y desactivado. Se activa desde el botón 🚨 del panel cuando haga falta.</div>`;
       }
       if (t.slot.source === 'library') {
-        const key = t.slot.libraryKey;
-        const items = (RUNDOWN.library && RUNDOWN.library[key]) || [];
-        const preview = items.slice(0, 5).map((p) => `· ${esc(p.title || p.body || '')}`).join('<br>');
-        return head + `<div class="status"><b>${items.length}</b> pieza(s) en el carrusel${items.length ? ':<br>' + preview + (items.length > 5 ? '<br>…' : '') : ''}</div>
-          <label>Añadir piezas (una por línea: Título | firma | texto)</label>
-          <textarea data-wz-add="${esc(key)}" placeholder="El casco medieval tiene forma de almendra | Dato curioso |">${esc(WZ.adds[key] || '')}</textarea>`;
+        return head + wizardLibraryHtml(t);
       }
       return head + '<div class="status">Sin configuración adicional.</div>';
     }).join('');
-    $('#wzBody').innerHTML = `<p class="hint" style="margin-top:0">Revise el contenido de cada tipo. Los datos automáticos no requieren edición.</p>` + sections;
+    $('#wzBody').innerHTML = `${wizardErrorHtml()}<p class="hint" style="margin-top:0">Revise el contenido de cada tipo. Los datos automáticos no requieren edición.</p>` + sections;
     return;
   }
 
@@ -2265,6 +2343,7 @@ function renderWizard() {
     ? (WZ.agenda || []).filter((m) => String(m.body || '').trim() || (String(m.title || '').trim() && String(m.title || '').trim() !== 'Agenda')).length
     : 0;
   $('#wzBody').innerHTML = `
+    ${wizardErrorHtml()}
     <p class="hint" style="margin-top:0">Resumen antes de confirmar:</p>
     <div class="status" style="line-height:1.7">
       Guion de <b>${chosen.length}</b> cartelas: ${chosen.map((t) => esc(t.slot.label)).join(' → ')}<br>
@@ -2297,6 +2376,17 @@ function wzCollect() {
     WZ.manual[id] = WZ.manual[id] || {};
     WZ.manual[id][field] = el.value;
   });
+  $('#wzBody').querySelectorAll('[data-wz-pick]').forEach((el) => {
+    WZ.picks[el.dataset.wzPick] = el.value === '' ? '' : Number(el.value);
+  });
+  $('#wzBody').querySelectorAll('[data-wz-lib-field]').forEach((el) => {
+    const [key, idxRaw, field] = el.dataset.wzLibField.split(':');
+    const idx = Number(idxRaw);
+    const arr = RUNDOWN.library && RUNDOWN.library[key];
+    if (!Array.isArray(arr) || !arr[idx]) return;
+    if (el.type === 'checkbox') arr[idx][field] = el.checked;
+    else arr[idx][field] = el.value;
+  });
   $('#wzBody').querySelectorAll('[data-wz-add]').forEach((el) => { WZ.adds[el.dataset.wzAdd] = el.value; });
 }
 
@@ -2314,6 +2404,7 @@ async function wizardFinish() {
       return s;
     });
     const lib = RUNDOWN.library || {};
+    const activeDate = (RUNDOWN && RUNDOWN.activeDate) || localDatePart();
     if (WZ.sel.has('agenda')) {
       const meta = (RUNDOWN.libraryKeys || []).find((k) => k.key === 'agendaEventos') || { key: 'agendaEventos', template: 'agenda', theme: 'blanco' };
       lib.agendaEventos = normalizeAgendaMoments(WZ.agenda || [])
@@ -2336,7 +2427,17 @@ async function wizardFinish() {
       const items = parseBulkItems(text || '', meta);
       if (items.length) { if (!Array.isArray(lib[key])) lib[key] = []; lib[key].push(...items); }
     }
-    await api('/rundown', { method: 'PUT', body: JSON.stringify({ title: `Guion (${WZ.days} días)`, slots, days: {} }) });
+    const pick = {};
+    chosen.forEach((t, i) => {
+      if (t.slot.source !== 'library' || !Number.isInteger(WZ.picks[t.id])) return;
+      const arr = Array.isArray(lib[t.slot.libraryKey]) ? lib[t.slot.libraryKey] : [];
+      const selectedItem = arr[WZ.picks[t.id]];
+      const activeItems = clientLibraryItems(lib, t.slot.libraryKey, activeDate);
+      const activeIndex = selectedItem ? activeItems.indexOf(selectedItem) : -1;
+      if (activeIndex >= 0) pick[slots[i].id] = activeIndex;
+    });
+    const days = Object.keys(pick).length ? { [activeDate]: { pick } } : {};
+    await api('/rundown', { method: 'PUT', body: JSON.stringify({ title: `Guion (${WZ.days} días)`, slots, days }) });
     await api('/rundown/library', { method: 'PUT', body: JSON.stringify(lib) });
     await api('/workers/refresh', { method: 'POST' }).catch(() => {});
     await api('/rundown/materialize', { method: 'POST', body: JSON.stringify({}) });
@@ -2416,8 +2517,30 @@ $('#wzBody').addEventListener('click', (e) => {
     const ta = box && box.querySelector('[data-wz-agenda-field="body"]');
     if (ta) insertAtCursor(ta, ' | ');
   }
+  const libQuick = e.target.closest('[data-wz-lib-quick]');
+  if (libQuick) {
+    wzCollect();
+    const [key, idxRaw, action] = libQuick.dataset.wzLibQuick.split(':');
+    const item = RUNDOWN.library && RUNDOWN.library[key] && RUNDOWN.library[key][Number(idxRaw)];
+    if (!item) return;
+    const active = (RUNDOWN && RUNDOWN.activeDate) || localDatePart();
+    const tomorrow = addDays(active, 1);
+    const now = localDateTimePart();
+    if (action === 'now') item.startAt = now;
+    if (action === 'midnight') item.endAt = dtLocal(active, '23:59');
+    if (action === 'tomorrow') {
+      item.startAt = dtLocal(tomorrow, '00:00');
+      item.endAt = dtLocal(tomorrow, '23:59');
+    }
+    renderWizard();
+  }
 });
 $('#wzBody').addEventListener('change', async (e) => {
+  if (e.target && e.target.matches('[data-wz-pick]')) {
+    wzCollect();
+    renderWizard();
+    return;
+  }
   if (e.target && e.target.matches('[data-wz-video-pick]')) {
     const id = e.target.dataset.wzVideoPick;
     WZ.manual[id] = WZ.manual[id] || {};
@@ -2446,15 +2569,28 @@ $('#wzBody').addEventListener('change', async (e) => {
   }
 });
 $('#wzNext').addEventListener('click', () => {
-  wzCollect();
-  if (WZ.step === 1 && !WZ.sel.size) { toast('Marca al menos un tipo de cartela'); return; }
-  if (WZ.step === 1 && !wizardCountState().ok) { toast(wizardCountState().diff < 0 ? 'Faltan cartelas para llegar a 8' : 'Sobran cartelas: deja exactamente 8'); return; }
-  if (WZ.step === 2) {
-    const missingFile = PLAN_TYPES.find((t) => WZ.sel.has(t.id) && t.slot.source === 'file' && !((WZ.manual[t.id] || {}).file || t.slot.file));
-    if (missingFile) { toast('Falta subir el MP4 de ' + missingFile.slot.label); return; }
+  try {
+    wzCollect();
+    WZ.error = '';
+    if (WZ.step === 1 && !WZ.sel.size) { WZ.error = 'Marca al menos un tipo de cartela.'; renderWizard(); toast(WZ.error); return; }
+    if (WZ.step === 1 && !wizardCountState().ok) {
+      WZ.error = wizardCountState().diff < 0 ? 'Faltan cartelas para llegar a 8.' : 'Sobran cartelas: deja exactamente 8.';
+      renderWizard(); toast(WZ.error); return;
+    }
+    if (WZ.step === 2) {
+      const missingFile = PLAN_TYPES.find((t) => WZ.sel.has(t.id) && t.slot.source === 'file' && !((WZ.manual[t.id] || {}).file || t.slot.file));
+      if (missingFile) {
+        WZ.error = `Falta elegir o subir el MP4 de "${missingFile.slot.label}". Puedes escoger uno guardado en la biblioteca o quitar esa cartela.`;
+        renderWizard(); toast('Falta el MP4'); return;
+      }
+    }
+    if (WZ.step < 3) { WZ.step++; renderWizard(); return; }
+    wizardFinish();
+  } catch (e) {
+    WZ.error = e && e.message ? e.message : 'Ha fallado el asistente al leer este paso.';
+    renderWizard();
+    toast('Error: ' + WZ.error);
   }
-  if (WZ.step < 3) { WZ.step++; renderWizard(); return; }
-  wizardFinish();
 });
 
 $('#btnWorkersRefresh').addEventListener('click', async (e) => {
