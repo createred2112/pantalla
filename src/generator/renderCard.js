@@ -236,10 +236,96 @@ function sameText(a, b) {
   return norm(String(a || '').replace(/\s+/g, ' ')) === norm(String(b || '').replace(/\s+/g, ' '));
 }
 
+function parseRgb(color) {
+  const s = String(color || '').trim().toLowerCase();
+  let m = s.match(/^#([0-9a-f]{3})$/);
+  if (m) return [...m[1]].map((h) => parseInt(h + h, 16));
+  m = s.match(/^#([0-9a-f]{6})$/);
+  if (m) return [0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16));
+  m = s.match(/^rgba?\(([^)]+)\)$/);
+  if (m) {
+    const p = m[1].split(',').map((x) => parseFloat(x));
+    if (p.length >= 3 && p.slice(0, 3).every((v) => isFinite(v))) {
+      return p.slice(0, 3).map((v) => Math.max(0, Math.min(255, v)));
+    }
+  }
+  return null;
+}
+
+function relLum(rgb) {
+  const f = (v) => {
+    v /= 255;
+    return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+  };
+  return 0.2126 * f(rgb[0]) + 0.7152 * f(rgb[1]) + 0.0722 * f(rgb[2]);
+}
+
+function contrastRatio(fg, bg) {
+  const a = relLum(fg), b = relLum(bg);
+  return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+}
+
+function readableTextColor(color, bg, dark = '#0E0E0E', light = '#FFFFFF') {
+  const b = parseRgb(bg);
+  const f = parseRgb(color);
+  if (!b) return color || dark;
+  if (f && contrastRatio(f, b) >= 4.5) return color;
+  const d = parseRgb(dark);
+  const l = parseRgb(light);
+  if (!d || !l) return relLum(b) > 0.45 ? '#0E0E0E' : '#FFFFFF';
+  return contrastRatio(d, b) >= contrastRatio(l, b) ? dark : light;
+}
+
+function applyReadableColor(el, ctx, bg, preferred) {
+  const current = preferred || el.color || ctx.theme.accentText || '#0E0E0E';
+  const color = readableTextColor(current, bg, '#0E0E0E', '#FFFFFF');
+  const next = { ...el, color };
+  if (norm(color) === norm(ctx.theme.accentText)) {
+    next.colorTheme = 'accentText';
+    delete next.colorFixed;
+  } else if (norm(color) !== norm(el.color || '')) {
+    delete next.colorTheme;
+    next.colorFixed = true;
+  }
+  return next;
+}
+
+function airBandFor(elements, ctx, bodyEl) {
+  const { W, H } = ctx;
+  const bodyY = Number(bodyEl && bodyEl.y || 0);
+  const bodyH = Number(bodyEl && bodyEl.h || 0);
+  const candidates = elements.filter((el) =>
+    (el.type === 'rect' || el.type === 'band') &&
+    Number(el.w || 0) >= W * 0.55 &&
+    Number(el.h || 0) >= H * 0.04 &&
+    Number(el.y || 0) >= H * 0.4 &&
+    Number(el.y || 0) <= H * 0.86
+  );
+  if (!bodyEl) return candidates[0] || null;
+  candidates.sort((a, b) => {
+    const ay = Number(a.y || 0), ah = Number(a.h || 0);
+    const by = Number(b.y || 0), bh = Number(b.h || 0);
+    const ao = Math.max(0, Math.min(ay + ah, bodyY + bodyH) - Math.max(ay, bodyY));
+    const bo = Math.max(0, Math.min(by + bh, bodyY + bodyH) - Math.max(by, bodyY));
+    return bo - ao;
+  });
+  return candidates[0] || null;
+}
+
+function ensureOrder(elements, lower, upper) {
+  if (!lower || !upper) return elements;
+  const lowerIdx = elements.indexOf(lower);
+  const upperIdx = elements.indexOf(upper);
+  if (lowerIdx < 0 || upperIdx < 0 || lowerIdx < upperIdx) return elements;
+  const next = elements.filter((el) => el !== lower && el !== upper);
+  next.splice(Math.max(0, upperIdx), 0, lower, upper);
+  return next;
+}
+
 function airBodyElement(card, ctx, band) {
   const { W, H, theme } = ctx;
   const pad = Math.round(W * 0.05);
-  return {
+  return applyReadableColor({
     id: 'el_air_body_guard',
     type: 'text',
     bind: 'body',
@@ -256,34 +342,47 @@ function airBodyElement(card, ctx, band) {
     valign: 'center',
     lineHeight: 1,
     autofit: { min: Math.round(H * 0.04), max: Math.round(H * 0.075), lines: 1 },
-  };
+  }, ctx, band.color || theme.accent, theme.accentText);
 }
 
 function repairAirFrame(card, ctx, frame, opts = {}) {
   if (!String(card.body || '').trim()) return frame;
   const { W, H, theme } = ctx;
-  const elements = Array.isArray(frame.elements) ? [...frame.elements] : [];
+  let elements = Array.isArray(frame.elements) ? [...frame.elements] : [];
   const idx = elements.findIndex((el) =>
     (el.type === 'text' || el.type === 'chip') &&
     (el.bind === 'body' || sameText(el.text, card.body))
   );
 
   if (opts.preserveLayout && idx >= 0) {
-    elements[idx] = {
-      ...elements[idx],
+    const originalBody = elements[idx];
+    let band = airBandFor(elements, ctx, originalBody);
+    if (!band) {
+      band = {
+        id: 'el_air_band_guard',
+        type: 'rect',
+        x: 0,
+        y: Number(originalBody.y || Math.round(H * 0.64)),
+        w: W,
+        h: Number(originalBody.h || Math.round(H * 0.13)),
+        color: theme.accent,
+        colorTheme: 'accent',
+      };
+      elements.splice(idx, 0, band);
+    }
+    const body = applyReadableColor({
+      ...originalBody,
       bind: 'body',
-      text: elements[idx].transform === 'upper' ? String(card.body || '').toUpperCase() : String(card.body || ''),
-    };
+      text: originalBody.transform === 'upper' ? String(card.body || '').toUpperCase() : String(card.body || ''),
+    }, ctx, band.color || theme.accent, originalBody.color || theme.accentText);
+    const bodyIdx = elements.indexOf(originalBody);
+    if (bodyIdx >= 0) elements[bodyIdx] = body;
+    else elements.splice(idx + 1, 0, body);
+    elements = ensureOrder(elements, band, body);
     return { ...frame, elements };
   }
 
-  let band = elements.find((el) =>
-    (el.type === 'rect' || el.type === 'band') &&
-    Number(el.w || 0) >= W * 0.8 &&
-    Number(el.h || 0) >= H * 0.06 &&
-    Number(el.y || 0) >= H * 0.45 &&
-    Number(el.y || 0) <= H * 0.82
-  );
+  let band = airBandFor(elements, ctx, idx >= 0 ? elements[idx] : null);
   if (!band) {
     band = {
       id: 'el_air_band_guard',
@@ -466,9 +565,13 @@ function repairFrameForCard(card, ctx, frame, opts = {}) {
 // Frame resuelto, por prioridad: layout propio de la cartela > layout por defecto
 // de la plantilla > el que genera la plantilla en código.
 function resolveFrame(card, ctx, tpl) {
-  if (card.layout && Array.isArray(card.layout.elements)) return applyLayout(card.layout, card, ctx, tpl);
+  if (card.layout && Array.isArray(card.layout.elements)) {
+    return repairFrameForCard(card, ctx, applyLayout(card.layout, card, ctx, tpl), { preserveLayout: true });
+  }
   const tl = require('../templateLayouts').get(card.template, ctx.theme && ctx.theme.key);
-  if (tl && Array.isArray(tl.elements)) return applyLayout(tl, card, ctx, tpl);
+  if (tl && Array.isArray(tl.elements)) {
+    return repairFrameForCard(card, ctx, applyLayout(tl, card, ctx, tpl), { preserveLayout: true });
+  }
   const frame = tpl.build(card, ctx) || { elements: [] };
   frame.elements = (frame.elements || []).map((e, i) => Object.assign({ id: 'el' + i, bind: inferBind(e, card) }, e));
   return ensureLogoElement(repairFrameForCard(card, ctx, frame), ctx, tpl);
