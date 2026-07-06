@@ -26,6 +26,7 @@ let RUNDOWN = null;
 let RUNDOWN_SELECTED = 0;
 let LIBRARY_CATEGORY = 'datosUtiles';
 let APP_STATUS = null;
+let VIDEO_LIBRARY = [];
 
 // Galería visual de plantillas (probar varias con los datos actuales).
 let galleryOpen = false;
@@ -48,7 +49,38 @@ async function loadConfig() {
       $('#edVideo').disabled = true;
       $('#edVideo').checked = false;
     }
+    await loadVideoLibrary();
   } catch {}
+}
+
+async function loadVideoLibrary() {
+  try {
+    const r = await api('/video-library');
+    VIDEO_LIBRARY = Array.isArray(r.items) ? r.items : [];
+    refreshVideoLibrarySelects();
+  } catch { VIDEO_LIBRARY = []; }
+}
+
+function videoLabel(v) {
+  const date = v.mtime ? new Date(v.mtime).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }) : '';
+  return `${v.name}${date ? ' · ' + date : ''}`;
+}
+
+function videoOptions(selected, placeholder = 'Elegir vídeo guardado...') {
+  const opts = [`<option value="">${esc(placeholder)}</option>`];
+  for (const v of VIDEO_LIBRARY) opts.push(`<option value="${esc(v.path)}" ${v.path === selected ? 'selected' : ''}>${esc(videoLabel(v))}</option>`);
+  return opts.join('');
+}
+
+function fillVideoSelect(sel, selected, placeholder) {
+  if (!sel) return;
+  sel.innerHTML = videoOptions(selected || '', placeholder);
+}
+
+function refreshVideoLibrarySelects() {
+  fillVideoSelect($('#edFileLibrary'), $('#edFile') && $('#edFile').value, 'Elegir vídeo promo guardado...');
+  fillVideoSelect($('#edVideoIntroLibrary'), $('#edVideoIntro') && $('#edVideoIntro').value, 'Elegir cortinilla de entrada...');
+  fillVideoSelect($('#edVideoOutroLibrary'), $('#edVideoOutro') && $('#edVideoOutro').value, 'Elegir cortinilla de salida...');
 }
 
 function requiredVideoCount() {
@@ -168,9 +200,11 @@ function buildBumperEditor() {
       <b style="font-size:13px">${esc(t.label)}</b>
       <label>Entrada MP4</label>
       <input type="file" data-bumper-file="intro" accept="video/mp4,video/*">
+      <select data-bumper-pick="intro" class="video-pick">${videoOptions(b.intro || '', 'Elegir entrada guardada...')}</select>
       <input data-bumper-path="intro" value="${esc(b.intro || '')}" placeholder="data/uploads/entrada-${esc(t.id)}.mp4">
       <label>Salida MP4</label>
       <input type="file" data-bumper-file="outro" accept="video/mp4,video/*">
+      <select data-bumper-pick="outro" class="video-pick">${videoOptions(b.outro || '', 'Elegir salida guardada...')}</select>
       <input data-bumper-path="outro" value="${esc(b.outro || '')}" placeholder="data/uploads/salida-${esc(t.id)}.mp4">
     </div>`;
   }).join('');
@@ -200,12 +234,19 @@ $('#setLogoDark').addEventListener('change', async (e) => {
   if (e.target.files[0]) { toast('Subiendo logo…'); const p = await uploadFile(e.target); SETTINGS.brand.logoDark = p; showLogoPrev('setLogoDarkPrev', p); toast('Logo oscuro listo'); }
 });
 $('#setTemplateBumpers').addEventListener('change', async (e) => {
+  const pick = e.target.closest('[data-bumper-pick]');
+  if (pick) {
+    const row = pick.closest('[data-bumper-template]');
+    row.querySelector(`[data-bumper-path="${pick.dataset.bumperPick}"]`).value = pick.value || '';
+    return;
+  }
   const fileInput = e.target.closest('[data-bumper-file]');
   if (!fileInput || !fileInput.files[0]) return;
   const row = fileInput.closest('[data-bumper-template]');
   const kind = fileInput.dataset.bumperFile;
   toast('Subiendo cortinilla…');
   const p = await uploadFile(fileInput);
+  await loadVideoLibrary();
   row.querySelector(`[data-bumper-path="${kind}"]`).value = p || '';
   toast('Cortinilla lista');
 });
@@ -502,7 +543,7 @@ function renderTodayPanel() {
       <div class="today-kpi"><small>Vuelta final</small><b>${durationLabel(st.seconds || 0)}</b></div>
     </div>
     <div class="today-actions">
-      <button type="button" class="ghost" data-today-action="rundown">Crear emisión</button>
+      <button type="button" class="ghost" data-today-action="rundown">Cambiar escaleta</button>
       <button type="button" class="ghost" data-today-action="prepare" ${prepareDisabled ? 'disabled' : ''}>Preparar archivos</button>
       <button type="button" class="ghost" data-today-action="review" ${reviewDisabled ? 'disabled' : ''}>Vista previa</button>
       <button type="button" class="primary" data-today-action="publish" ${publishDisabled ? 'disabled' : ''}>Subir</button>
@@ -511,6 +552,16 @@ function renderTodayPanel() {
 }
 
 function esc(s){return String(s ?? '').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+
+function insertAtCursor(el, text) {
+  const start = el.selectionStart ?? el.value.length;
+  const end = el.selectionEnd ?? start;
+  el.value = el.value.slice(0, start) + text + el.value.slice(end);
+  const pos = start + text.length;
+  el.focus();
+  try { el.setSelectionRange(pos, pos); } catch {}
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+}
 
 // --- Reordenar ---
 async function move(i, dir) {
@@ -622,6 +673,7 @@ function openEditor(card) {
   const adv = $('#advVideo'); if (adv) adv.open = $('#edVideo').checked;
   $('#edVideoIntro').value = card?.videoIntro || '';
   $('#edVideoOutro').value = card?.videoOutro || '';
+  refreshVideoLibrarySelects();
   $('#edPreview').style.display = 'none';
   $('#edVideoPreview').style.display = 'none';
   $('#edVideoPreview').removeAttribute('src');
@@ -750,14 +802,17 @@ $('#edPhotoFile').addEventListener('change', async (e) => {
   if (e.target.files[0]) { toast('Subiendo foto…'); $('#edPhoto').value = await uploadFile(e.target); toast('Foto lista'); }
 });
 $('#edAnyFile').addEventListener('change', async (e) => {
-  if (e.target.files[0]) { toast('Subiendo…'); $('#edFile').value = await uploadFile(e.target); toast('Archivo listo'); }
+  if (e.target.files[0]) { toast('Subiendo…'); $('#edFile').value = await uploadFile(e.target); await loadVideoLibrary(); toast('Archivo listo'); }
 });
 $('#edVideoIntroFile').addEventListener('change', async (e) => {
-  if (e.target.files[0]) { toast('Subiendo cortinilla…'); $('#edVideoIntro').value = await uploadFile(e.target); toast('Entrada lista'); }
+  if (e.target.files[0]) { toast('Subiendo cortinilla…'); $('#edVideoIntro').value = await uploadFile(e.target); await loadVideoLibrary(); toast('Entrada lista'); }
 });
 $('#edVideoOutroFile').addEventListener('change', async (e) => {
-  if (e.target.files[0]) { toast('Subiendo cortinilla…'); $('#edVideoOutro').value = await uploadFile(e.target); toast('Salida lista'); }
+  if (e.target.files[0]) { toast('Subiendo cortinilla…'); $('#edVideoOutro').value = await uploadFile(e.target); await loadVideoLibrary(); toast('Salida lista'); }
 });
+$('#edFileLibrary').addEventListener('change', (e) => { if (e.target.value) $('#edFile').value = e.target.value; });
+$('#edVideoIntroLibrary').addEventListener('change', (e) => { $('#edVideoIntro').value = e.target.value || ''; });
+$('#edVideoOutroLibrary').addEventListener('change', (e) => { $('#edVideoOutro').value = e.target.value || ''; });
 
 $('#btnExtract').addEventListener('click', async () => {
   const url = $('#edUrl').value.trim();
@@ -978,15 +1033,18 @@ function renderPilotHistory() {
   const gen = PILOT.generate || null;
   const sync = PILOT.sync || null;
   const upload = PILOT.upload || null;
-  const lastUpdate = sync && sync.ts ? sync : (gen && gen.ts ? gen : PILOT.last);
-  const updateOk = !lastUpdate || lastUpdate.ok !== false;
-  const updateDetail = lastUpdate
-    ? (`${lastUpdate.cards ? lastUpdate.cards + ' cartelas' : ''}${lastUpdate.count ? lastUpdate.count + ' MP4' : ''}${lastUpdate.reused ? ' · ' + lastUpdate.reused + ' reutilizados' : ''}${lastUpdate.unchanged ? ' · sin cambios' : ''}`.trim() || 'OK')
-    : 'Sin resultado todavía';
-  const uploadOk = upload && upload.ok !== false;
+  const lastCycle = (sync && sync.ts) ? sync : ((PILOT.last && PILOT.last.ts) ? PILOT.last : gen);
+  const cycleOk = !lastCycle || lastCycle.ok !== false;
+  const cycleDetail = lastCycle
+    ? (`${lastCycle.cards ? lastCycle.cards + ' cartelas' : ''}${lastCycle.count ? lastCycle.count + ' MP4' : ''}${lastCycle.reused ? ' · ' + lastCycle.reused + ' reutilizados' : ''}${lastCycle.unchanged ? ' · sin cambios, no sube' : ''}`.trim() || 'OK')
+    : 'Aún no ha corrido el piloto.';
+  const uploadOk = !upload || upload.ok !== false;
+  const uploadDetail = upload
+    ? (upload.ok === false ? (upload.error || 'Falló FTP') : `${(upload.files || []).length} archivo(s)${upload.dryRun ? ' · simulada' : ' · FTP OK'}`)
+    : 'Sin envío FTP registrado.';
   $('#pilotHistory').innerHTML = [
-    stateCard('Última actualización', fmtStamp(lastUpdate && lastUpdate.ts), updateOk ? updateDetail : (lastUpdate.error || 'Falló; mira Estado'), updateOk, updateOk ? 'OK' : 'ERROR'),
-    stateCard('Última subida', fmtStamp(upload && upload.ts), upload ? (uploadOk ? `${(upload.files || []).length} archivo(s) · ${upload.dryRun ? 'simulada' : 'FTP OK'}` : (upload.error || 'Falló FTP')) : 'Aún no se ha subido desde el panel.', uploadOk, upload ? (uploadOk ? 'OK' : 'ERROR') : 'SIN SUBIDA'),
+    stateCard('Último ciclo del piloto', fmtStamp(lastCycle && lastCycle.ts), cycleOk ? cycleDetail : (lastCycle.error || 'Falló; mira Estado'), cycleOk, cycleOk ? 'OK' : 'ERROR'),
+    stateCard('Último envío a pantalla', fmtStamp(upload && upload.ts), uploadDetail, uploadOk, upload ? (uploadOk ? 'OK' : 'ERROR') : 'SIN ENVÍO'),
   ].join('');
 }
 
@@ -1283,7 +1341,7 @@ function wizardCountHtml() {
   const msg = c.ok
     ? `Perfecto: ${c.required}/${c.required} huecos de emisión.`
     : (c.diff < 0 ? `Faltan ${Math.abs(c.diff)} hueco(s) para llegar a ${c.required}.` : `Sobran ${c.diff} hueco(s): la pantalla solo debe recibir ${c.required}.`);
-  return `<div class="status" style="border-color:${c.ok ? 'rgba(43,182,115,.55)' : 'rgba(232,172,22,.65)'};color:${c.ok ? '#bff0d5' : '#ffd98a'}">
+  return `<div class="status wz-count-sticky" style="border-color:${c.ok ? 'rgba(43,182,115,.55)' : 'rgba(232,172,22,.65)'};color:${c.ok ? '#bff0d5' : '#ffd98a'}">
     <b>${c.selected}/${c.required} cartelas seleccionadas</b><br>${msg}
   </div>`;
 }
@@ -1445,6 +1503,7 @@ function slotEditHtml(s, i) {
             </select></label>
             <label>Título interno<input data-rd-current="title" value="${esc(s.title || '')}" placeholder="Vídeo promo"></label>
             <label class="slot-wide">Archivo<input type="file" data-rd-file-upload accept="image/*,video/mp4,video/*">
+              <select data-rd-video-pick class="video-pick">${videoOptions(s.file || '', 'Elegir vídeo guardado...')}</select>
               <input data-rd-current="file" value="${esc(s.file || '')}" placeholder="data/uploads/promo.mp4"></label>
             <div class="slot-wide hint">El archivo listo se reutiliza: no pasa por el render de cartelas. Si la pantalla exige MP4, usa vídeo MP4.</div>`
           : (isWorker
@@ -1829,7 +1888,10 @@ function libraryItemHtml(meta, item, i) {
         <label>${isAgenda ? 'Cabecera' : 'Título'}<input data-lib-field="title" value="${esc(item.title || '')}" placeholder="${isAgenda ? 'Agenda, Ahora en..., Mañana...' : (isMeteo ? 'Alerta naranja' : '')}"></label>
         <label>${subtitleLabel}<input data-lib-field="subtitle" value="${esc(item.subtitle || '')}" placeholder="${isAgenda ? 'Hoy, Mañana, Festival...' : (isCurious ? 'Lo que quieras que aparezca arriba' : '')}"></label>
       </div>
-      <label>${isAgenda ? 'Eventos del bloque' : 'Texto'}<textarea data-lib-field="body" placeholder="${isAgenda ? '21:00 | Concierto | Plaza Nueva\\n22:30 | DJ set | Casco Viejo' : (isMeteo ? 'Evita actividad física en las horas centrales y bebe agua con frecuencia.' : '')}">${esc(item.body || '')}</textarea></label>
+      <label>${isAgenda ? 'Eventos del bloque' : 'Texto'}
+        ${isAgenda ? '<div class="agenda-format"><b>Formato:</b> Hora | Evento | Lugar <button type="button" class="ghost" data-lib-pipe>Insertar separador |</button></div>' : ''}
+        <textarea data-lib-field="body" placeholder="${isAgenda ? '21:00 | Concierto | Plaza Nueva\\n22:30 | DJ set | Casco Viejo' : (isMeteo ? 'Evita actividad física en las horas centrales y bebe agua con frecuencia.' : '')}">${esc(item.body || '')}</textarea>
+      </label>
       <label>¿Cuándo sale?
         <select data-lib-mode>
           <option value="always" ${!sched ? 'selected' : ''}>Siempre (en el carrusel con las demás)</option>
@@ -2108,7 +2170,10 @@ function agendaMomentHtml(m, i) {
       <label>Etiqueta<input data-wz-agenda-field="subtitle" value="${esc(m.subtitle || '')}" placeholder="Hoy, Mañana, Ahora en..."></label>
       <label>Empieza a salir<input type="datetime-local" data-wz-agenda-field="startAt" value="${esc(m.startAt || '')}"></label>
       <label>Deja de salir<input type="datetime-local" data-wz-agenda-field="endAt" value="${esc(m.endAt || '')}"></label>
-      <label class="agenda-wide">Eventos que verá la pantalla<textarea data-wz-agenda-field="body" placeholder="21:00 | Concierto en la Virgen Blanca | Casco Viejo&#10;22:30 | DJ set | Plaza Nueva">${esc(m.body || '')}</textarea></label>
+      <label class="agenda-wide">Eventos que verá la pantalla
+        <div class="agenda-format"><b>Formato:</b> Hora | Evento | Lugar <button type="button" class="ghost" data-wz-agenda-pipe="${i}">Insertar separador |</button></div>
+        <textarea data-wz-agenda-field="body" placeholder="21:00 | Concierto en la Virgen Blanca | Casco Viejo&#10;22:30 | DJ set | Plaza Nueva">${esc(m.body || '')}</textarea>
+      </label>
     </div>
   </div>`;
 }
@@ -2141,7 +2206,10 @@ function normalizeAgendaMoments(items) {
 
 function renderWizard() {
   const total = 3;
+  const count = wizardCountState();
   $('#wzTitle').textContent = `Escaleta · paso ${WZ.step} de ${total}`;
+  $('#wzProgress').textContent = `${count.selected}/${count.required}`;
+  $('#wzProgress').className = `tag ${count.ok ? 'ok' : 'warn'}`;
   $('#wzBack').hidden = WZ.step === 1;
   $('#wzNext').textContent = WZ.step === 3 ? '✅ Guardar y ver vista previa' : 'Siguiente →';
   const chosen = PLAN_TYPES.filter((t) => WZ.sel.has(t.id));
@@ -2173,6 +2241,7 @@ function renderWizard() {
         return head + `<div class="status">MP4 listo: se copiará como su berri-N.mp4 sin renderizar cartela.</div>
           <label>Título interno</label><input data-wz-manual="${t.id}:title" value="${esc(cur.title || t.slot.title || '')}" placeholder="Vídeo promo">
           <label>Archivo MP4</label><input type="file" data-wz-upload="${t.id}" accept="video/mp4,video/*">
+          <select data-wz-video-pick="${t.id}" class="video-pick">${videoOptions(cur.file || '', 'Elegir vídeo promo guardado...')}</select>
           <input data-wz-manual="${t.id}:file" value="${esc(cur.file || '')}" placeholder="data/uploads/promo.mp4">
           <div class="hint" style="margin-top:5px">La duración se calcula desde el MP4 real.</div>`;
       }
@@ -2351,9 +2420,23 @@ $('#wzBody').addEventListener('click', (e) => {
     wzCollect();
     if (WZ.agenda.length > 1) WZ.agenda.splice(Number(del.dataset.wzAgendaDel), 1);
     renderWizard();
+    return;
+  }
+  const pipe = e.target.closest('[data-wz-agenda-pipe]');
+  if (pipe) {
+    const box = pipe.closest('[data-wz-agenda]');
+    const ta = box && box.querySelector('[data-wz-agenda-field="body"]');
+    if (ta) insertAtCursor(ta, ' | ');
   }
 });
 $('#wzBody').addEventListener('change', async (e) => {
+  if (e.target && e.target.matches('[data-wz-video-pick]')) {
+    const id = e.target.dataset.wzVideoPick;
+    WZ.manual[id] = WZ.manual[id] || {};
+    WZ.manual[id].file = e.target.value || '';
+    renderWizard();
+    return;
+  }
   if (e.target && e.target.matches('[data-wz-type]')) {
     wzCollect();
     renderWizard();
@@ -2364,6 +2447,7 @@ $('#wzBody').addEventListener('change', async (e) => {
     try {
       toast('Subiendo MP4...');
       const path = await uploadFile(e.target);
+      await loadVideoLibrary();
       WZ.manual[id] = WZ.manual[id] || {};
       WZ.manual[id].file = path || '';
       renderWizard();
@@ -2528,8 +2612,17 @@ $('#slotEditor').addEventListener('click', (e) => {
 $('#slotEditor').addEventListener('input', () => { if (RUNDOWN) { collectRundown(); rdSetDirty(true); } });
 $('#slotEditor').addEventListener('change', (e) => {
   if (!RUNDOWN) return;
+  if (e.target && e.target.matches('[data-rd-video-pick]')) {
+    const input = $('#slotEditor').querySelector('[data-rd-current="file"]');
+    if (input) input.value = e.target.value || '';
+    collectRundown();
+    rdSetDirty(true);
+    renderRundown();
+    return;
+  }
   if (e.target && e.target.matches('[data-rd-file-upload]') && e.target.files && e.target.files[0]) {
-    uploadFile(e.target).then((path) => {
+    uploadFile(e.target).then(async (path) => {
+      await loadVideoLibrary();
       const input = $('#slotEditor').querySelector('[data-rd-current="file"]');
       if (input) input.value = path || '';
       collectRundown();
@@ -2579,6 +2672,13 @@ $('#libraryList').addEventListener('change', (e) => {
 });
 $('#libraryList').addEventListener('click', (e) => {
   if (!RUNDOWN) return;
+  const pipe = e.target.closest('[data-lib-pipe]');
+  if (pipe) {
+    const wrap = pipe.closest('.lib-edit');
+    const ta = wrap && wrap.querySelector('[data-lib-field="body"]');
+    if (ta) insertAtCursor(ta, ' | ');
+    return;
+  }
   const quick = e.target.closest('[data-quick-time]');
   if (quick) {
     const wrap = quick.closest('.lib-edit');

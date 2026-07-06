@@ -77,6 +77,13 @@ app.use('/media/uploads', express.static(paths.uploads));
 app.use('/media/inbox', express.static(paths.workerInbox));
 app.use('/media/output', express.static(paths.output));
 app.use('/fonts', express.static(path.join(__dirname, '..', 'assets', 'fonts')));
+app.get('/media/project-videos/:name', (req, res) => {
+  const name = path.basename(req.params.name || '');
+  if (!/^[A-Za-z0-9_.-]+\.mp4$/i.test(name)) return res.status(404).end();
+  const full = path.join(ROOT, name);
+  if (!fs.existsSync(full)) return res.status(404).end();
+  res.sendFile(full);
+});
 
 // --- Subida de fotos (desde el móvil) ---
 const upload = multer({
@@ -349,6 +356,41 @@ app.post('/api/upload', upload.single('photo'), (req, res) => {
   const rel = path.join('data/uploads', req.file.filename).replace(/\\/g, '/');
   log.info('upload-foto', `Foto recibida: ${req.file.filename}`);
   res.json({ path: rel, url: `/media/uploads/${req.file.filename}` });
+});
+
+app.get('/api/video-library', (req, res) => {
+  let items = [];
+  try {
+    const uploaded = fs.readdirSync(paths.uploads)
+      .filter((f) => /\.mp4$/i.test(f))
+      .map((name) => {
+        const full = path.join(paths.uploads, name);
+        const st = fs.statSync(full);
+        const rel = path.join('data/uploads', name).replace(/\\/g, '/');
+        return {
+          name,
+          path: rel,
+          url: `/media/uploads/${name}`,
+          size: st.size,
+          mtime: st.mtime.toISOString(),
+        };
+      });
+    const project = fs.readdirSync(ROOT)
+      .filter((f) => /^[A-Za-z0-9_.-]+\.mp4$/i.test(f))
+      .map((name) => {
+        const full = path.join(ROOT, name);
+        const st = fs.statSync(full);
+        return {
+          name,
+          path: name,
+          url: `/media/project-videos/${name}`,
+          size: st.size,
+          mtime: st.mtime.toISOString(),
+        };
+      });
+    items = [...uploaded, ...project].sort((a, b) => String(b.mtime).localeCompare(String(a.mtime)));
+  } catch {}
+  res.json({ items });
 });
 
 // Subir una fuente propia (.ttf/.otf) -> assets/fonts como Familia-Peso.ext.

@@ -194,6 +194,11 @@
   .agenda-quick{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
   .agenda-quick button{padding:7px 9px;font-size:12px}
   .agenda-add{width:100%;margin-top:8px}
+  .agenda-format{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0;color:var(--muted);font-size:12px}
+  .agenda-format b{color:var(--txt)}
+  .agenda-format button{padding:6px 9px;font-size:12px}
+  .wz-count-sticky{position:sticky;top:-14px;z-index:2;background:#102241;border:1px solid var(--line2)!important;box-shadow:0 8px 16px rgba(0,0,0,.25)}
+  .video-pick{margin-top:6px}
   .bulk-box summary{cursor:pointer;color:var(--muted);font-size:13px}
   .weekdays{display:flex;gap:4px;flex-wrap:wrap;margin-top:4px}
   .weekdays label{margin:0;color:var(--txt);font-size:11px;background:#0a1a30;border:1px solid var(--line);border-radius:8px;padding:5px 7px}
@@ -396,7 +401,7 @@
   <div class="bar">
     <button class="tool featured" id="btnRundown">
       <span class="ico">🗓</span>
-      <span class="tool-txt"><b>Crear emisión</b><small>8 cartelas · revisar · pantalla</small></span>
+      <span class="tool-txt"><b>Nueva escaleta</b><small>Elegir los 8 huecos de pantalla</small></span>
     </button>
     <button class="tool danger" id="btnBreaking">
       <span class="ico">🚨</span>
@@ -510,6 +515,7 @@
       <div id="fileFields" style="display:none">
         <label>Archivo (sube desde el móvil o usa uno del worker)</label>
         <input type="file" id="edAnyFile" accept="image/*,video/*">
+        <select id="edFileLibrary" class="video-pick"></select>
         <input id="edFile" placeholder="data/worker-inbox/archivo.jpg">
       </div>
 
@@ -523,9 +529,11 @@
         <div id="videoBumpers" style="display:none;margin-top:10px;padding:10px;background:#0a1a30;border:1px dashed var(--line);border-radius:10px">
           <label style="margin-top:0">Cortinilla de entrada (MP4)</label>
           <input type="file" id="edVideoIntroFile" accept="video/mp4,video/*">
+          <select id="edVideoIntroLibrary" class="video-pick"></select>
           <input id="edVideoIntro" placeholder="data/uploads/entrada.mp4">
           <label>Cortinilla de salida (MP4)</label>
           <input type="file" id="edVideoOutroFile" accept="video/mp4,video/*">
+          <select id="edVideoOutroLibrary" class="video-pick"></select>
           <input id="edVideoOutro" placeholder="data/uploads/salida.mp4">
           <div class="hint" style="margin-top:5px">Solo se usan cuando la cartela está animada. Se adaptan a la pantalla y se unen al MP4 final.</div>
         </div>
@@ -663,6 +671,7 @@
   <div class="dlg-b" id="wzBody"></div>
   <div class="dlg-f">
     <button class="ghost" id="wzAdvanced" title="Storyboard completo: bloques sueltos, orden, saltos por día, carrusel">Modo avanzado</button>
+    <span id="wzProgress" class="tag warn"></span>
     <span class="spacer"></span>
     <button class="ghost" id="wzBack" hidden>← Atrás</button>
     <button class="primary" id="wzNext">Siguiente →</button>
