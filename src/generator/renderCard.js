@@ -322,6 +322,17 @@ function ensureOrder(elements, lower, upper) {
   return next;
 }
 
+function isAirBodyCandidate(el, card, band) {
+  if (!el || (el.type !== 'text' && el.type !== 'chip')) return false;
+  if (el.bind === 'body' || sameText(el.text, card.body)) return true;
+  if (/peor\s+indicador|indice\s+europeo|índice\s+europeo/i.test(String(el.text || ''))) return true;
+  if (!band) return false;
+  const y = Number(el.y || 0), h = Number(el.h || 0);
+  const by = Number(band.y || 0), bh = Number(band.h || 0);
+  const overlap = Math.max(0, Math.min(y + h, by + bh) - Math.max(y, by));
+  return overlap >= Math.min(Math.max(1, h), Math.max(1, bh)) * 0.45;
+}
+
 function airBodyElement(card, ctx, band) {
   const { W, H, theme } = ctx;
   const pad = Math.round(W * 0.05);
@@ -370,15 +381,13 @@ function repairAirFrame(card, ctx, frame, opts = {}) {
       };
       elements.splice(idx, 0, band);
     }
-    const body = applyReadableColor({
-      ...originalBody,
-      bind: 'body',
-      text: originalBody.transform === 'upper' ? String(card.body || '').toUpperCase() : String(card.body || ''),
-    }, ctx, band.color || theme.accent, originalBody.color || theme.accentText);
-    const bodyIdx = elements.indexOf(originalBody);
-    if (bodyIdx >= 0) elements[bodyIdx] = body;
-    else elements.splice(idx + 1, 0, body);
-    elements = ensureOrder(elements, band, body);
+    const body = {
+      ...airBodyElement(card, ctx, band),
+      id: originalBody.id || 'el_air_body_guard',
+    };
+    elements = elements.filter((el) => el === band || !isAirBodyCandidate(el, card, band));
+    const bandIndex = elements.indexOf(band);
+    elements.splice(Math.max(0, bandIndex + 1), 0, body);
     return { ...frame, elements };
   }
 
@@ -403,8 +412,8 @@ function repairAirFrame(card, ctx, frame, opts = {}) {
     delete band.colorFixed;
   }
 
-  const body = idx >= 0 ? { ...elements[idx], ...airBodyElement(card, ctx, band) } : airBodyElement(card, ctx, band);
-  if (idx >= 0) elements.splice(idx, 1);
+  const body = idx >= 0 ? { ...airBodyElement(card, ctx, band), id: elements[idx].id || 'el_air_body_guard' } : airBodyElement(card, ctx, band);
+  elements = elements.filter((el) => el === band || !isAirBodyCandidate(el, card, band));
   const bandIndex = elements.indexOf(band);
   elements.splice(Math.max(0, bandIndex + 1), 0, body);
   return { ...frame, elements };
