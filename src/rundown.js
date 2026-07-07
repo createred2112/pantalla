@@ -652,7 +652,7 @@ function report(rundown, library, date) {
       skippedToday,
       note: autoSkipped ? 'Sin agenda activa para este momento' : (missing ? (s.source === 'worker' ? `Pendiente worker: ${s.workerKey}` : (s.source === 'file' ? 'Falta seleccionar el archivo MP4' : 'Pendiente de contenido')) : ''),
       chosenIndex: plan ? plan.chosenIndex : null,
-      choices: plan ? plan.next.slice(0, 8) : [],
+      choices: plan ? plan.next : [],
     };
   });
 }
