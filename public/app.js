@@ -212,6 +212,12 @@ function renderSwatches() {
 function applyHints() {
   const t = TEMPLATES.find((x) => x.id === $('#edTemplate').value);
   const h = (t && t.hint) || {};
+  const tpl = t && t.id;
+  $('#edTitleLabel').textContent = 'Título';
+  $('#edSubtitleLabel').textContent = tpl === 'datocurioso' ? 'Texto superior' : 'Subtítulo';
+  $('#edBodyLabel').textContent = 'Texto';
+  $('#edDateLabel').textContent = 'Fecha';
+  $('#edSubtitle').placeholder = tpl === 'datocurioso' ? 'GasteizBerri, Dato curioso, Sabías que...' : 'Sección';
   $('#hTitle').textContent = h.title ? '· ' + h.title : '';
   $('#hSubtitle').textContent = h.subtitle ? '· ' + h.subtitle : '';
   $('#hBody').textContent = h.body && h.body !== '—' ? '· ' + h.body : '';
@@ -813,6 +819,7 @@ async function move(i, dir) {
 // --- Editor ---
 const editor = $('#editor');
 let ED_SLOT = null; // bloque del guion que produce la cartela abierta (si aplica)
+let ED_LIBRARY_INDEX = -1; // pieza concreta del carrusel que produce la cartela abierta
 
 // Cartela producida por el guion: el lápiz enseña el mando REAL (cadencia,
 // piezas del carrusel) en vez de campos que el siguiente pase sobreescribiría.
@@ -831,21 +838,38 @@ async function loadEditorRundown(card) {
     box.style.display = '';
     if (slot.source === 'library') {
       // Plantilla y tema quedan editables (se guardan en el bloque, persisten);
-      // solo se ocultan los textos por-pieza, que el siguiente pase repone.
-      $('#edContentFields').style.display = 'none';
+      // en datos curiosos tambien se puede editar aqui la pieza elegida.
+      const keys = RUNDOWN.libraryKeys || [];
+      const catLabel = (keys.find((k) => k.key === slot.libraryKey) || {}).label || slot.libraryKey;
+      const items = (RUNDOWN.library && RUNDOWN.library[slot.libraryKey]) || [];
+      const isAgendaLib = slot.libraryKey === 'agendaEventos';
+      const editablePiece = slot.libraryKey === 'datosCuriosos';
+      const currentReport = ((RUNDOWN && RUNDOWN.report) || []).find((r) => r.id === slot.id) || {};
+      const matchIndex = items.findIndex((it) =>
+        String(it.title || '') === String(card.title || '') &&
+        String(it.subtitle || '') === String(card.subtitle || '') &&
+        String(it.body || '') === String(card.body || '')
+      );
+      ED_LIBRARY_INDEX = matchIndex >= 0 ? matchIndex : (Number.isInteger(currentReport.chosenIndex) ? currentReport.chosenIndex : -1);
+      const currentItem = ED_LIBRARY_INDEX >= 0 ? items[ED_LIBRARY_INDEX] : null;
+      $('#edContentFields').style.display = editablePiece ? '' : 'none';
+      if (editablePiece && currentItem) {
+        $('#edTitleField').value = currentItem.title || '';
+        $('#edSubtitle').value = currentItem.subtitle || '';
+        $('#edBody').value = currentItem.body || '';
+        $('#edDate').value = currentItem.date || '';
+        $('#edSubtitleLabel').textContent = 'Texto superior';
+        $('#edSubtitle').placeholder = 'GasteizBerri, Dato curioso, Sabias que...';
+      }
       if (![...$('#edTemplate').options].some((o) => o.value === '')) {
         $('#edTemplate').insertAdjacentHTML('afterbegin', '<option value="">Auto (cada pieza con la suya)</option>');
       }
       $('#edTemplate').value = slot.template || '';
       $('#edTheme').value = slot.theme || '';
       renderSwatches();
-      const keys = RUNDOWN.libraryKeys || [];
-      const catLabel = (keys.find((k) => k.key === slot.libraryKey) || {}).label || slot.libraryKey;
-      const items = (RUNDOWN.library && RUNDOWN.library[slot.libraryKey]) || [];
-      const isAgendaLib = slot.libraryKey === 'agendaEventos';
       box.innerHTML = `
         <div class="status">Producida por el bloque <b>«${esc(slot.label)}»</b> · carrusel: <b>${esc(catLabel)}</b>.
-          La plantilla, el tema y el diseño se mantienen en este bloque aunque rote la pieza (vacío = cada pieza con el suyo).</div>
+          ${editablePiece ? 'Puedes editar aquí la pieza elegida; el texto superior es el campo "Texto superior".' : 'La plantilla, el tema y el diseño se mantienen en este bloque aunque rote la pieza (vacío = cada pieza con el suyo).'}</div>
         <label>Cambia de pieza<select id="edSlotRotation">
           <option value="dia" ${slot.rotation !== 'hora' ? 'selected' : ''}>Cada día</option>
           <option value="hora" ${slot.rotation === 'hora' ? 'selected' : ''}>Cada hora</option>
@@ -889,6 +913,7 @@ async function loadEditorRundown(card) {
 
 function openEditor(card) {
   ED_SLOT = null;
+  ED_LIBRARY_INDEX = -1;
   $('#edRundownBox').style.display = 'none';
   $('#edRundownBox').innerHTML = '';
   $('#genFields').style.display = '';
@@ -1145,6 +1170,16 @@ async function saveEditor({ renderAfter = false } = {}) {
         const it = arr && arr[Number(el.dataset.edLib)];
         if (it) it.enabled = el.checked;
       });
+      if (ED_SLOT.libraryKey === 'datosCuriosos' && ED_LIBRARY_INDEX >= 0) {
+        const arr = RUNDOWN.library && RUNDOWN.library[ED_SLOT.libraryKey];
+        const it = arr && arr[ED_LIBRARY_INDEX];
+        if (it) {
+          it.title = data.title || '';
+          it.subtitle = data.subtitle || '';
+          it.body = data.body || '';
+          it.date = data.date || '';
+        }
+      }
       await api('/rundown', { method: 'PUT', body: JSON.stringify(RUNDOWN.rundown) });
       await api('/rundown/library', { method: 'PUT', body: JSON.stringify(RUNDOWN.library) });
       await api('/rundown/materialize', { method: 'POST', body: '{}' });

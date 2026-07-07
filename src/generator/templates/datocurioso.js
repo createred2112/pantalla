@@ -4,7 +4,7 @@
 module.exports = {
   id: 'datocurioso',
   label: 'Dato curioso (frase legible)',
-  hint: { title: 'Dato principal', subtitle: 'Etiqueta (p. ej. Dato curioso)', body: 'Detalle opcional', date: 'Fuente o fecha, opcional' },
+  hint: { title: 'Dato principal', subtitle: 'Texto superior (encima del dato)', body: 'Detalle opcional', date: 'Fuente o fecha, opcional' },
   defaultTheme: 'lima',
   logoPos: 'bl',
   build(card, ctx) {
