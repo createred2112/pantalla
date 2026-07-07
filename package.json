@@ -1,6 +1,6 @@
 {
   "name": "pantalla",
-  "version": "0.117.0",
+  "version": "0.118.0",
   "description": "Motor de cartelería digital para LA PANTALLA (gasteizberri): genera MP4 con texto/foto variables, importa piezas de vídeo, prepara siempre ocho vídeos con nombres fijos y sube por FTP sobreescribiendo. Incluye panel móvil de admin, logs y status.",
   "type": "commonjs",
   "main": "src/server.js",

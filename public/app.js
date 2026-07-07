@@ -5,6 +5,7 @@ const TOKEN = new URLSearchParams(location.search).get('token') || '';
 const H = { 'Content-Type': 'application/json', ...(TOKEN ? { 'x-panel-token': TOKEN } : {}) };
 
 const $ = (s) => document.querySelector(s);
+const DISPLAY_TIME_ZONE = 'Europe/Madrid';
 const api = async (path, opts = {}) => {
   const r = await fetch('/api' + path, { headers: H, ...opts });
   if (r.status === 401) { location.href = '/login'; throw new Error('sesión expirada'); }
@@ -88,7 +89,7 @@ function videoLabel(v) {
   const date = v.mtime ? new Date(v.mtime).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }) : '';
   if (uploadStamp) {
     const d = new Date(Number(uploadStamp[1]));
-    const when = Number.isNaN(d.getTime()) ? date : d.toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+    const when = Number.isNaN(d.getTime()) ? date : d.toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: DISPLAY_TIME_ZONE });
     return `Vídeo subido ${when}`;
   }
   return `${v.name}${date ? ' · ' + date : ''}`;
@@ -197,7 +198,13 @@ function requiredVideoCount() {
 
 function fmtStamp(ts) {
   if (!ts) return 'Nunca';
-  try { return new Date(ts).toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }); }
+  try { return new Date(ts).toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: DISPLAY_TIME_ZONE }); }
+  catch { return String(ts); }
+}
+
+function fmtClock(ts) {
+  if (!ts) return '';
+  try { return new Date(ts).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', timeZone: DISPLAY_TIME_ZONE }); }
   catch { return String(ts); }
 }
 function renderSwatches() {
@@ -1289,7 +1296,7 @@ const PILOT_PLAN_PAGE = {};
 
 function fmtLastRun(last) {
   if (!last) return 'todavía no se ha ejecutado';
-  const when = last.ts ? new Date(last.ts).toLocaleString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : last.day;
+  const when = last.ts ? fmtStamp(last.ts) : last.day;
   if (last.ok === false) return `última: ${when} · falló (mira Estado)`;
   return `última: ${when} · ${last.cards || 0} cartelas${last.published ? ' publicadas' : ' preparadas'}`;
 }
@@ -1331,12 +1338,14 @@ function renderPilotMatrix() {
 function renderPilotHistory() {
   const gen = PILOT.generate || null;
   const sync = PILOT.sync || null;
+  const hourly = PILOT.hourly || null;
   const upload = latestUploadActivity();
   const realUpload = latestRealUpload();
-  const lastCycle = (sync && sync.ts) ? sync : ((PILOT.last && PILOT.last.ts) ? PILOT.last : gen);
+  const lastCycle = newestByTs([sync, hourly, (PILOT.last && PILOT.last.ts) ? PILOT.last : null, gen]);
+  const cycleKind = lastCycle === hourly ? 'Pase horario' : (lastCycle === sync ? 'Vigilancia' : (lastCycle === gen ? 'Preparación' : 'Pase diario'));
   const cycleOk = !lastCycle || lastCycle.ok !== false;
   const cycleDetail = lastCycle
-    ? (`${lastCycle.cards ? lastCycle.cards + ' cartelas' : ''}${lastCycle.count ? lastCycle.count + ' MP4' : ''}${lastCycle.reused ? ' · ' + lastCycle.reused + ' reutilizados' : ''}${lastCycle.unchanged ? ' · sin cambios, no sube' : ''}`.trim() || 'OK')
+    ? (`${cycleKind}${lastCycle.cards ? ' · ' + lastCycle.cards + ' cartelas' : ''}${lastCycle.count ? ' · ' + lastCycle.count + ' MP4' : ''}${lastCycle.reused ? ' · ' + lastCycle.reused + ' reutilizados' : ''}${lastCycle.unchanged ? ' · sin cambios, no sube' : ''}`.trim() || 'OK')
     : 'Aún no ha corrido el piloto.';
   const cards = [
     stateCard('Último ciclo del piloto', fmtStamp(lastCycle && lastCycle.ts), cycleOk ? cycleDetail : (lastCycle.error || 'Falló; mira Estado'), cycleOk, cycleOk ? 'OK' : 'ERROR'),
@@ -1382,7 +1391,7 @@ function renderAudit(entries) {
   if (!entries || !entries.length) return '<div class="status">Todavía no hay operaciones registradas.</div>';
   return entries.map((e) => {
     const ok = e.status === 'error' ? 'bad' : (e.status === 'skipped' ? 'skip' : 'ok');
-    const ts = e.ts ? new Date(e.ts).toLocaleString('es-ES') : '';
+    const ts = e.ts ? new Date(e.ts).toLocaleString('es-ES', { timeZone: DISPLAY_TIME_ZONE }) : '';
     const icon = e.status === 'error' ? '!' : (e.status === 'skipped' ? 'i' : '✓');
     const steps = (e.steps || []).map((s) => `<div class="audit-step"><b>${esc(s.label)}</b><span>${esc(s.detail)}</span></div>`).join('');
     const files = Array.isArray(e.files) && e.files.length
@@ -1496,7 +1505,8 @@ function renderPilot() {
     pilotTag(PILOT.mode === 'publish' ? (p.ftpConfigured ? 'FTP listo' : 'FTP sin configurar') : 'revisión manual', PILOT.mode !== 'publish' || p.ftpConfigured),
     pilotTag(rendered >= Math.min(required, selected) ? 'MP4 cacheados' : `${rendered}/${Math.min(required, selected)} MP4 cacheados`, rendered >= Math.min(required, selected)),
   ];
-  if (sync && sync.ts) checks.push(pilotTag(`última vigilancia ${new Date(sync.ts).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}`, sync.ok !== false));
+  const lastWatch = newestByTs([sync, PILOT.hourly || null]);
+  if (lastWatch && lastWatch.ts) checks.push(pilotTag(`última vigilancia ${fmtClock(lastWatch.ts)}`, lastWatch.ok !== false));
   $('#pilotChecks').innerHTML = checks.join('');
   renderPilotPlan();
 }
@@ -2057,7 +2067,7 @@ function fmtShortDate(d) {
 function fmtMoment(v) {
   if (!v) return '';
   try {
-    return new Date(v).toLocaleString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+    return new Date(v).toLocaleString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: DISPLAY_TIME_ZONE });
   } catch { return v; }
 }
 
@@ -3499,20 +3509,20 @@ async function loadStatus(full) {
     showActivity();
     renderTodayPanel();
     const lastReal = latestRealUpload();
-    const last = lastReal && lastReal.ts ? new Date(lastReal.ts).toLocaleString('es-ES') : 'nunca';
+    const last = lastReal && lastReal.ts ? new Date(lastReal.ts).toLocaleString('es-ES', { timeZone: DISPLAY_TIME_ZONE }) : 'nunca';
     const op = s.operation || null;
     const opText = op
-      ? ` · <b style="color:#ffd98a">Trabajando ahora:</b> ${esc(op.owner || 'emisión')} desde ${esc(new Date(op.startedAt).toLocaleTimeString('es-ES'))}`
+      ? ` · <b style="color:#ffd98a">Trabajando ahora:</b> ${esc(op.owner || 'emisión')} desde ${esc(fmtClock(op.startedAt))}`
       : '';
     $('#statusLine').innerHTML =
       `Pantalla ${s.screen.width}×${s.screen.height} · FTP ${s.ftpConfigured ? '<b>configurado</b>' : '<b style="color:#e0a106">sin configurar</b>'} · Última publicación real: <b>${last}</b>${opText}` +
       uploadResultHtml(latestUploadActivity(), true);
     if (full) {
       const busyHtml = op
-        ? `<div>⏳ <b>Operación en curso</b> · ${esc(op.owner || 'emisión')} · empezó ${esc(new Date(op.startedAt).toLocaleString('es-ES'))}</div>`
+        ? `<div>⏳ <b>Operación en curso</b> · ${esc(op.owner || 'emisión')} · empezó ${esc(new Date(op.startedAt).toLocaleString('es-ES', { timeZone: DISPLAY_TIME_ZONE }))}</div>`
         : '<div>✅ <b>Sin operación en curso</b> · se puede preparar o subir</div>';
       const stageHtml = Object.entries(st.stages || {}).map(([k, v]) =>
-        `<div>${v.ok ? '✅' : '❌'} <b>${esc(statusStageLabel(k, v))}</b> · ${new Date(v.ts).toLocaleTimeString('es-ES')}${statusStageDetail(k, v) ? ' · ' + esc(statusStageDetail(k, v)) : ''}</div>`).join('') || 'Sin actividad aún.';
+        `<div>${v.ok ? '✅' : '❌'} <b>${esc(statusStageLabel(k, v))}</b> · ${fmtClock(v.ts)}${statusStageDetail(k, v) ? ' · ' + esc(statusStageDetail(k, v)) : ''}</div>`).join('') || 'Sin actividad aún.';
       $('#statusBox').innerHTML = busyHtml + stageHtml;
       const audit = await api('/operations?n=12');
       $('#auditBox').innerHTML = renderAudit(audit);
