@@ -13,32 +13,34 @@ module.exports = {
     const els = [];
     const label = String(card.subtitle || 'DATO CURIOSO').trim();
     const title = String(card.title || card.body || '').trim();
-    const body = String(card.body || '').trim();
+    const rawBody = String(card.body || '').trim();
+    const body = rawBody && rawBody !== title && rawBody.toLowerCase() !== label.toLowerCase() ? rawBody : '';
     const footer = String(card.date || '').trim();
     const stripH = Math.round(H * 0.16);
+    const labelX = Math.max(pad, Math.round(W * 0.095));
 
     els.push({ type: 'rect', x: 0, y: 0, w: W, h: H, color: theme.bg });
     els.push({ type: 'rect', x: 0, y: 0, w: W, h: stripH, color: theme.accent });
     els.push({
-      type: 'text', x: pad, y: 0, w: W - pad * 2, h: stripH,
+      type: 'text', x: labelX, y: 0, w: W - labelX - pad, h: stripH,
       text: label.toUpperCase(), font: 'display', weight: 800, color: theme.accentText,
       align: 'left', valign: 'center', letterSpacingEm: 0.03,
-      autofit: { min: Math.round(H * 0.045), max: Math.round(H * 0.085), lines: 1 },
+      autofit: { min: Math.round(H * 0.045), max: Math.round(H * 0.078), lines: 1 },
     });
 
     els.push({
-      type: 'text', x: pad, y: Math.round(H * 0.2), w: W - pad * 2, h: Math.round(H * 0.48),
+      type: 'text', x: pad, y: stripH + Math.round(H * 0.055), w: W - pad * 2, h: Math.round(H * (body ? 0.48 : 0.56)),
       text: title.toUpperCase(), font: 'display', weight: 800, color: theme.text,
-      align: 'left', valign: 'center', lineHeight: 0.98,
-      autofit: { min: Math.round(H * 0.055), max: Math.round(H * 0.145), lines: 4 },
+      align: 'left', valign: 'top', lineHeight: 0.94,
+      autofit: { min: Math.round(H * 0.055), max: Math.round(H * 0.135), lines: 4 },
     });
 
-    if (body && body !== title) {
+    if (body) {
       els.push({
-        type: 'text', x: pad, y: Math.round(H * 0.69), w: W - pad * 2, h: Math.round(H * 0.105),
+        type: 'text', x: pad, y: Math.round(H * 0.72), w: W - pad * 2, h: Math.round(H * 0.095),
         text: body.toUpperCase(), font: 'text', weight: 800, color: theme.text,
         align: 'left', valign: 'center', lineHeight: 1.08,
-        autofit: { min: Math.round(H * 0.035), max: Math.round(H * 0.06), lines: 2 },
+        autofit: { min: Math.round(H * 0.032), max: Math.round(H * 0.052), lines: 2 },
       });
     }
 
