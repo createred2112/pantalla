@@ -51,6 +51,11 @@ function summarizeGroup(events) {
   const workers = events.find((e) => e.type === 'workers.refresh' || e.type === 'publish.workers') || null;
   const busy = events.find((e) => e.type === 'pipeline.busy') || null;
   const failed = events.find((e) => e.ok === false) || null;
+  const dryRun = Boolean(
+    (upload && upload.dryRun) ||
+    (finish && finish.dryRun) ||
+    (start && start.dryRun)
+  );
 
   const entry = {
     id: first.runId || `${first.type || 'op'}-${first.ts || Date.now()}`,
@@ -84,7 +89,9 @@ function summarizeGroup(events) {
   if (upload) {
     entry.steps.push(step('FTP', upload.ok === false
       ? (upload.error || 'Fallo al subir')
-      : `${(upload.files || []).length} archivo(s) subido(s) a ${upload.remoteDir || '/'}`,
+      : dryRun
+        ? `${(upload.files || []).length} archivo(s) revisado(s), no enviado(s)`
+        : `${(upload.files || []).length} archivo(s) subido(s) a ${upload.remoteDir || '/'}`,
     upload.ok !== false));
     if (!entry.files.length) entry.files = upload.files || [];
   }
@@ -105,8 +112,10 @@ function summarizeGroup(events) {
     entry.headline = 'Error';
     entry.summary = failed.error || 'La operación terminó con fallos.';
   } else if (upload && upload.ok !== false) {
-    entry.headline = 'Subida OK';
-    entry.summary = `${(upload.files || []).length} archivo(s) enviados al FTP.`;
+    entry.headline = dryRun ? 'Comprobación OK' : 'Subida OK';
+    entry.summary = dryRun
+      ? `${(upload.files || []).length} archivo(s) revisado(s). No se envió nada a pantalla.`
+      : `${(upload.files || []).length} archivo(s) enviados al FTP.`;
   } else if (generate && generate.ok !== false) {
     entry.headline = 'Preparación OK';
     entry.summary = `${generate.count || 0} MP4 preparados para revisar.`;
