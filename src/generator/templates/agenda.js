@@ -27,17 +27,24 @@ module.exports = {
     const brandText = (wordmark.a || wordmark.b)
       ? `${wordmark.a || ''}${wordmark.b || ''}.com`
       : (brand.website || brand.name || 'GasteizBerri.com');
+    const headTextY = Math.round(topH * 0.11);
+    const headTextH = Math.round(topH * 0.78);
 
     // Banda superior + etiqueta + caja flecha.
     els.push({ type: 'rect', x: 0, y: 0, w: W - topH, h: topH, color: red });
     els.push({ type: 'rect', x: W - topH, y: 0, w: topH, h: topH, color: dark });
-    els.push({ type: 'text', x: pad, y: 0, w: Math.round(W * (subtitle ? 0.38 : 0.6)), h: topH, text: title.toUpperCase(), font: 'display', weight: 800, color: white, align: 'left', valign: 'center', size: Math.round(topH * 0.52), letterSpacingEm: 0.02 });
+    els.push({
+      type: 'text', x: pad, y: headTextY, w: Math.round(W * (subtitle ? 0.38 : 0.6)), h: headTextH,
+      text: title.toUpperCase(), font: 'display', weight: 800, color: white,
+      align: 'left', valign: 'center', size: Math.round(topH * 0.72),
+      lineHeight: 0.9, letterSpacingEm: 0.01,
+    });
     if (subtitle) {
       els.push({
-        type: 'text', x: Math.round(W * 0.49), y: 0, w: Math.round(W * 0.37), h: topH,
+        type: 'text', x: Math.round(W * 0.49), y: headTextY, w: Math.round(W * 0.37), h: headTextH,
         text: subtitle.toUpperCase(), font: 'display', weight: 800, color: white,
-        align: 'center', valign: 'center', letterSpacingEm: 0.02,
-        autofit: { min: Math.round(topH * 0.24), max: Math.round(topH * 0.52), lines: 1 },
+        align: 'center', valign: 'center', lineHeight: 0.9, letterSpacingEm: 0.01,
+        autofit: { min: Math.round(topH * 0.34), max: Math.round(topH * 0.72), lines: 1 },
       });
     }
     const a = topH * 0.3, m = topH / 2, swA = topH * 0.08;
