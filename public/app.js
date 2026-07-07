@@ -1985,30 +1985,6 @@ function blankLibraryItem(meta) {
 
 function blankAgendaLibraryItem() {
   const meta = (RUNDOWN.libraryKeys || []).find((k) => k.key === 'agendaEventos') || { template: 'agenda', theme: 'blanco' };
-  const active = RUNDOWN.activeDate || localDatePart();
-  const blocks = ((RUNDOWN.library || {}).agendaEventos || [])
-    .map((item, idx) => agendaRangeForDay(item, active, idx))
-    .filter(Boolean)
-    .sort((a, b) => a.start - b.start);
-  let startMin = 8 * 60;
-  let endMin = 9 * 60;
-  let cursor = 8 * 60;
-  let placed = false;
-  for (const b of blocks) {
-    if (b.start - cursor >= 30) {
-      startMin = cursor;
-      endMin = Math.min(cursor + 60, b.start);
-      placed = true;
-      break;
-    }
-    cursor = Math.max(cursor, b.end);
-  }
-  if (!placed && blocks.length) {
-    startMin = cursor < 22 * 60 ? cursor : blocks[blocks.length - 1].end;
-    endMin = Math.min(startMin + 60, 24 * 60);
-  }
-  const startAt = dtLocal(active, inputTimeLabel(startMin));
-  const endAt = dtLocal(active, inputTimeLabel(endMin));
   return {
     ...blankLibraryItem(meta),
     title: '',
@@ -2016,8 +1992,8 @@ function blankAgendaLibraryItem() {
     body: '',
     template: 'agenda',
     theme: 'blanco',
-    startAt,
-    endAt,
+    startAt: '',
+    endAt: '',
   };
 }
 
@@ -2134,12 +2110,18 @@ function itemCanAppearOnDate(item, date) {
 
 function agendaRangeForDay(item, date, idx) {
   if (!itemCanAppearOnDate(item, date)) return null;
+  const hasTimeWindow = Boolean(item.startAt || item.endAt);
   let start = item.startAt ? minuteOf(item.startAt) : null;
   let end = item.endAt ? minuteOf(item.endAt) : null;
   if (item.startAt && String(item.startAt).slice(0, 10) < date) start = 0;
   if (item.endAt && String(item.endAt).slice(0, 10) > date) end = 24 * 60;
-  if (start == null) start = 8 * 60;
-  if (end == null) end = start + 60;
+  if (!hasTimeWindow) {
+    start = 0;
+    end = 24 * 60;
+  } else {
+    if (start == null) start = 0;
+    if (end == null) end = 24 * 60;
+  }
   if (end <= start) end = Math.min(24 * 60, start + 60);
   start = Math.max(0, Math.min(24 * 60, start));
   end = Math.max(start + 1, Math.min(24 * 60, end));
@@ -2338,8 +2320,8 @@ function libraryItemHtml(meta, item, i) {
       </label>
       <label>¿Cuándo sale?
         <select data-lib-mode>
-          <option value="always" ${!sched ? 'selected' : ''}>Siempre (en el carrusel con las demás)</option>
-          <option value="scheduled" ${sched ? 'selected' : ''}>Solo cuando lo programe</option>
+          <option value="always" ${!sched ? 'selected' : ''}>Cada día / cuando lo marque yo (sin hora fija)</option>
+          <option value="scheduled" ${sched ? 'selected' : ''}>Solo en una franja programada</option>
         </select>
       </label>
       <div class="lib-sched" ${sched ? '' : 'hidden'}>
@@ -3309,8 +3291,16 @@ $('#libraryList').addEventListener('change', (e) => {
   if (!RUNDOWN) return;
   // El selector "¿Cuándo sale?" muestra/oculta los campos de programación al momento.
   if (e.target && e.target.matches('[data-lib-mode]')) {
-    const box = e.target.closest('.lib-edit').querySelector('.lib-sched');
+    const edit = e.target.closest('.lib-edit');
+    const box = edit && edit.querySelector('.lib-sched');
     if (box) box.hidden = e.target.value !== 'scheduled';
+    if (e.target.value === 'always' && edit) {
+      ['startAt', 'endAt', 'start', 'end', 'dates'].forEach((key) => {
+        const field = edit.querySelector(`[data-lib-field="${key}"]`);
+        if (field) field.value = '';
+      });
+      edit.querySelectorAll('[data-lib-weekday]').forEach((field) => { field.checked = false; });
+    }
   }
   collectLibraryCategory();
   rdSetDirty(true);
