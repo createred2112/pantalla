@@ -314,7 +314,7 @@ app.post('/api/rundown/materialize', (req, res) => {
 
 app.post('/api/rundown/pick', (req, res) => {
   const body = req.body || {};
-  res.json(rundown.pick(body.date || req.query.date, body.slotId, body.itemIndex));
+  res.json(rundown.pick(body.date || req.query.date, body.slotId, body.itemIndex, { fixed: body.fixed }));
 });
 
 // Frame resuelto de una cartela (para el editor visual): elementos posicionados.

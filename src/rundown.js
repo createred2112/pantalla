@@ -256,11 +256,26 @@ function cleanDays(days) {
     const skip = Array.isArray(v && v.skip) ? [...new Set(v.skip.map(String).filter(Boolean))] : [];
     const theme = String((v && v.theme) || '').trim();
     const pick = {};
+    const autoPick = {};
     for (const [slotId, idx] of Object.entries((v && v.pick && typeof v.pick === 'object') ? v.pick : {})) {
       const n = Number(idx);
       if (String(slotId).trim() && Number.isInteger(n) && n >= 0) pick[String(slotId)] = n;
     }
-    if (skip.length || Object.keys(pick).length || theme) out[String(d).slice(0, 10)] = { skip, ...(theme ? { theme } : {}), ...(Object.keys(pick).length ? { pick } : {}) };
+    for (const [slotId, rec] of Object.entries((v && v.autoPick && typeof v.autoPick === 'object') ? v.autoPick : {})) {
+      const n = Number(rec && rec.index);
+      const step = Number(rec && rec.step);
+      if (String(slotId).trim() && Number.isInteger(n) && n >= 0 && Number.isInteger(step)) {
+        autoPick[String(slotId)] = { index: n, step };
+      }
+    }
+    if (skip.length || Object.keys(pick).length || Object.keys(autoPick).length || theme) {
+      out[String(d).slice(0, 10)] = {
+        skip,
+        ...(theme ? { theme } : {}),
+        ...(Object.keys(pick).length ? { pick } : {}),
+        ...(Object.keys(autoPick).length ? { autoPick } : {}),
+      };
+    }
   }
   return out;
 }
@@ -275,6 +290,17 @@ function pickMapFor(rundown, date) {
   for (const [slotId, idx] of Object.entries(raw)) {
     const n = Number(idx);
     if (Number.isInteger(n) && n >= 0) out[slotId] = n;
+  }
+  return out;
+}
+
+function autoPickMapFor(rundown, date) {
+  const raw = (((rundown.days || {})[date] || {}).autoPick) || {};
+  const out = {};
+  for (const [slotId, rec] of Object.entries(raw)) {
+    const index = Number(rec && rec.index);
+    const step = Number(rec && rec.step);
+    if (Number.isInteger(index) && index >= 0 && Number.isInteger(step)) out[slotId] = { index, step };
   }
   return out;
 }
@@ -325,14 +351,15 @@ function refreshMaterializedLibraryCards(library, options = {}) {
   const rundown = readJson(RUNDOWN_FILE, DEFAULT_RUNDOWN);
   upgradeRundown(rundown);
   const pick = pickMapFor(rundown, date);
+  const autoPick = autoPickMapFor(rundown, date);
   const theme = dayTheme(date, rundown);
   let updated = 0;
   for (const slot of rundown.slots || []) {
     const s = normalizeSlot(slot);
     if (s.source !== 'library') continue;
     const current = store.list().find((card) => card.source === 'rundown' && card.rundownSlot === s.id);
-    if (!current || !shouldMaterialize(s, library, date, pick)) continue;
-    const next = toCard(s, library, current.order || 999, date, pick, theme);
+    if (!current || !shouldMaterialize(s, library, date, pick, autoPick)) continue;
+    const next = toCard(s, library, current.order || 999, date, pick, theme, autoPick);
     if (!cardNeedsPatch(current, next)) continue;
     store.update(current.id, { ...next, id: current.id, order: current.order || next.order });
     updated++;
@@ -394,27 +421,35 @@ function normalizeSlot(slot) {
 // Carrusel SIN repetir: recorre TODAS las piezas en orden y solo reinicia al
 // agotarlas. Determinista (sin estado): el cursor avanza con el día — o con la
 // hora actual si la cadencia es horaria. El offset desincroniza bloques.
-function pickDaily(items, key, date, rotation) {
-  if (!Array.isArray(items) || !items.length) return null;
-  const step = rotation === 'hora'
+function rotationStep(date, rotation) {
+  return rotation === 'hora'
     ? Math.floor(Date.now() / 3600000)
     : Math.floor(Date.parse(`${date || todayKey()}T12:00:00Z`) / 86400000);
+}
+
+function pickDaily(items, key, date, rotation, autoPick) {
+  if (!Array.isArray(items) || !items.length) return null;
+  const step = rotationStep(date, rotation);
+  if (autoPick && Number.isInteger(autoPick.index) && Number.isInteger(autoPick.step)) {
+    const delta = step - autoPick.step;
+    return items[((autoPick.index + delta) % items.length + items.length) % items.length];
+  }
   let off = 0;
   for (const ch of String(key)) off = (off + ch.charCodeAt(0)) % 9973;
   return items[(step + off) % items.length];
 }
 
-function libraryChoice(items, key, date, rotation, pickIndex) {
+function libraryChoice(items, key, date, rotation, pickIndex, autoPick) {
   if (!Array.isArray(items) || !items.length) return null;
   if (Number.isInteger(pickIndex) && pickIndex >= 0 && pickIndex < items.length) return items[pickIndex];
-  return pickDaily(items, key, date, rotation);
+  return pickDaily(items, key, date, rotation, autoPick);
 }
 
-function libraryPlanForSlot(slot, library, date, pickIndex) {
+function libraryPlanForSlot(slot, library, date, pickIndex, autoPick) {
   const s = normalizeSlot(slot);
   if (s.source !== 'library') return null;
   const items = libraryItems(library, s.libraryKey, date);
-  const chosen = libraryChoice(items, s.id, date, s.rotation, pickIndex);
+  const chosen = libraryChoice(items, s.id, date, s.rotation, pickIndex, autoPick);
   const chosenIndex = chosen ? items.indexOf(chosen) : -1;
   const next = items.map((item, index) => ({
     index,
@@ -442,7 +477,7 @@ function slotPayload(slot, library, date, options = {}) {
     };
   }
   if (s.source === 'library') {
-    const item = libraryChoice(libraryItems(library, s.libraryKey, date), s.id, date, s.rotation, options.pickIndex);
+    const item = libraryChoice(libraryItems(library, s.libraryKey, date), s.id, date, s.rotation, options.pickIndex, options.autoPick);
     return item ? { ...item } : {
       title: s.label,
       subtitle: 'Pendiente',
@@ -513,9 +548,9 @@ function bumperForSlot(slot, payload = {}) {
   return { intro: '', outro: '', key: '' };
 }
 
-function toCard(slot, library, order, date, pickMap = {}, dayThemeKey = '') {
+function toCard(slot, library, order, date, pickMap = {}, dayThemeKey = '', autoPickMap = {}) {
   const s = normalizeSlot(slot);
-  const p = slotPayload(s, library, date, { pickIndex: pickMap[s.id] });
+  const p = slotPayload(s, library, date, { pickIndex: pickMap[s.id], autoPick: autoPickMap[s.id] });
   const semanticBumperKey = s.bumperKey || defaultBumperKeyForSlot(s);
   const bumper = bumperForSlot(s, p);
   const wantsVideo = s.video === true || Boolean(s.videoIntro || s.videoOutro || bumper.intro || bumper.outro);
@@ -610,11 +645,11 @@ function rememberCardEdit(card, patch = {}) {
   return read();
 }
 
-function shouldMaterialize(slot, library, date, pickMap = {}) {
+function shouldMaterialize(slot, library, date, pickMap = {}, autoPickMap = {}) {
   const s = normalizeSlot(slot);
   if (s.enabled === false) return false;
   if (s.source === 'library' && s.libraryKey === 'agendaEventos') {
-    const p = slotPayload(s, library, date, { pickIndex: pickMap[s.id] });
+    const p = slotPayload(s, library, date, { pickIndex: pickMap[s.id], autoPick: autoPickMap[s.id] });
     return Boolean(!p.missing && (p.title || p.body));
   }
   return true;
@@ -623,16 +658,17 @@ function shouldMaterialize(slot, library, date, pickMap = {}) {
 function report(rundown, library, date) {
   const skip = skipSetFor(rundown, date);
   const pick = pickMapFor(rundown, date);
+  const autoPick = autoPickMapFor(rundown, date);
   const limit = emissionLimit();
   let emissionOrder = 0;
   return (rundown.slots || []).map((slot, i) => {
     const s = normalizeSlot(slot);
-    const p = slotPayload(s, library, date, { pickIndex: pick[s.id] });
-    const plan = libraryPlanForSlot(s, library, date, pick[s.id]);
+    const p = slotPayload(s, library, date, { pickIndex: pick[s.id], autoPick: autoPick[s.id] });
+    const plan = libraryPlanForSlot(s, library, date, pick[s.id], autoPick[s.id]);
     const skippedToday = skip.has(s.id);
     const autoSkipped = s.source === 'library' && s.libraryKey === 'agendaEventos' && (p.missing || (!p.title && !p.body));
     const missing = s.enabled && !skippedToday && !autoSkipped && (p.missing || !p.title);
-    const eligible = !skippedToday && shouldMaterialize(s, library, date, pick);
+    const eligible = !skippedToday && shouldMaterialize(s, library, date, pick, autoPick);
     let inEmission = false;
     let slotEmissionOrder = null;
     if (eligible) {
@@ -660,6 +696,7 @@ function report(rundown, library, date) {
       note: autoSkipped ? 'Sin agenda activa para este momento' : (missing ? (s.source === 'worker' ? `Pendiente worker: ${s.workerKey}` : (s.source === 'file' ? 'Falta seleccionar el archivo MP4' : 'Pendiente de contenido')) : ''),
       chosenIndex: plan ? plan.chosenIndex : null,
       manualPick: Object.prototype.hasOwnProperty.call(pick, s.id),
+      autoPick: Object.prototype.hasOwnProperty.call(autoPick, s.id),
       rotation: s.rotation,
       choices: plan ? plan.next : [],
     };
@@ -670,14 +707,15 @@ function materialize(options = {}) {
   const { rundown, library, activeDate, report: rep } = read(options);
   const skip = skipSetFor(rundown, activeDate);
   const pick = pickMapFor(rundown, activeDate);
-  const eligible = (rundown.slots || []).filter((s) => !skip.has(String(s.id)) && shouldMaterialize(s, library, activeDate, pick));
+  const autoPick = autoPickMapFor(rundown, activeDate);
+  const eligible = (rundown.slots || []).filter((s) => !skip.has(String(s.id)) && shouldMaterialize(s, library, activeDate, pick, autoPick));
   const limit = emissionLimit();
   const active = limit ? eligible.slice(0, limit) : eligible;
   const omitted = limit && eligible.length > limit
     ? eligible.slice(limit).map((s) => ({ id: String(s.id), label: String(s.label || s.id || '') }))
     : [];
   const theme = dayTheme(activeDate, rundown);
-  const generated = active.map((slot, i) => toCard(slot, library, i + 1, activeDate, pick, theme));
+  const generated = active.map((slot, i) => toCard(slot, library, i + 1, activeDate, pick, theme, autoPick));
   const manual = store.list()
     .filter((card) => card.source !== 'rundown')
     .map((card, i) => ({ ...card, order: generated.length + i + 1 }));
@@ -685,17 +723,30 @@ function materialize(options = {}) {
   return { ok: true, count: generated.length, requiredCount: limit || undefined, omitted, cards: generated, report: rep };
 }
 
-function pick(date, slotId, itemIndex) {
+function pick(date, slotId, itemIndex, options = {}) {
   const day = String(date || todayKey()).slice(0, 10);
   const data = readJson(RUNDOWN_FILE, DEFAULT_RUNDOWN);
   upgradeRundown(data);
   if (!data.days || typeof data.days !== 'object') data.days = {};
   const rec = data.days[day] && typeof data.days[day] === 'object' ? data.days[day] : {};
   const picks = rec.pick && typeof rec.pick === 'object' ? rec.pick : {};
+  const autoPicks = rec.autoPick && typeof rec.autoPick === 'object' ? rec.autoPick : {};
+  const slot = (data.slots || []).map(normalizeSlot).find((s) => String(s.id) === String(slotId));
   const n = Number(itemIndex);
-  if (Number.isInteger(n) && n >= 0) picks[String(slotId)] = n;
-  else delete picks[String(slotId)];
+  if (Number.isInteger(n) && n >= 0) {
+    if (options.fixed !== false) {
+      picks[String(slotId)] = n;
+      delete autoPicks[String(slotId)];
+    } else {
+      delete picks[String(slotId)];
+      autoPicks[String(slotId)] = { index: n, step: rotationStep(day, slot ? slot.rotation : 'dia') };
+    }
+  } else {
+    delete picks[String(slotId)];
+    delete autoPicks[String(slotId)];
+  }
   rec.pick = picks;
+  rec.autoPick = autoPicks;
   data.days[day] = rec;
   return save(data, { date: day });
 }

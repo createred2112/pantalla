@@ -1433,6 +1433,11 @@ function renderPilotPlan() {
     ).join('');
     const cadence = r.rotation === 'hora' ? 'automático cada hora' : 'automático cada día';
     const pickState = r.manualPick ? 'fijada para hoy' : cadence;
+    const modeButton = r.chosenIndex != null && r.chosenIndex >= 0
+      ? (r.manualPick
+        ? `<button type="button" class="ghost" data-pilot-mode="${esc(r.id)}:auto:${r.chosenIndex}">Volver a automático</button>`
+        : `<button type="button" class="ghost" data-pilot-mode="${esc(r.id)}:fixed:${r.chosenIndex}">Fijar esta pieza</button>`)
+      : '';
     return `<div class="pilot-plan-card">
       <div class="pilot-plan-head">
         <b>${esc(r.label)}</b>
@@ -1446,7 +1451,7 @@ function renderPilotPlan() {
         ${pageControls}
         <div class="pilot-choice">${buttons}</div>
         <div class="pilot-plan-tools">
-          ${r.manualPick ? `<button type="button" class="ghost" data-pilot-auto="${esc(r.id)}">Volver a automático</button>` : ''}
+          ${modeButton}
           <button type="button" class="ghost" data-pilot-bank="${esc(r.libraryKey || '')}:edit">Editar banco</button>
           <button type="button" class="ghost" data-pilot-bank="${esc(r.libraryKey || '')}:add">Añadir pieza</button>
         </div>
@@ -1582,21 +1587,21 @@ $('#pilotPlan').addEventListener('click', async (e) => {
     renderPilotPlan();
     return;
   }
-  const autoBtn = e.target.closest('[data-pilot-auto]');
-  if (autoBtn && PILOT) {
-    const slotId = autoBtn.dataset.pilotAuto;
+  const modeBtn = e.target.closest('[data-pilot-mode]');
+  if (modeBtn && PILOT) {
+    const [slotId, mode, idx] = modeBtn.dataset.pilotMode.split(':');
     const date = (PILOT.rundown && PILOT.rundown.activeDate) || localDatePart();
-    autoBtn.disabled = true;
+    modeBtn.disabled = true;
     try {
-      await api('/rundown/pick', { method: 'POST', body: JSON.stringify({ date, slotId, itemIndex: -1 }) });
+      await api('/rundown/pick', { method: 'POST', body: JSON.stringify({ date, slotId, itemIndex: Number(idx), fixed: mode === 'fixed' }) });
       await api('/rundown/materialize', { method: 'POST', body: JSON.stringify({ date }) });
-      toast('Carrusel en automático');
+      toast(mode === 'fixed' ? 'Pieza fijada para hoy' : 'Carrusel en automático');
       load();
       loadPilot();
     } catch (err) {
       toast('Error: ' + err.message);
     } finally {
-      autoBtn.disabled = false;
+      modeBtn.disabled = false;
     }
     return;
   }
@@ -1611,11 +1616,13 @@ $('#pilotPlan').addEventListener('click', async (e) => {
   if (!b || !PILOT) return;
   const [slotId, idx] = b.dataset.pilotPick.split(':');
   const date = (PILOT.rundown && PILOT.rundown.activeDate) || localDatePart();
+  const row = (((PILOT.rundown || {}).report) || []).find((r) => String(r.id) === String(slotId));
+  const fixed = Boolean(row && row.manualPick);
   b.disabled = true;
   try {
-    await api('/rundown/pick', { method: 'POST', body: JSON.stringify({ date, slotId, itemIndex: Number(idx) }) });
+    await api('/rundown/pick', { method: 'POST', body: JSON.stringify({ date, slotId, itemIndex: Number(idx), fixed }) });
     await api('/rundown/materialize', { method: 'POST', body: JSON.stringify({ date }) });
-    toast('Pieza fijada para hoy');
+    toast(fixed ? 'Pieza fijada para hoy' : 'Pieza elegida en automático');
     load();
     loadPilot();
   } catch (err) {
