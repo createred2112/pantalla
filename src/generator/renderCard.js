@@ -345,6 +345,15 @@ function isAirBodyCandidate(el, card, band) {
   return overlap >= Math.min(Math.max(1, h), Math.max(1, bh)) * 0.45;
 }
 
+function isAirBandCandidate(el, ctx) {
+  if (!el || (el.type !== 'rect' && el.type !== 'band')) return false;
+  const { W, H } = ctx;
+  return Number(el.w || 0) >= W * 0.55 &&
+    Number(el.h || 0) >= H * 0.04 &&
+    Number(el.y || 0) >= H * 0.4 &&
+    Number(el.y || 0) <= H * 0.86;
+}
+
 function airBodyText(card) {
   const body = String(card && card.body || '').trim();
   if (body) return body;
@@ -425,13 +434,13 @@ function repairAirFrame(card, ctx, frame, opts = {}) {
 
   if (opts.preserveLayout && idx >= 0) {
     const body = airBodyElement(card, ctx, detailBox, elements[idx]);
-    elements = elements.filter((el) => el.id !== 'el_air_band_guard' && el.id !== 'el_air_detail_rule' && !isAirBodyCandidate(el, card, null));
+    elements = elements.filter((el) => el.id !== 'el_air_band_guard' && el.id !== 'el_air_detail_rule' && !isAirBandCandidate(el, ctx) && !isAirBodyCandidate(el, card, null));
     elements.push(rule, body);
     return { ...frame, elements };
   }
 
   const body = idx >= 0 ? airBodyElement(card, ctx, detailBox, elements[idx]) : airBodyElement(card, ctx, detailBox);
-  elements = elements.filter((el) => el.id !== 'el_air_band_guard' && el.id !== 'el_air_detail_rule' && !isAirBodyCandidate(el, card, null));
+  elements = elements.filter((el) => el.id !== 'el_air_band_guard' && el.id !== 'el_air_detail_rule' && !isAirBandCandidate(el, ctx) && !isAirBodyCandidate(el, card, null));
   elements.push(rule, body);
   return { ...frame, elements };
 }
