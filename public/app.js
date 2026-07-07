@@ -1581,6 +1581,7 @@ let RD_DIRTY = false;   // hay cambios sin guardar en escaleta/contenido
 let LIB_OPEN = -1;      // índice de la pieza expandida en la lista
 let RD_STAMP = Date.now(); // cache-bust de las miniaturas del storyboard
 let RD_PLAN_DAYS = 7;      // días que enseña el planificador (lo fija el asistente)
+let RUNDOWN_MODE = 'rundown';
 
 // Catálogo del asistente "Planificar días": tipos de cartela predeterminados.
 const PLAN_TYPES = [
@@ -1621,7 +1622,8 @@ function wizardCountHtml() {
 
 function rdSetDirty(v) {
   RD_DIRTY = v;
-  $('#btnRundownSave').textContent = v ? 'Guardar cambios ●' : 'Guardar cambios';
+  const base = RUNDOWN_MODE === 'library' ? 'Guardar bancos' : 'Guardar cambios';
+  $('#btnRundownSave').textContent = v ? `${base} ●` : base;
 }
 
 function setRundownTab(tab) {
@@ -1630,7 +1632,20 @@ function setRundownTab(tab) {
   document.querySelectorAll('[data-rd-tab]').forEach((b) => b.classList.toggle('sel', b.dataset.rdTab === tab));
 }
 
+function setRundownMode(mode) {
+  RUNDOWN_MODE = mode === 'library' ? 'library' : 'rundown';
+  const libraryMode = RUNDOWN_MODE === 'library';
+  const title = $('#rundownDlgTitle');
+  if (title) title.textContent = libraryMode ? 'Bancos de contenido' : 'Escaleta';
+  const tabs = document.querySelector('#rundownDlg .rd-tabs');
+  if (tabs) tabs.hidden = libraryMode;
+  $('#btnRundownReset').hidden = libraryMode;
+  $('#btnRundownMake').hidden = libraryMode;
+  rdSetDirty(RD_DIRTY);
+}
+
 async function openRundown() {
+  setRundownMode('rundown');
   const today = localDatePart();
   RUNDOWN = await api('/rundown?date=' + encodeURIComponent($('#rundownDate').value || today));
   RUNDOWN_SELECTED = -1; // nada seleccionado: solo el storyboard
@@ -1638,6 +1653,19 @@ async function openRundown() {
   RD_STAMP = Date.now();
   rdSetDirty(false);
   setRundownTab('seq');
+  renderRundown();
+  rundownDlg.showModal();
+}
+
+async function openBanks() {
+  setRundownMode('library');
+  const today = localDatePart();
+  RUNDOWN = await api('/rundown?date=' + encodeURIComponent($('#rundownDate').value || today));
+  RUNDOWN_SELECTED = -1;
+  LIB_OPEN = -1;
+  RD_STAMP = Date.now();
+  rdSetDirty(false);
+  setRundownTab('lib');
   renderRundown();
   rundownDlg.showModal();
 }
@@ -2335,25 +2363,32 @@ function parseBulkItems(text, meta) {
 // Guarda TODO de una vez: secuencia + contenido programado.
 async function saveAllRundown(opts = {}) {
   const date = $('#rundownDate').value || localDatePart();
-  collectRundown();
+  const libraryOnly = opts.libraryOnly === true || RUNDOWN_MODE === 'library';
+  if (!libraryOnly) collectRundown();
   collectLibraryCategory();
   sortAgendaLibraryForSave(date);
-  const rd = RUNDOWN.rundown;
   const lib = RUNDOWN.library;
-  await api('/rundown?date=' + encodeURIComponent(date), { method: 'PUT', body: JSON.stringify(rd) });
+  if (!libraryOnly) {
+    const rd = RUNDOWN.rundown;
+    await api('/rundown?date=' + encodeURIComponent(date), { method: 'PUT', body: JSON.stringify(rd) });
+  }
   RUNDOWN = await api('/rundown/library?date=' + encodeURIComponent(date), { method: 'PUT', body: JSON.stringify(lib) });
   // Re-materializa las cartelas del día visible para que los cambios de tema/
   // plantilla/contenido se reflejen: la cartela afectada queda marcada como
   // "cambios sin aplicar" (⟳) en el panel. Si se está planificando otro día,
   // NO se tocan las cartelas en emisión (para eso está "Aplicar escaleta").
   const today = localDatePart();
-  if (opts.materialize !== false && date === today) {
+  if (!libraryOnly && opts.materialize !== false && date === today) {
     await api('/rundown/materialize', { method: 'POST', body: JSON.stringify({ date }) });
+    load();
+  } else if (date === today) {
     load();
   }
   rdSetDirty(false);
   renderRundown();
-  if (!opts.silent) toast('Guardado. Las cartelas con cambios quedan marcadas para regenerar (⟳)');
+  if (!opts.silent) toast(libraryOnly
+    ? 'Bancos guardados. Las cartelas de carrusel quedan actualizadas para regenerar (⟳)'
+    : 'Guardado. Las cartelas con cambios quedan marcadas para regenerar (⟳)');
 }
 
 async function makeRundown() {
@@ -2821,6 +2856,7 @@ function applyAgendaQuick(i, kind) {
 }
 
 $('#btnRundown').addEventListener('click', openWizard);
+$('#btnBanks').addEventListener('click', openBanks);
 $('#wzClose').addEventListener('click', () => wizardDlg.close());
 $('#wzAdvanced').addEventListener('click', () => { wizardDlg.close(); openRundown(); });
 $('#wzBack').addEventListener('click', () => { wzCollect(); WZ.step = Math.max(1, WZ.step - 1); renderWizard(); });

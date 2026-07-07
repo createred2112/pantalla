@@ -80,7 +80,7 @@ function renderHash(card) {
   try { tplLayout = require('../templateLayouts').get(card.template, theme.key); } catch {}
   const tplBumpers = templateBumpersFor(card);
   const src = {
-    v: 29, // subir al cambiar el diseño de las plantillas en código
+    v: 31, // subir al cambiar el diseño/render de las plantillas en código
     template: card.template || '',
     theme,
     layout: card.layout || null,
@@ -93,6 +93,7 @@ function renderHash(card) {
     photo: fileSig(card.photo),
     video: card.video === true,
     motion: card.video ? 4 : null, // versión de la coreografía de animación
+    fps: card.video ? (Number(cfg.video && cfg.video.fps) || 25) : null,
     videoIntro: card.video ? fileSig(card.videoIntro || tplBumpers.intro) : null,
     videoOutro: card.video ? fileSig(card.videoOutro || tplBumpers.outro) : null,
     duration: card.video ? (Number(card.duration) || 0) : null, // el MP4 depende de la duración

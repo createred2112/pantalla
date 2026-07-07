@@ -539,7 +539,11 @@ function repairWeatherFrame(card, ctx, frame, opts = {}) {
 
   const icon = weatherIconElement(card, ctx);
   const svgIdx = elements.findIndex((el) => el.type === 'svg' && /<svg/i.test(String(el.svg || '')));
-  if (svgIdx >= 0) elements[svgIdx] = { ...elements[svgIdx], ...icon };
+  if (svgIdx >= 0) {
+    elements[svgIdx] = opts.preserveLayout
+      ? { ...icon, ...elements[svgIdx], type: 'svg', anim: icon.anim, svg: icon.svg }
+      : { ...elements[svgIdx], ...icon };
+  }
   else elements.push(icon);
 
   const summary = weatherSummary(card);
@@ -627,19 +631,37 @@ function forecastIconElement(day, i, count, ctx) {
   };
 }
 
-function repairForecastFrame(card, ctx, frame) {
+function repairForecastFrame(card, ctx, frame, opts = {}) {
   const days = forecastDays(card);
   if (!days.length) return frame;
-  const elements = (Array.isArray(frame.elements) ? [...frame.elements] : [])
-    .filter((el) => el.type !== 'svg' || !/<svg/i.test(String(el.svg || '')));
-  days.forEach((day, i) => elements.push(forecastIconElement(day, i, days.length, ctx)));
+  const src = Array.isArray(frame.elements) ? frame.elements : [];
+  if (!opts.preserveLayout) {
+    const elements = src.filter((el) => el.type !== 'svg' || !/<svg/i.test(String(el.svg || '')));
+    days.forEach((day, i) => elements.push(forecastIconElement(day, i, days.length, ctx)));
+    return { ...frame, elements };
+  }
+  let iconIndex = 0;
+  const elements = [];
+  for (const el of src) {
+    if (el.type === 'svg' && /<svg/i.test(String(el.svg || ''))) {
+      const day = days[iconIndex];
+      if (day) {
+        const icon = forecastIconElement(day, iconIndex, days.length, ctx);
+        elements.push({ ...icon, ...el, type: 'svg', anim: icon.anim, svg: icon.svg });
+      }
+      iconIndex++;
+      continue;
+    }
+    elements.push(el);
+  }
+  for (let i = iconIndex; i < days.length; i++) elements.push(forecastIconElement(days[i], i, days.length, ctx));
   return { ...frame, elements };
 }
 
 function repairFrameForCard(card, ctx, frame, opts = {}) {
   if (card && card.template === 'aire') return repairAirFrame(card, ctx, frame, opts);
   if (card && card.template === 'clima') return repairWeatherFrame(card, ctx, frame, opts);
-  if (card && card.template === 'prevision') return repairForecastFrame(card, ctx, frame);
+  if (card && card.template === 'prevision') return repairForecastFrame(card, ctx, frame, opts);
   return frame;
 }
 

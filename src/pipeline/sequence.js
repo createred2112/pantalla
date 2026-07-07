@@ -4,6 +4,8 @@
 // y lo sustituye al final para no dejar tandas parciales.
 const fs = require('fs');
 const path = require('path');
+const { spawnSync } = require('child_process');
+const ffmpeg = require('ffmpeg-static');
 const { active } = require('../store');
 const { cfg, paths, abs } = require('../config');
 const { slugify } = require('../util/slugify');
@@ -130,6 +132,85 @@ function allowedByProfile(ext) {
   return true;
 }
 
+function targetVideoSpec() {
+  const W = Number(cfg.screen && cfg.screen.width) || 1920;
+  const H = Number(cfg.screen && cfg.screen.height) || 1080;
+  const fps = Number(cfg.video && cfg.video.fps) || 25;
+  return { W, H, fps };
+}
+
+function parseFps(text) {
+  const m = String(text || '').match(/,\s*([0-9]+(?:\.[0-9]+)?)\s*fps\b/i);
+  if (!m) return null;
+  const n = Number(m[1]);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+function videoInfo(file) {
+  try {
+    const r = spawnSync(ffmpeg, ['-hide_banner', '-i', file], { encoding: 'utf8', windowsHide: true });
+    const text = `${r.stderr || ''}\n${r.stdout || ''}`;
+    const line = (text.match(/Stream #.*Video:[^\n]+/) || [''])[0];
+    const size = line.match(/,\s*(\d{2,5})x(\d{2,5})(?:\s|\[|,)/);
+    const codec = (line.match(/Video:\s*([^,\s]+)/i) || [])[1] || '';
+    const pixFmt = (line.match(/Video:[^,]+,\s*([^,\s]+)/i) || [])[1] || '';
+    return {
+      codec: codec.toLowerCase(),
+      pixFmt: pixFmt.toLowerCase(),
+      width: size ? Number(size[1]) : null,
+      height: size ? Number(size[2]) : null,
+      fps: parseFps(line),
+      raw: line,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function needsVideoNormalize(file) {
+  const spec = targetVideoSpec();
+  const info = videoInfo(file);
+  if (!info || !info.width || !info.height || !info.fps) return { yes: true, info };
+  const fpsDiff = Math.abs(info.fps - spec.fps);
+  return {
+    yes: info.codec !== 'h264' ||
+      !info.pixFmt.startsWith('yuv420p') ||
+      info.width !== spec.W ||
+      info.height !== spec.H ||
+      fpsDiff > 0.25,
+    info,
+  };
+}
+
+function normalizeVideoForPublish(src, dest) {
+  const { W, H, fps } = targetVideoSpec();
+  const r = spawnSync(ffmpeg, [
+    '-y', '-i', src, '-an',
+    '-vf', `scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H},setsar=1,fps=${fps},format=yuv420p`,
+    '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-profile:v', 'high', '-preset', 'veryfast', '-movflags', '+faststart',
+    dest,
+  ], { encoding: 'utf8', windowsHide: true });
+  if (r.status !== 0) {
+    const err = `${r.stderr || ''}\n${r.stdout || ''}`.trim().slice(-500);
+    throw new Error(`ffmpeg ${r.status}: ${err}`);
+  }
+}
+
+function copyForPublish(src, dest, file) {
+  if (path.extname(file).toLowerCase() !== '.mp4') {
+    fs.copyFileSync(src, dest);
+    return;
+  }
+  const check = needsVideoNormalize(src);
+  if (!check.yes) {
+    fs.copyFileSync(src, dest);
+    return;
+  }
+  const info = check.info || {};
+  log.warn('sequence', `Normalizando ${file} para pantalla (${info.width || '?'}x${info.height || '?'}, ${info.fps || '?'} fps, ${info.codec || '?'}/${info.pixFmt || '?'})`);
+  normalizeVideoForPublish(src, dest);
+}
+
 function swapPublishDir(stagingDir) {
   const parent = path.dirname(paths.publish);
   const backupDir = path.join(parent, `.publish-backup-${Date.now()}-${process.pid}`);
@@ -243,7 +324,7 @@ function sequence({ dryRun } = {}) {
   const stagingDir = path.join(path.dirname(paths.publish), `.publish-staging-${Date.now()}-${process.pid}`);
   try {
     fs.mkdirSync(stagingDir, { recursive: true });
-    for (const c of copies) fs.copyFileSync(c.src, path.join(stagingDir, c.file));
+    for (const c of copies) copyForPublish(c.src, path.join(stagingDir, c.file), c.file);
     if (includePlaylist()) writePlaylist(stagingDir, manifest);
     swapPublishDir(stagingDir);
   } catch (e) {

@@ -296,8 +296,45 @@ function save(rundown, options = {}) {
 }
 
 function saveLibrary(library, options = {}) {
-  writeJson(LIBRARY_FILE, normalizeLibrary(library));
+  const next = normalizeLibrary(library);
+  writeJson(LIBRARY_FILE, next);
+  refreshMaterializedLibraryCards(next, options);
   return read(options);
+}
+
+function sameValue(a, b) {
+  return JSON.stringify(a == null ? null : a) === JSON.stringify(b == null ? null : b);
+}
+
+function cardNeedsPatch(card, next) {
+  const keys = [
+    'enabled', 'type', 'template', 'theme', 'layout', 'video', 'videoIntro', 'videoOutro',
+    'title', 'subtitle', 'body', 'date', 'data', 'photo', 'file', 'duration',
+    'bumperKey', 'rundownLibraryKey', 'rundownWorkerKey',
+  ];
+  return keys.some((key) => !sameValue(card[key], next[key]));
+}
+
+function refreshMaterializedLibraryCards(library, options = {}) {
+  if (options.refreshCards === false) return { updated: 0 };
+  ensureFiles();
+  const date = options.date || todayKey();
+  const rundown = readJson(RUNDOWN_FILE, DEFAULT_RUNDOWN);
+  upgradeRundown(rundown);
+  const pick = pickMapFor(rundown, date);
+  const theme = dayTheme(date, rundown);
+  let updated = 0;
+  for (const slot of rundown.slots || []) {
+    const s = normalizeSlot(slot);
+    if (s.source !== 'library') continue;
+    const current = store.list().find((card) => card.source === 'rundown' && card.rundownSlot === s.id);
+    if (!current || !shouldMaterialize(s, library, date, pick)) continue;
+    const next = toCard(s, library, current.order || 999, date, pick, theme);
+    if (!cardNeedsPatch(current, next)) continue;
+    store.update(current.id, { ...next, id: current.id, order: current.order || next.order });
+    updated++;
+  }
+  return { updated };
 }
 
 function saveDay(date, pack) {

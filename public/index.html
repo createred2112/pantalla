@@ -436,6 +436,10 @@
       <span class="ico">🗓</span>
       <span class="tool-txt"><b>Nueva escaleta</b><small>Elegir los 8 huecos de pantalla</small></span>
     </button>
+    <button class="tool" id="btnBanks">
+      <span class="ico">🗂</span>
+      <span class="tool-txt"><b>Bancos</b><small>Mensajes, agenda y carruseles</small></span>
+    </button>
     <button class="tool danger" id="btnBreaking">
       <span class="ico">🚨</span>
       <span class="tool-txt"><b>Alerta urgente</b><small>Noticia rápida en pantalla</small></span>
@@ -746,7 +750,7 @@
 <!-- Escaleta -->
 <dialog id="rundownDlg">
   <div class="dlg-h">
-    <h2 style="flex:0 0 auto">Escaleta</h2>
+    <h2 id="rundownDlgTitle" style="flex:0 0 auto">Escaleta</h2>
     <div class="rd-tabs">
       <button type="button" class="rd-tab sel" data-rd-tab="seq">Guion</button>
       <button type="button" class="rd-tab" data-rd-tab="lib">Carrusel</button>

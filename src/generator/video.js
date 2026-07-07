@@ -15,7 +15,7 @@ const mediaDuration = require('../util/mediaDuration');
 const log = require('../util/logger');
 
 const MAX_RENDER_MS = Number(process.env.PANTALLA_VIDEO_TIMEOUT_MS || 55000);
-const MAX_FULL_FPS = Number(process.env.PANTALLA_VIDEO_MAX_FPS || 15);
+const MAX_FULL_FPS = Number(process.env.PANTALLA_VIDEO_MAX_FPS || 25);
 
 function timeoutError(card, phase) {
   const title = card.title || card.id || 'cartela';
@@ -238,7 +238,7 @@ function runFfmpeg(args, opts = {}) {
 
 async function encode(dir, fps, out, opts = {}) {
   await runFfmpeg(['-y', '-framerate', String(fps), '-i', path.join(dir, 'f%05d.jpg'),
-    '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'veryfast', '-movflags', '+faststart', out], opts);
+    '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-profile:v', 'high', '-preset', 'veryfast', '-movflags', '+faststart', out], opts);
   return out;
 }
 
@@ -250,7 +250,7 @@ async function normalizeClip(input, out, W, H, fps, opts = {}) {
   await runFfmpeg([
     '-y', '-i', input, '-an',
     '-vf', `scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H},setsar=1,fps=${fps},format=yuv420p`,
-    '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'veryfast', '-movflags', '+faststart',
+    '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-profile:v', 'high', '-preset', 'veryfast', '-movflags', '+faststart',
     out,
   ], opts);
   return out;
@@ -313,7 +313,7 @@ async function renderVideoToFile(card) {
   const { W, H } = ctx;
   const duration = Math.max(2, Math.min(20, Number(card.duration) || 6));
   const configuredFps = Number(cfg.video && cfg.video.fps) || 25;
-  const fps = card._previewVideo ? Math.min(12, configuredFps) : Math.min(Math.max(8, MAX_FULL_FPS), configuredFps);
+  const fps = card._previewVideo ? Math.min(12, configuredFps) : Math.min(Math.max(8, configuredFps), MAX_FULL_FPS);
   const frames = Math.round(duration * fps);
 
   const html = await buildHtml(card, ctx, tpl, frame);
