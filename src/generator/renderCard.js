@@ -276,9 +276,20 @@ function readableTextColor(color, bg, dark = '#0E0E0E', light = '#FFFFFF') {
   return contrastRatio(d, b) >= contrastRatio(l, b) ? dark : light;
 }
 
+function readableBgColor(raw, fallback) {
+  const direct = parseRgb(raw);
+  if (direct) return raw;
+  const colors = String(raw || '').match(/#[0-9a-f]{3,6}|rgba?\([^)]+\)/gi) || [];
+  const parsed = colors.map(parseRgb).filter(Boolean);
+  if (!parsed.length) return fallback;
+  const avg = parsed.reduce((acc, rgb) => acc.map((v, i) => v + rgb[i]), [0, 0, 0])
+    .map((v) => Math.round(v / parsed.length));
+  return `rgb(${avg[0]},${avg[1]},${avg[2]})`;
+}
+
 function applyReadableColor(el, ctx, bg, preferred) {
   const current = preferred || el.color || ctx.theme.accentText || '#0E0E0E';
-  const color = readableTextColor(current, bg, '#0E0E0E', '#FFFFFF');
+  const color = readableTextColor(current, readableBgColor(bg, ctx.theme.accent), '#0E0E0E', '#FFFFFF');
   const next = { ...el, color };
   if (norm(color) === norm(ctx.theme.accentText)) {
     next.colorTheme = 'accentText';
@@ -367,7 +378,7 @@ function airBodyElement(card, ctx, band, base = null) {
     colorTheme: (base && base.colorTheme) || fallback.colorTheme,
     autofit: (base && base.autofit) || fallback.autofit,
   };
-  return applyReadableColor(next, ctx, band.color || theme.accent, next.color || theme.accentText);
+  return applyReadableColor(next, ctx, band.gradient || band.color || theme.accent, next.color || theme.accentText);
 }
 
 function repairAirFrame(card, ctx, frame, opts = {}) {
