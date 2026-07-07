@@ -645,6 +645,24 @@ function rememberCardEdit(card, patch = {}) {
   return read();
 }
 
+function rememberCardDelete(card, date) {
+  if (!card || card.source !== 'rundown' || !card.rundownSlot) return null;
+  const day = String(date || todayKey()).slice(0, 10);
+  ensureFiles();
+  const data = readJson(RUNDOWN_FILE, DEFAULT_RUNDOWN);
+  upgradeRundown(data);
+  const slotId = String(card.rundownSlot);
+  const slot = (data.slots || []).find((s) => String(s.id) === slotId);
+  if (!slot) return null;
+  if (!data.days || typeof data.days !== 'object') data.days = {};
+  const rec = data.days[day] && typeof data.days[day] === 'object' ? data.days[day] : {};
+  const skip = Array.isArray(rec.skip) ? rec.skip.map(String) : [];
+  if (!skip.includes(slotId)) skip.push(slotId);
+  rec.skip = skip;
+  data.days[day] = rec;
+  return save(data, { date: day });
+}
+
 function shouldMaterialize(slot, library, date, pickMap = {}, autoPickMap = {}) {
   const s = normalizeSlot(slot);
   if (s.enabled === false) return false;
@@ -751,4 +769,4 @@ function pick(date, slotId, itemIndex, options = {}) {
   return save(data, { date: day });
 }
 
-module.exports = { read, save, saveLibrary, saveDay, reset, materialize, pick, rememberCardEdit, dayTheme, RUNDOWN_FILE, LIBRARY_FILE };
+module.exports = { read, save, saveLibrary, saveDay, reset, materialize, pick, rememberCardEdit, rememberCardDelete, dayTheme, RUNDOWN_FILE, LIBRARY_FILE };

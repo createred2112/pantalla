@@ -1331,8 +1331,12 @@ $('#list').addEventListener('click', async (e) => {
   }
   else if (b.dataset.design) location.href = '/editor.html?id=' + b.dataset.design;
   else if (b.dataset.del) {
-    if (confirm('¿Eliminar esta cartela?'))
-      api('/cards/' + b.dataset.del, { method: 'DELETE' }).then(() => { toast('Eliminada'); load(); });
+    if (confirm('¿Eliminar esta cartela?')) {
+      api('/cards/' + b.dataset.del + '?date=' + encodeURIComponent(localDatePart()), { method: 'DELETE' }).then((r) => {
+        toast(r && r.skippedToday ? 'Quitada de la emisión de hoy' : 'Eliminada');
+        load();
+      });
+    }
   }
 });
 

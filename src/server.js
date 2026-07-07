@@ -367,8 +367,11 @@ app.put('/api/cards/:id', (req, res) => {
 });
 
 app.delete('/api/cards/:id', (req, res) => {
+  const card = store.list().find((c) => c.id === req.params.id);
   const ok = store.remove(req.params.id);
+  let rundownSkip = null;
   if (ok) {
+    try { rundownSkip = rundown.rememberCardDelete(card, req.query.date); } catch (e) { log.warn('rundown', `No se pudo recordar borrado de ${req.params.id}: ${e.message}`); }
     // Limpieza: renders huérfanos de la cartela borrada.
     try {
       for (const f of fs.readdirSync(paths.output)) {
@@ -377,7 +380,7 @@ app.delete('/api/cards/:id', (req, res) => {
       renderMeta.remove(req.params.id);
     } catch {}
   }
-  res.json({ ok });
+  res.json({ ok, skippedToday: Boolean(rundownSkip) });
 });
 
 app.post('/api/cards/:id/render', async (req, res) => {
