@@ -335,7 +335,8 @@ function ensureOrder(elements, lower, upper) {
 
 function isAirBodyCandidate(el, card, band) {
   if (!el || (el.type !== 'text' && el.type !== 'chip')) return false;
-  if (el.bind === 'body' || sameText(el.text, card.body)) return true;
+  const bodyText = airBodyText(card);
+  if (el.bind === 'body' || sameText(el.text, bodyText)) return true;
   if (/peor\s+indicador|indice\s+europeo|índice\s+europeo/i.test(String(el.text || ''))) return true;
   if (!band) return false;
   const y = Number(el.y || 0), h = Number(el.h || 0);
@@ -344,9 +345,21 @@ function isAirBodyCandidate(el, card, band) {
   return overlap >= Math.min(Math.max(1, h), Math.max(1, bh)) * 0.45;
 }
 
+function airBodyText(card) {
+  const body = String(card && card.body || '').trim();
+  if (body) return body;
+  const data = (card && card.data) || {};
+  const worst = data.worstIndicator || (data.extra && data.extra.worstIndicator) || null;
+  const label = worst && String(worst.label || worst.desc || '').trim();
+  if (label) return `Peor indicador: ${label.toUpperCase()}`;
+  if (data.europeanAqi != null) return `Indice europeo: ${data.europeanAqi}`;
+  return '';
+}
+
 function airBodyElement(card, ctx, band, base = null) {
   const { W, H, theme } = ctx;
   const pad = Math.round(W * 0.05);
+  const bodyText = airBodyText(card);
   const fallback = {
     id: 'el_air_body_guard',
     type: 'text',
@@ -355,7 +368,7 @@ function airBodyElement(card, ctx, band, base = null) {
     y: band.y,
     w: W - pad * 2,
     h: band.h,
-    text: String(card.body || '').toUpperCase(),
+    text: bodyText.toUpperCase(),
     font: 'display',
     weight: 800,
     color: theme.accentText,
@@ -371,7 +384,7 @@ function airBodyElement(card, ctx, band, base = null) {
     id: (base && base.id) || fallback.id,
     type: 'text',
     bind: 'body',
-    text: String(card.body || '').toUpperCase(),
+    text: bodyText.toUpperCase(),
     font: (base && base.font) || fallback.font,
     weight: (base && base.weight) || fallback.weight,
     color: (base && base.color) || fallback.color,
@@ -382,12 +395,13 @@ function airBodyElement(card, ctx, band, base = null) {
 }
 
 function repairAirFrame(card, ctx, frame, opts = {}) {
-  if (!String(card.body || '').trim()) return frame;
+  if (!airBodyText(card)) return frame;
   const { W, H, theme } = ctx;
   let elements = Array.isArray(frame.elements) ? [...frame.elements] : [];
+  const bodyText = airBodyText(card);
   const idx = elements.findIndex((el) =>
     (el.type === 'text' || el.type === 'chip') &&
-    (el.bind === 'body' || sameText(el.text, card.body))
+    (el.bind === 'body' || sameText(el.text, bodyText))
   );
 
   if (opts.preserveLayout && idx >= 0) {
@@ -429,9 +443,11 @@ function repairAirFrame(card, ctx, frame, opts = {}) {
   } else {
     band.x = 0;
     band.w = W;
-    band.color = theme.accent;
-    band.colorTheme = 'accent';
-    delete band.colorFixed;
+    if (!opts.preserveLayout) {
+      band.color = theme.accent;
+      band.colorTheme = 'accent';
+      delete band.colorFixed;
+    }
   }
 
   const body = idx >= 0 ? airBodyElement(card, ctx, band, elements[idx]) : airBodyElement(card, ctx, band);

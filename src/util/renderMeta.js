@@ -63,7 +63,13 @@ function templateBumpersFor(card) {
 function visualData(card) {
   // La plantilla de aire no pinta los valores numéricos internos; pinta estado,
   // indicador y fuente desde title/body/date. Así puede reutilizar BUENA, etc.
-  if (card.template === 'aire') return null;
+  if (card.template === 'aire') {
+    const d = card.data || {};
+    const worst = d.worstIndicator || (d.extra && d.extra.worstIndicator) || null;
+    return !card.body && (worst || d.europeanAqi != null)
+      ? { worstIndicator: worst ? { label: worst.label || '', desc: worst.desc || '' } : null, europeanAqi: d.europeanAqi }
+      : null;
+  }
   return card.data || null;
 }
 
@@ -74,7 +80,7 @@ function renderHash(card) {
   try { tplLayout = require('../templateLayouts').get(card.template, theme.key); } catch {}
   const tplBumpers = templateBumpersFor(card);
   const src = {
-    v: 28, // subir al cambiar el diseño de las plantillas en código
+    v: 29, // subir al cambiar el diseño de las plantillas en código
     template: card.template || '',
     theme,
     layout: card.layout || null,
