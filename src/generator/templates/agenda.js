@@ -54,7 +54,11 @@ module.exports = {
     const items = String(card.body || '').split(/\r?\n/).map((s) => s.trim()).filter(Boolean).slice(0, 3)
       .map((l) => {
         const p = l.split('|').map((x) => x.trim());
-        if (p.length > 1) return { time: p[0] || '', name: (p[1] || p[0] || '').toUpperCase(), venue: (p[2] || '').toUpperCase() };
+        if (p.length > 1) return {
+          time: p[0] || '',
+          name: (p[1] || p[0] || '').toUpperCase(),
+          venue: (p.length >= 4 ? [p[2], p[3]].filter(Boolean).join(' · ') : (p[2] || '')).toUpperCase(),
+        };
         const m = l.match(/^(\d{1,2}[:.]\d{2})\s+(.+)$/);
         if (m) return { time: m[1].replace('.', ':'), name: m[2].toUpperCase(), venue: '' };
         return { time: '', name: l.toUpperCase(), venue: '' };

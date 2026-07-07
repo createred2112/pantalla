@@ -2049,14 +2049,14 @@ function blankAgendaLibraryItem() {
 }
 
 function agendaEventId(ev) {
-  const raw = `${ev && ev.time || ''}|${ev && ev.title || ''}|${ev && ev.place || ''}`.toLowerCase();
+  const raw = `${ev && ev.time || ''}|${ev && ev.title || ''}|${ev && ev.subtitle || ''}|${ev && ev.place || ''}`.toLowerCase();
   let hash = 0;
   for (const ch of raw) hash = ((hash * 31) + ch.charCodeAt(0)) >>> 0;
   return 'evt_' + hash.toString(36);
 }
 
 function blankAgendaBankEvent() {
-  return { id: 'evt_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), time: '', title: '', place: '', notes: '', enabled: true };
+  return { id: 'evt_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), time: '', title: '', subtitle: '', place: '', notes: '', enabled: true };
 }
 
 function ensureAgendaBank() {
@@ -2070,7 +2070,8 @@ function ensureAgendaBank() {
 }
 
 function agendaEventLine(ev) {
-  return [ev.time, ev.title, ev.place].map((x) => String(x || '').trim()).filter(Boolean).join(' | ');
+  const detail = [ev.subtitle, ev.place].map((x) => String(x || '').trim()).filter(Boolean).join(' · ');
+  return [ev.time, ev.title, detail].map((x) => String(x || '').trim()).filter(Boolean).join(' | ');
 }
 
 function agendaResolvedBody(item) {
@@ -2086,7 +2087,35 @@ function agendaResolvedBody(item) {
 }
 
 function agendaBankLabel(ev) {
-  return [ev.time, ev.title, ev.place].map((x) => String(x || '').trim()).filter(Boolean).join(' · ') || '(evento sin rellenar)';
+  return [ev.time, ev.title, ev.subtitle, ev.place].map((x) => String(x || '').trim()).filter(Boolean).join(' · ') || '(evento sin rellenar)';
+}
+
+function agendaLineToEvent(line) {
+  const parts = String(line || '').split('|').map((x) => x.trim());
+  const ev = blankAgendaBankEvent();
+  ev.time = parts.length >= 3 ? parts[0] : '';
+  ev.title = parts.length >= 3 ? parts[1] : (parts[0] || '');
+  ev.subtitle = parts.length >= 4 ? parts[2] : '';
+  ev.place = parts.length >= 4 ? parts[3] : (parts.length >= 3 ? parts[2] : (parts[1] || ''));
+  ev.id = agendaEventId(ev);
+  return ev.title ? ev : null;
+}
+
+function syncAgendaBankFromBlocks() {
+  if (!RUNDOWN || !RUNDOWN.library || !Array.isArray(RUNDOWN.library.agendaEventos)) return;
+  const bank = ensureAgendaBank();
+  const byId = new Map(bank.map((ev) => [String(ev.id), ev]));
+  RUNDOWN.library.agendaEventos.forEach((item) => {
+    if (Array.isArray(item.eventIds) && item.eventIds.length) return;
+    const ids = [];
+    String(item.body || '').split(/\r?\n/).forEach((line) => {
+      const ev = agendaLineToEvent(line);
+      if (!ev) return;
+      if (!byId.has(ev.id)) { bank.push(ev); byId.set(ev.id, ev); }
+      ids.push(ev.id);
+    });
+    if (ids.length) item.eventIds = ids;
+  });
 }
 
 function clientDayNumber(date) {
@@ -2334,7 +2363,7 @@ function agendaTimelineDayHtml(items, date, dayIndex) {
     </button>`;
   }).join('');
   return `<div class="agenda-day ${dayIndex === 0 ? 'today' : ''}">
-    <div class="agenda-day-title"><b>${esc(fmtShortDate(date))}</b><span>${blocks.length} bloque(s)</span></div>
+    <div class="agenda-day-title"><b>${esc(fmtShortDate(date))}</b><span>${blocks.length} momento(s)</span></div>
     <div class="agenda-time-scroll">
       <div class="agenda-time-scale">${markers.join('')}</div>
       <div class="agenda-time-track" style="height:${Math.max(70, lanes.length * 54 + 8)}px">${gapHtml}${blockHtml}</div>
@@ -2348,7 +2377,7 @@ function renderAgendaTimeline(items, date) {
   const dates = agendaDatesFrom(date);
   const hasBlocks = dates.some((d) => (items || []).some((item, idx) => agendaRangeForDay(item, d, idx)));
   if (!hasBlocks) {
-    box.innerHTML = `<div class="agenda-timeline"><div class="status"><b>Sin bloques visibles en los próximos ${dates.length} días.</b> Añade un bloque de agenda para ver la línea de tiempo.</div></div>`;
+    box.innerHTML = `<div class="agenda-timeline"><div class="status"><b>Sin momentos visibles en los próximos ${dates.length} días.</b> Añade un momento en pantalla para ver la línea de tiempo.</div></div>`;
     return;
   }
   box.innerHTML = `<div class="agenda-timeline">
@@ -2358,10 +2387,12 @@ function renderAgendaTimeline(items, date) {
 }
 
 function renderAgendaBankPanel() {
+  syncAgendaBankFromBlocks();
   const bank = ensureAgendaBank();
   const rows = bank.length ? bank.map((ev, i) => `<div class="agenda-bank-row ${ev.enabled === false ? 'off' : ''}" data-agenda-bank-item="${i}">
       <label>Hora<input data-agenda-bank-field="time" value="${esc(ev.time || '')}" placeholder="19:30"></label>
       <label>Evento<input data-agenda-bank-field="title" value="${esc(ev.title || '')}" placeholder="Nombre del evento"></label>
+      <label>Subtítulo<input data-agenda-bank-field="subtitle" value="${esc(ev.subtitle || '')}" placeholder="Tipo, compañía..."></label>
       <label>Lugar<input data-agenda-bank-field="place" value="${esc(ev.place || '')}" placeholder="Lugar"></label>
       <label>Notas<input data-agenda-bank-field="notes" value="${esc(ev.notes || '')}" placeholder="Interno"></label>
       <label class="chk"><input type="checkbox" data-agenda-bank-field="enabled" ${ev.enabled !== false ? 'checked' : ''}> Activo</label>
@@ -2382,23 +2413,26 @@ function renderLibraryPanel() {
   $('#libraryCategory').innerHTML = keys.map((meta) => `<option value="${esc(meta.key)}" ${meta.key === LIBRARY_CATEGORY ? 'selected' : ''}>${esc(meta.label)}</option>`).join('');
   const meta = currentLibraryMeta();
   const isAgenda = meta.key === 'agendaEventos';
+  if (isAgenda) syncAgendaBankFromBlocks();
   const items = (RUNDOWN.library && Array.isArray(RUNDOWN.library[meta.key])) ? RUNDOWN.library[meta.key] : [];
   const activeDate = RUNDOWN.activeDate || localDatePart();
   const eligible = items.filter((item) => clientItemApplies(item, activeDate)).length;
   const viewItems = isAgenda ? agendaViewItems(items, activeDate) : items.map((item, i) => ({ item, i }));
   const libTitle = document.querySelector('#rdTabLib .library-head h3');
   if (libTitle) libTitle.textContent = isAgenda ? 'Agenda viva' : 'Carrusel';
-  $('#btnLibraryAdd').textContent = isAgenda ? '＋ Añadir bloque de agenda' : '＋ Añadir pieza';
-  $('#btnLibraryAdd').title = isAgenda ? 'Crea una tarjeta nueva de Agenda viva con horario propio.' : 'Añade una pieza a este carrusel.';
+  $('#btnLibraryAdd').textContent = isAgenda ? '＋ Añadir momento en pantalla' : '＋ Añadir pieza';
+  $('#btnLibraryAdd').title = isAgenda ? 'Crea una aparición de agenda con horario propio usando eventos guardados.' : 'Añade una pieza a este carrusel.';
   $('#librarySummary').innerHTML =
     isAgenda
-      ? `<b>${items.length}</b> bloque(s) de agenda · <b style="color:${eligible ? '#bff0d5' : '#ffd98a'}">${eligible}</b> pueden salir el ${esc(fmtShortDate(activeDate))}`
+      ? `<b>${items.length}</b> momento(s) de agenda · <b style="color:${eligible ? '#bff0d5' : '#ffd98a'}">${eligible}</b> pueden salir el ${esc(fmtShortDate(activeDate))}`
       : `<b>${items.length}</b> pieza(s) en esta categoría · <b style="color:${eligible ? '#bff0d5' : '#ffd98a'}">${eligible}</b> pueden salir el ${esc(fmtShortDate(activeDate))}`;
   if (isAgenda) renderAgendaTimeline(items, activeDate);
   else renderPlanner();
   const listHtml = items.length ? viewItems.map(({ item, i }) => libraryItemHtml(meta, item, i)).join('') :
-    `<div class="empty">Esta categoría está vacía. ${isAgenda ? 'Añade un bloque de agenda.' : 'Añade una pieza o importa un lote.'}</div>`;
-  $('#libraryList').innerHTML = (isAgenda ? renderAgendaBankPanel() : '') + listHtml;
+    `<div class="empty">Esta categoría está vacía. ${isAgenda ? 'Añade un momento en pantalla.' : 'Añade una pieza o importa un lote.'}</div>`;
+  $('#libraryList').innerHTML = isAgenda
+    ? renderAgendaBankPanel() + `<div class="agenda-moments-head"><b>Momentos en pantalla</b><span>Elige cuándo sale cada grupo de eventos.</span></div>` + listHtml
+    : listHtml;
 }
 
 function weekdayBox(item, n, label) {
@@ -2419,6 +2453,14 @@ function agendaEventPickerHtml(item, index, scope) {
   </div>`;
 }
 
+function agendaSelectedEventsHtml(item) {
+  const ids = Array.isArray(item && item.eventIds) ? item.eventIds.map(String) : [];
+  const bank = new Map(ensureAgendaBank().map((ev) => [String(ev.id), ev]));
+  const selected = ids.map((id) => bank.get(id)).filter(Boolean);
+  if (!selected.length) return '<div class="agenda-selected empty">Sin eventos elegidos para este momento.</div>';
+  return `<div class="agenda-selected">${selected.map((ev) => `<span>${esc(agendaBankLabel(ev))}</span>`).join('')}</div>`;
+}
+
 function libraryItemHtml(meta, item, i) {
   const isAgenda = meta.key === 'agendaEventos';
   const isCurious = meta.key === 'datosCuriosos';
@@ -2427,7 +2469,7 @@ function libraryItemHtml(meta, item, i) {
   const agendaBody = isAgenda ? agendaResolvedBody(item) : '';
   const head = `<button type="button" class="lib-row" data-lib-open="${i}">
       <span class="lib-dot ${item.enabled !== false ? 'on' : ''}"></span>
-      <span class="lib-title">${esc(item.title || agendaBody || item.body || (isAgenda ? '(bloque de agenda sin rellenar)' : '(sin título)'))}</span>
+      <span class="lib-title">${esc(item.title || agendaBody || item.body || (isAgenda ? '(momento de agenda sin eventos)' : '(sin título)'))}</span>
       <span class="lib-when">${esc(scheduleSummary(item))}</span>
     </button>`;
   if (i !== LIB_OPEN) {
@@ -2441,11 +2483,18 @@ function libraryItemHtml(meta, item, i) {
         <label>${isAgenda ? 'Cabecera' : 'Título'}<input data-lib-field="title" value="${esc(item.title || '')}" placeholder="${isAgenda ? 'Agenda, Ahora en..., Mañana...' : (isMeteo ? 'Alerta naranja' : '')}"></label>
         <label>${subtitleLabel}<input data-lib-field="subtitle" value="${esc(item.subtitle || '')}" placeholder="${isAgenda ? 'Hoy, Mañana, Festival...' : (isCurious ? 'Lo que quieras que aparezca arriba' : '')}"></label>
       </div>
-      <label>${isAgenda ? 'Eventos del bloque' : 'Texto'}
-        ${isAgenda ? '<div class="agenda-format"><b>Formato:</b> Hora | Evento | Lugar <button type="button" class="ghost" data-lib-pipe>Insertar separador |</button></div>' : ''}
-        <textarea data-lib-field="body" placeholder="${isAgenda ? '21:00 | Concierto | Plaza Nueva\\n22:30 | DJ set | Casco Viejo' : (isMeteo ? 'Evita actividad física en las horas centrales y bebe agua con frecuencia.' : '')}">${esc(isAgenda ? agendaBody : (item.body || ''))}</textarea>
-      </label>
-      ${isAgenda ? agendaEventPickerHtml(item, i, 'lib') : ''}
+      ${isAgenda ? `<div class="agenda-block-chooser">
+        <b>Eventos elegidos</b>
+        ${agendaSelectedEventsHtml(item)}
+        ${agendaEventPickerHtml(item, i, 'lib')}
+        <details class="agenda-manual">
+          <summary>Texto manual avanzado</summary>
+          <div class="agenda-format"><b>Formato:</b> Hora | Evento | Subtítulo/lugar <button type="button" class="ghost" data-lib-pipe>Insertar separador |</button></div>
+          <textarea data-lib-field="body" placeholder="21:00 | Concierto | Plaza Nueva">${esc(agendaBody || item.body || '')}</textarea>
+        </details>
+      </div>` : `<label>Texto
+        <textarea data-lib-field="body" placeholder="${isMeteo ? 'Evita actividad física en las horas centrales y bebe agua con frecuencia.' : ''}">${esc(item.body || '')}</textarea>
+      </label>`}
       <label>¿Cuándo sale?
         <select data-lib-mode>
           <option value="always" ${!sched ? 'selected' : ''}>Cada día / cuando lo marque yo (sin hora fija)</option>
@@ -2749,11 +2798,16 @@ function agendaMomentHtml(m, i) {
       <label>Etiqueta<input data-wz-agenda-field="subtitle" value="${esc(m.subtitle || '')}" placeholder="Hoy, Mañana, Ahora en..."></label>
       <label>Empieza a salir<input type="datetime-local" data-wz-agenda-field="startAt" value="${esc(m.startAt || '')}"></label>
       <label>Deja de salir<input type="datetime-local" data-wz-agenda-field="endAt" value="${esc(m.endAt || '')}"></label>
-      <label class="agenda-wide">Eventos que verá la pantalla
-        <div class="agenda-format"><b>Formato:</b> Hora | Evento | Lugar <button type="button" class="ghost" data-wz-agenda-pipe="${i}">Insertar separador |</button></div>
-        <textarea data-wz-agenda-field="body" placeholder="21:00 | Concierto en la Virgen Blanca | Casco Viejo&#10;22:30 | DJ set | Plaza Nueva">${esc(body || '')}</textarea>
-      </label>
-      <div class="agenda-wide">${agendaEventPickerHtml(m, i, 'wz')}</div>
+      <div class="agenda-wide agenda-block-chooser">
+        <b>Eventos elegidos</b>
+        ${agendaSelectedEventsHtml(m)}
+        ${agendaEventPickerHtml(m, i, 'wz')}
+        <details class="agenda-manual">
+          <summary>Texto manual avanzado</summary>
+          <div class="agenda-format"><b>Formato:</b> Hora | Evento | Subtítulo/lugar <button type="button" class="ghost" data-wz-agenda-pipe="${i}">Insertar separador |</button></div>
+          <textarea data-wz-agenda-field="body" placeholder="21:00 | Concierto en la Virgen Blanca | Casco Viejo">${esc(body || '')}</textarea>
+        </details>
+      </div>
     </div>
   </div>`;
 }
@@ -2767,6 +2821,7 @@ function renderAgendaWizard() {
       <div class="agenda-bank-row wz-event-new">
         <label>Hora<input data-wz-bank-new="time" placeholder="19:30"></label>
         <label>Evento<input data-wz-bank-new="title" placeholder="Nombre del evento"></label>
+        <label>Subtítulo<input data-wz-bank-new="subtitle" placeholder="Tipo, compañía..."></label>
         <label>Lugar<input data-wz-bank-new="place" placeholder="Lugar"></label>
         <button type="button" class="ghost" data-wz-bank-add>Guardar evento</button>
       </div>
@@ -3320,7 +3375,7 @@ $('#btnLibraryAdd').addEventListener('click', () => {
   rdSetDirty(true);
   renderLibraryPanel();
   if (meta.key === 'agendaEventos') {
-    toast('Bloque de agenda añadido: rellena eventos y guarda cambios');
+    toast('Momento de agenda añadido: elige eventos y guarda cambios');
     const open = $('#libraryList').querySelector(`[data-lib-item="${LIB_OPEN}"]`);
     if (open) open.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }

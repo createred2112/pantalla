@@ -145,7 +145,7 @@ function normalizeLibraryItem(item, defaults) {
 }
 
 function agendaEventId(item) {
-  const raw = `${item && item.time || ''}|${item && item.title || ''}|${item && item.place || ''}`.toLowerCase();
+  const raw = `${item && item.time || ''}|${item && item.title || ''}|${item && item.subtitle || ''}|${item && item.place || ''}`.toLowerCase();
   let hash = 0;
   for (const ch of raw) hash = ((hash * 31) + ch.charCodeAt(0)) >>> 0;
   return `evt_${hash.toString(36)}`;
@@ -157,6 +157,7 @@ function normalizeAgendaEvent(item) {
     id: String(ev.id || agendaEventId(ev)),
     time: String(ev.time || '').trim(),
     title: String(ev.title || ev.name || '').trim(),
+    subtitle: String(ev.subtitle || '').trim(),
     place: String(ev.place || ev.location || '').trim(),
     notes: String(ev.notes || '').trim(),
     enabled: ev.enabled !== false,
@@ -169,13 +170,15 @@ function agendaLineToEvent(line) {
   const ev = normalizeAgendaEvent({
     time: parts.length >= 3 ? parts[0] : '',
     title: parts.length >= 3 ? parts[1] : (parts[0] || ''),
-    place: parts.length >= 3 ? parts[2] : (parts[1] || ''),
+    subtitle: parts.length >= 4 ? parts[2] : '',
+    place: parts.length >= 4 ? parts[3] : (parts.length >= 3 ? parts[2] : (parts[1] || '')),
   });
   return ev.title ? ev : null;
 }
 
 function agendaEventLine(ev) {
-  return [ev.time, ev.title, ev.place].map((x) => String(x || '').trim()).filter(Boolean).join(' | ');
+  const detail = [ev.subtitle, ev.place].map((x) => String(x || '').trim()).filter(Boolean).join(' · ');
+  return [ev.time, ev.title, detail].map((x) => String(x || '').trim()).filter(Boolean).join(' | ');
 }
 
 function dayNumber(date) {
