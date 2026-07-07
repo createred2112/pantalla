@@ -34,6 +34,7 @@ const DEFAULT_LIBRARY = {
   comentariosSemana: [
     { title: 'La conversación también es ciudad.', subtitle: 'Comentario de la semana', body: 'Selecciona aquí un comentario destacado de GasteizBerri.', template: 'cita', theme: 'carbon' },
   ],
+  agendaBanco: [],
   agendaEventos: [
     { title: 'Agenda', subtitle: 'Hoy', body: '19:30 | Actividad pendiente | Lugar\n20:00 | Añade eventos | Vitoria-Gasteiz', template: 'agenda', theme: 'blanco' },
   ],
@@ -139,7 +140,42 @@ function normalizeLibraryItem(item, defaults) {
     dates: dates.map((d) => String(d).trim()).filter(Boolean),
     weekdays: weekdays.map((d) => Number(d)).filter((n) => n >= 1 && n <= 7),
     notes: String((item && item.notes) || ''),
+    eventIds: Array.isArray(item && item.eventIds) ? item.eventIds.map(String).filter(Boolean) : [],
   };
+}
+
+function agendaEventId(item) {
+  const raw = `${item && item.time || ''}|${item && item.title || ''}|${item && item.place || ''}`.toLowerCase();
+  let hash = 0;
+  for (const ch of raw) hash = ((hash * 31) + ch.charCodeAt(0)) >>> 0;
+  return `evt_${hash.toString(36)}`;
+}
+
+function normalizeAgendaEvent(item) {
+  const ev = item && typeof item === 'object' ? item : {};
+  const next = {
+    id: String(ev.id || agendaEventId(ev)),
+    time: String(ev.time || '').trim(),
+    title: String(ev.title || ev.name || '').trim(),
+    place: String(ev.place || ev.location || '').trim(),
+    notes: String(ev.notes || '').trim(),
+    enabled: ev.enabled !== false,
+  };
+  return next;
+}
+
+function agendaLineToEvent(line) {
+  const parts = String(line || '').split('|').map((x) => x.trim());
+  const ev = normalizeAgendaEvent({
+    time: parts.length >= 3 ? parts[0] : '',
+    title: parts.length >= 3 ? parts[1] : (parts[0] || ''),
+    place: parts.length >= 3 ? parts[2] : (parts[1] || ''),
+  });
+  return ev.title ? ev : null;
+}
+
+function agendaEventLine(ev) {
+  return [ev.time, ev.title, ev.place].map((x) => String(x || '').trim()).filter(Boolean).join(' | ');
 }
 
 function dayNumber(date) {
@@ -186,18 +222,33 @@ function itemApplies(item, date) {
 function normalizeLibrary(library) {
   const src = library && typeof library === 'object' ? library : {};
   const next = { days: src.days && typeof src.days === 'object' ? src.days : {} };
+  next.agendaBanco = (Array.isArray(src.agendaBanco) ? src.agendaBanco : [])
+    .map(normalizeAgendaEvent)
+    .filter((item) => item.title);
   for (const meta of LIBRARY_KEYS) {
     const base = Array.isArray(src[meta.key])
       ? src[meta.key]
       : (meta.key === 'agendaEventos' ? [] : DEFAULT_LIBRARY[meta.key]);
-    next[meta.key] = (base || []).map((item) => normalizeLibraryItem(item, meta)).filter((item) => item.title || item.body);
+    next[meta.key] = (base || [])
+      .map((item) => normalizeLibraryItem(item, meta))
+      .filter((item) => item.title || item.body || (item.eventIds && item.eventIds.length));
+  }
+  if (!next.agendaBanco.length && Array.isArray(next.agendaEventos)) {
+    const byKey = new Map();
+    for (const item of next.agendaEventos) {
+      for (const line of String(item.body || '').split(/\r?\n/)) {
+        const ev = agendaLineToEvent(line);
+        if (ev && !byKey.has(ev.id)) byKey.set(ev.id, ev);
+      }
+    }
+    next.agendaBanco = [...byKey.values()];
   }
   for (const [date, pack] of Object.entries(next.days)) {
     const clean = {};
     for (const meta of LIBRARY_KEYS) {
       clean[meta.key] = (Array.isArray(pack && pack[meta.key]) ? pack[meta.key] : [])
         .map((item) => normalizeLibraryItem(item, meta))
-        .filter((item) => item.title || item.body);
+        .filter((item) => item.title || item.body || (item.eventIds && item.eventIds.length));
     }
     next.days[date] = clean;
   }
@@ -212,13 +263,26 @@ function dailyPack(library, date) {
   return clean;
 }
 
+function resolveAgendaItem(item, library) {
+  const ids = Array.isArray(item && item.eventIds) ? item.eventIds.map(String).filter(Boolean) : [];
+  if (!ids.length) return item;
+  const bank = new Map((library.agendaBanco || []).map((ev) => [String(ev.id), ev]));
+  const lines = ids
+    .map((id) => bank.get(id))
+    .filter((ev) => ev && ev.enabled !== false)
+    .map(agendaEventLine)
+    .filter(Boolean);
+  return { ...item, body: lines.join('\n') || item.body || '' };
+}
+
 function libraryItems(library, key, date) {
   const lib = normalizeLibrary(library);
   const daily = lib.days[date] && Array.isArray(lib.days[date][key]) ? lib.days[date][key] : [];
   const pool = Array.isArray(lib[key]) ? lib[key] : [];
   const exact = pool.filter((item) => item.enabled !== false && item.dates && item.dates.includes(date) && itemApplies(item, date));
   const scheduled = exact.length ? exact : pool.filter((item) => itemApplies(item, date));
-  return [...daily, ...scheduled];
+  const items = [...daily, ...scheduled];
+  return key === 'agendaEventos' ? items.map((item) => resolveAgendaItem(item, lib)) : items;
 }
 
 function read(options = {}) {

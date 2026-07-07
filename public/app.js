@@ -2044,7 +2044,49 @@ function blankAgendaLibraryItem() {
     theme: 'blanco',
     startAt: '',
     endAt: '',
+    eventIds: [],
   };
+}
+
+function agendaEventId(ev) {
+  const raw = `${ev && ev.time || ''}|${ev && ev.title || ''}|${ev && ev.place || ''}`.toLowerCase();
+  let hash = 0;
+  for (const ch of raw) hash = ((hash * 31) + ch.charCodeAt(0)) >>> 0;
+  return 'evt_' + hash.toString(36);
+}
+
+function blankAgendaBankEvent() {
+  return { id: 'evt_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), time: '', title: '', place: '', notes: '', enabled: true };
+}
+
+function ensureAgendaBank() {
+  if (!RUNDOWN.library) RUNDOWN.library = {};
+  if (!Array.isArray(RUNDOWN.library.agendaBanco)) RUNDOWN.library.agendaBanco = [];
+  RUNDOWN.library.agendaBanco.forEach((ev) => {
+    if (!ev.id) ev.id = agendaEventId(ev);
+    if (ev.enabled == null) ev.enabled = true;
+  });
+  return RUNDOWN.library.agendaBanco;
+}
+
+function agendaEventLine(ev) {
+  return [ev.time, ev.title, ev.place].map((x) => String(x || '').trim()).filter(Boolean).join(' | ');
+}
+
+function agendaResolvedBody(item) {
+  const ids = Array.isArray(item && item.eventIds) ? item.eventIds.map(String) : [];
+  if (!ids.length) return String(item && item.body || '');
+  const bank = new Map(ensureAgendaBank().map((ev) => [String(ev.id), ev]));
+  const lines = ids
+    .map((id) => bank.get(id))
+    .filter((ev) => ev && ev.enabled !== false)
+    .map(agendaEventLine)
+    .filter(Boolean);
+  return lines.join('\n') || String(item && item.body || '');
+}
+
+function agendaBankLabel(ev) {
+  return [ev.time, ev.title, ev.place].map((x) => String(x || '').trim()).filter(Boolean).join(' · ') || '(evento sin rellenar)';
 }
 
 function clientDayNumber(date) {
@@ -2216,7 +2258,8 @@ function clientLibraryItems(lib, key, date) {
   const pool = Array.isArray(lib[key]) ? lib[key] : [];
   const exact = pool.filter((it) => it.enabled !== false && Array.isArray(it.dates) && it.dates.includes(date) && clientItemApplies(it, date));
   const scheduled = exact.length ? exact : pool.filter((it) => clientItemApplies(it, date));
-  return [...daily, ...scheduled];
+  const items = [...daily, ...scheduled];
+  return key === 'agendaEventos' ? items.map((it) => ({ ...it, body: agendaResolvedBody(it) })) : items;
 }
 
 // Planificador: qué pieza saldrá en cada bloque programado los próximos 7 días.
@@ -2314,6 +2357,25 @@ function renderAgendaTimeline(items, date) {
   </div>`;
 }
 
+function renderAgendaBankPanel() {
+  const bank = ensureAgendaBank();
+  const rows = bank.length ? bank.map((ev, i) => `<div class="agenda-bank-row ${ev.enabled === false ? 'off' : ''}" data-agenda-bank-item="${i}">
+      <label>Hora<input data-agenda-bank-field="time" value="${esc(ev.time || '')}" placeholder="19:30"></label>
+      <label>Evento<input data-agenda-bank-field="title" value="${esc(ev.title || '')}" placeholder="Nombre del evento"></label>
+      <label>Lugar<input data-agenda-bank-field="place" value="${esc(ev.place || '')}" placeholder="Lugar"></label>
+      <label>Notas<input data-agenda-bank-field="notes" value="${esc(ev.notes || '')}" placeholder="Interno"></label>
+      <label class="chk"><input type="checkbox" data-agenda-bank-field="enabled" ${ev.enabled !== false ? 'checked' : ''}> Activo</label>
+      <button type="button" class="ghost" data-agenda-bank-del="${i}">Quitar</button>
+    </div>`).join('') : '<div class="hint">No hay eventos guardados todavía.</div>';
+  return `<div class="agenda-bank">
+    <div class="agenda-bank-head">
+      <div><b>Banco de eventos</b><span>Guarda cada evento una vez y úsalo en tantos bloques como quieras.</span></div>
+      <button type="button" class="ghost" data-agenda-bank-add>Añadir evento</button>
+    </div>
+    ${rows}
+  </div>`;
+}
+
 function renderLibraryPanel() {
   const keys = RUNDOWN.libraryKeys || [];
   if (!keys.some((x) => x.key === LIBRARY_CATEGORY) && keys[0]) LIBRARY_CATEGORY = keys[0].key;
@@ -2334,8 +2396,9 @@ function renderLibraryPanel() {
       : `<b>${items.length}</b> pieza(s) en esta categoría · <b style="color:${eligible ? '#bff0d5' : '#ffd98a'}">${eligible}</b> pueden salir el ${esc(fmtShortDate(activeDate))}`;
   if (isAgenda) renderAgendaTimeline(items, activeDate);
   else renderPlanner();
-  $('#libraryList').innerHTML = items.length ? viewItems.map(({ item, i }) => libraryItemHtml(meta, item, i)).join('') :
+  const listHtml = items.length ? viewItems.map(({ item, i }) => libraryItemHtml(meta, item, i)).join('') :
     `<div class="empty">Esta categoría está vacía. ${isAgenda ? 'Añade un bloque de agenda.' : 'Añade una pieza o importa un lote.'}</div>`;
+  $('#libraryList').innerHTML = (isAgenda ? renderAgendaBankPanel() : '') + listHtml;
 }
 
 function weekdayBox(item, n, label) {
@@ -2343,14 +2406,28 @@ function weekdayBox(item, n, label) {
   return `<label><input type="checkbox" data-lib-weekday="${n}" ${on ? 'checked' : ''}>${label}</label>`;
 }
 
+function agendaEventPickerHtml(item, index, scope) {
+  const bank = ensureAgendaBank().filter((ev) => ev.title || ev.time || ev.place);
+  if (!bank.length) return '<div class="agenda-event-picker"><div class="hint">Añade eventos al banco para poder insertarlos aquí.</div></div>';
+  const ids = new Set(Array.isArray(item && item.eventIds) ? item.eventIds.map(String) : []);
+  return `<div class="agenda-event-picker">
+    <b>Usar eventos del banco</b>
+    <div class="agenda-event-buttons">${bank.map((ev) => {
+      const on = ids.has(String(ev.id));
+      return `<button type="button" class="ghost ${on ? 'on' : ''}" data-agenda-event-toggle="${esc(scope)}:${index}:${esc(ev.id)}">${on ? '✓ ' : '+ '}${esc(agendaBankLabel(ev))}</button>`;
+    }).join('')}</div>
+  </div>`;
+}
+
 function libraryItemHtml(meta, item, i) {
   const isAgenda = meta.key === 'agendaEventos';
   const isCurious = meta.key === 'datosCuriosos';
   const isMeteo = meta.key === 'avisosMeteorologicos' || meta.key === 'consejosMeteorologicos';
   const subtitleLabel = isAgenda ? 'Etiqueta' : (isCurious ? 'Cabecera superior' : (isMeteo ? 'Riesgo o tipo de aviso' : 'Firma/sección'));
+  const agendaBody = isAgenda ? agendaResolvedBody(item) : '';
   const head = `<button type="button" class="lib-row" data-lib-open="${i}">
       <span class="lib-dot ${item.enabled !== false ? 'on' : ''}"></span>
-      <span class="lib-title">${esc(item.title || item.body || (isAgenda ? '(bloque de agenda sin rellenar)' : '(sin título)'))}</span>
+      <span class="lib-title">${esc(item.title || agendaBody || item.body || (isAgenda ? '(bloque de agenda sin rellenar)' : '(sin título)'))}</span>
       <span class="lib-when">${esc(scheduleSummary(item))}</span>
     </button>`;
   if (i !== LIB_OPEN) {
@@ -2366,8 +2443,9 @@ function libraryItemHtml(meta, item, i) {
       </div>
       <label>${isAgenda ? 'Eventos del bloque' : 'Texto'}
         ${isAgenda ? '<div class="agenda-format"><b>Formato:</b> Hora | Evento | Lugar <button type="button" class="ghost" data-lib-pipe>Insertar separador |</button></div>' : ''}
-        <textarea data-lib-field="body" placeholder="${isAgenda ? '21:00 | Concierto | Plaza Nueva\\n22:30 | DJ set | Casco Viejo' : (isMeteo ? 'Evita actividad física en las horas centrales y bebe agua con frecuencia.' : '')}">${esc(item.body || '')}</textarea>
+        <textarea data-lib-field="body" placeholder="${isAgenda ? '21:00 | Concierto | Plaza Nueva\\n22:30 | DJ set | Casco Viejo' : (isMeteo ? 'Evita actividad física en las horas centrales y bebe agua con frecuencia.' : '')}">${esc(isAgenda ? agendaBody : (item.body || ''))}</textarea>
       </label>
+      ${isAgenda ? agendaEventPickerHtml(item, i, 'lib') : ''}
       <label>¿Cuándo sale?
         <select data-lib-mode>
           <option value="always" ${!sched ? 'selected' : ''}>Cada día / cuando lo marque yo (sin hora fija)</option>
@@ -2470,6 +2548,23 @@ function collectLibraryCategory() {
   if (mode && mode.value === 'always') { obj.start = ''; obj.end = ''; obj.startAt = ''; obj.endAt = ''; obj.dates = []; obj.weekdays = []; }
 }
 
+function collectAgendaBank() {
+  if (!RUNDOWN || !RUNDOWN.library) return;
+  const rows = [...document.querySelectorAll('[data-agenda-bank-item]')];
+  if (!rows.length) return;
+  RUNDOWN.library.agendaBanco = rows.map((row) => {
+    const i = Number(row.dataset.agendaBankItem);
+    const prev = ensureAgendaBank()[i] || blankAgendaBankEvent();
+    const next = { ...prev };
+    row.querySelectorAll('[data-agenda-bank-field]').forEach((field) => {
+      const key = field.dataset.agendaBankField;
+      next[key] = field.type === 'checkbox' ? field.checked : field.value;
+    });
+    if (!next.id) next.id = agendaEventId(next);
+    return next;
+  }).filter((ev) => ev.title || ev.time || ev.place);
+}
+
 function sortAgendaLibraryForSave(startDate) {
   if (!RUNDOWN || !RUNDOWN.library || !Array.isArray(RUNDOWN.library.agendaEventos)) return;
   const openItem = RUNDOWN.library.agendaEventos[LIB_OPEN] || null;
@@ -2517,6 +2612,7 @@ async function saveAllRundown(opts = {}) {
   const date = $('#rundownDate').value || localDatePart();
   const libraryOnly = opts.libraryOnly === true || RUNDOWN_MODE === 'library';
   if (!libraryOnly) collectRundown();
+  collectAgendaBank();
   collectLibraryCategory();
   sortAgendaLibraryForSave(date);
   const lib = RUNDOWN.library;
@@ -2629,12 +2725,13 @@ function initialAgendaMoments() {
 
 function agendaMomentSummary(m) {
   const when = scheduleSummary({ enabled: true, startAt: m.startAt, endAt: m.endAt, start: m.start, end: m.end, dates: m.dates || [] });
-  const lines = String(m.body || '').split(/\r?\n/).filter((x) => x.trim()).length;
+  const lines = String(agendaResolvedBody(m) || '').split(/\r?\n/).filter((x) => x.trim()).length;
   return `${when} · ${lines || 0} evento(s)`;
 }
 
 function agendaMomentHtml(m, i) {
   const live = clientItemApplies({ enabled: true, startAt: m.startAt, endAt: m.endAt, start: m.start, end: m.end, dates: m.dates || [] }, agendaBaseDate());
+  const body = agendaResolvedBody(m);
   return `<div class="agenda-moment ${live ? 'live' : ''}" data-wz-agenda="${i}">
     <div class="agenda-moment-head">
       <b>${esc(agendaMomentSummary(m))}</b>
@@ -2654,14 +2751,26 @@ function agendaMomentHtml(m, i) {
       <label>Deja de salir<input type="datetime-local" data-wz-agenda-field="endAt" value="${esc(m.endAt || '')}"></label>
       <label class="agenda-wide">Eventos que verá la pantalla
         <div class="agenda-format"><b>Formato:</b> Hora | Evento | Lugar <button type="button" class="ghost" data-wz-agenda-pipe="${i}">Insertar separador |</button></div>
-        <textarea data-wz-agenda-field="body" placeholder="21:00 | Concierto en la Virgen Blanca | Casco Viejo&#10;22:30 | DJ set | Plaza Nueva">${esc(m.body || '')}</textarea>
+        <textarea data-wz-agenda-field="body" placeholder="21:00 | Concierto en la Virgen Blanca | Casco Viejo&#10;22:30 | DJ set | Plaza Nueva">${esc(body || '')}</textarea>
       </label>
+      <div class="agenda-wide">${agendaEventPickerHtml(m, i, 'wz')}</div>
     </div>
   </div>`;
 }
 
 function renderAgendaWizard() {
-  return `<div class="status"><b>Agenda viva nueva:</b> empieza vacía para no arrastrar eventos antiguos. Las agendas guardadas siguen en Modo avanzado si quieres recuperarlas.</div>
+  return `<div class="status"><b>Agenda viva:</b> usa el banco de eventos. Guarda cada evento una vez y selecciónalo en todos los momentos donde tenga que aparecer.</div>
+    <div class="agenda-bank wz-bank">
+      <div class="agenda-bank-head">
+        <div><b>Banco de eventos</b><span>${ensureAgendaBank().length} evento(s) guardado(s)</span></div>
+      </div>
+      <div class="agenda-bank-row wz-event-new">
+        <label>Hora<input data-wz-bank-new="time" placeholder="19:30"></label>
+        <label>Evento<input data-wz-bank-new="title" placeholder="Nombre del evento"></label>
+        <label>Lugar<input data-wz-bank-new="place" placeholder="Lugar"></label>
+        <button type="button" class="ghost" data-wz-bank-add>Guardar evento</button>
+      </div>
+    </div>
     <div class="agenda-wizard">${(WZ.agenda || []).map(agendaMomentHtml).join('')}</div>
     <button type="button" class="ghost agenda-add" data-wz-agenda-add>Añadir otro momento de agenda</button>`;
 }
@@ -2892,8 +3001,9 @@ function wzCollect() {
   if (d) WZ.days = Math.max(1, Math.min(14, Number(d.value) || 3));
   const agendaBoxes = [...$('#wzBody').querySelectorAll('[data-wz-agenda]')];
   if (agendaBoxes.length) {
-    WZ.agenda = agendaBoxes.map((box) => {
-      const obj = {};
+    const prevAgenda = WZ.agenda || [];
+    WZ.agenda = agendaBoxes.map((box, idx) => {
+      const obj = { ...(prevAgenda[idx] || {}) };
       box.querySelectorAll('[data-wz-agenda-field]').forEach((el) => { obj[el.dataset.wzAgendaField] = el.value; });
       return obj;
     });
@@ -2938,20 +3048,24 @@ async function wizardFinish() {
     const activeDate = (WZ && WZ.date) || (RUNDOWN && RUNDOWN.activeDate) || localDatePart();
     if (WZ.sel.has('agenda')) {
       const meta = (RUNDOWN.libraryKeys || []).find((k) => k.key === 'agendaEventos') || { key: 'agendaEventos', template: 'agenda', theme: 'blanco' };
-      lib.agendaEventos = normalizeAgendaMoments(WZ.agenda || [])
-        .filter((m) => String(m.body || '').trim() || (String(m.title || '').trim() && String(m.title || '').trim() !== 'Agenda'))
+      const agendaMoments = normalizeAgendaMoments(WZ.agenda || [])
+        .filter((m) => String(agendaResolvedBody(m) || m.body || '').trim() || (Array.isArray(m.eventIds) && m.eventIds.length))
         .map((m) => ({
           ...blankLibraryItem(meta),
           title: m.title || 'Agenda',
           subtitle: m.subtitle || '',
-          body: m.body || '',
+          body: agendaResolvedBody(m) || m.body || '',
           startAt: m.startAt || '',
           endAt: m.endAt || '',
           start: m.start || '',
           end: m.end || '',
           dates: Array.isArray(m.dates) ? m.dates : [],
+          eventIds: Array.isArray(m.eventIds) ? m.eventIds : [],
         }))
         .filter((item) => String(item.title || item.body || '').trim());
+      if (agendaMoments.length) {
+        lib.agendaEventos = [...(Array.isArray(lib.agendaEventos) ? lib.agendaEventos : []), ...agendaMoments];
+      }
     }
     for (const [key, text] of Object.entries(WZ.adds)) {
       const meta = (RUNDOWN.libraryKeys || []).find((k) => k.key === key) || { key, template: 'noticia', theme: '' };
@@ -3019,6 +3133,33 @@ $('#wzBody').addEventListener('click', (e) => {
     const oldDate = WZ.date || localDatePart();
     WZ.date = dateBtn.dataset.wzDate || localDatePart();
     WZ.agenda = normalizeAgendaMoments(retargetAgendaMoments(WZ.agenda || [], oldDate, WZ.date));
+    renderWizard();
+    return;
+  }
+  const bankAdd = e.target.closest('[data-wz-bank-add]');
+  if (bankAdd) {
+    const row = bankAdd.closest('.wz-event-new');
+    const next = blankAgendaBankEvent();
+    row.querySelectorAll('[data-wz-bank-new]').forEach((field) => { next[field.dataset.wzBankNew] = field.value; });
+    if (!String(next.title || '').trim()) { toast('Escribe el nombre del evento'); return; }
+    next.id = agendaEventId(next);
+    const bank = ensureAgendaBank();
+    if (!bank.some((ev) => String(ev.id) === String(next.id))) bank.push(next);
+    rdSetDirty(true);
+    renderWizard();
+    toast('Evento guardado en el banco');
+    return;
+  }
+  const eventToggle = e.target.closest('[data-agenda-event-toggle]');
+  if (eventToggle) {
+    wzCollect();
+    const [scope, idxRaw, eventId] = eventToggle.dataset.agendaEventToggle.split(':');
+    if (scope !== 'wz') return;
+    const item = WZ.agenda && WZ.agenda[Number(idxRaw)];
+    if (!item) return;
+    const ids = Array.isArray(item.eventIds) ? item.eventIds.map(String) : [];
+    item.eventIds = ids.includes(eventId) ? ids.filter((id) => id !== eventId) : [...ids, eventId];
+    item.body = agendaResolvedBody(item);
     renderWizard();
     return;
   }
@@ -3163,12 +3304,14 @@ $('#btnRundownMake').addEventListener('click', makeRundown);
 document.querySelectorAll('[data-rd-tab]').forEach((b) => b.addEventListener('click', () => {
   if (!RUNDOWN) return;
   collectRundown();
+  collectAgendaBank();
   collectLibraryCategory();
   setRundownTab(b.dataset.rdTab);
   if (b.dataset.rdTab === 'lib') renderLibraryPanel();
 }));
 $('#btnLibraryAdd').addEventListener('click', () => {
   if (!RUNDOWN) return;
+  collectAgendaBank();
   collectLibraryCategory();
   const meta = currentLibraryMeta();
   if (!Array.isArray(RUNDOWN.library[meta.key])) RUNDOWN.library[meta.key] = [];
@@ -3184,6 +3327,7 @@ $('#btnLibraryAdd').addEventListener('click', () => {
 });
 $('#btnBulkImport').addEventListener('click', () => {
   if (!RUNDOWN) return;
+  collectAgendaBank();
   collectLibraryCategory();
   const meta = currentLibraryMeta();
   let items = [];
@@ -3336,7 +3480,7 @@ $('#libraryPlanner').addEventListener('click', (e) => {
   const item = $('#libraryList').querySelector(`[data-lib-item="${LIB_OPEN}"]`);
   if (item) item.scrollIntoView({ behavior: 'smooth', block: 'center' });
 });
-$('#libraryList').addEventListener('input', () => { if (RUNDOWN) { collectLibraryCategory(); rdSetDirty(true); } });
+$('#libraryList').addEventListener('input', () => { if (RUNDOWN) { collectAgendaBank(); collectLibraryCategory(); rdSetDirty(true); } });
 $('#libraryList').addEventListener('change', (e) => {
   if (!RUNDOWN) return;
   // El selector "¿Cuándo sale?" muestra/oculta los campos de programación al momento.
@@ -3352,12 +3496,51 @@ $('#libraryList').addEventListener('change', (e) => {
       edit.querySelectorAll('[data-lib-weekday]').forEach((field) => { field.checked = false; });
     }
   }
+  collectAgendaBank();
   collectLibraryCategory();
   rdSetDirty(true);
   renderLibraryPanel();
 });
 $('#libraryList').addEventListener('click', (e) => {
   if (!RUNDOWN) return;
+  const bankAdd = e.target.closest('[data-agenda-bank-add]');
+  if (bankAdd) {
+    collectAgendaBank();
+    ensureAgendaBank().push(blankAgendaBankEvent());
+    rdSetDirty(true);
+    renderLibraryPanel();
+    return;
+  }
+  const bankDel = e.target.closest('[data-agenda-bank-del]');
+  if (bankDel) {
+    collectAgendaBank();
+    const idx = Number(bankDel.dataset.agendaBankDel);
+    const bank = ensureAgendaBank();
+    const ev = bank[idx];
+    if (!ev || !confirm('¿Quitar este evento del banco?')) return;
+    bank.splice(idx, 1);
+    (RUNDOWN.library.agendaEventos || []).forEach((item) => {
+      if (Array.isArray(item.eventIds)) item.eventIds = item.eventIds.filter((id) => String(id) !== String(ev.id));
+    });
+    rdSetDirty(true);
+    renderLibraryPanel();
+    return;
+  }
+  const eventToggle = e.target.closest('[data-agenda-event-toggle]');
+  if (eventToggle) {
+    collectAgendaBank();
+    collectLibraryCategory();
+    const [scope, idxRaw, eventId] = eventToggle.dataset.agendaEventToggle.split(':');
+    if (scope !== 'lib') return;
+    const item = RUNDOWN.library && RUNDOWN.library.agendaEventos && RUNDOWN.library.agendaEventos[Number(idxRaw)];
+    if (!item) return;
+    const ids = Array.isArray(item.eventIds) ? item.eventIds.map(String) : [];
+    item.eventIds = ids.includes(eventId) ? ids.filter((id) => id !== eventId) : [...ids, eventId];
+    item.body = agendaResolvedBody(item);
+    rdSetDirty(true);
+    renderLibraryPanel();
+    return;
+  }
   const pipe = e.target.closest('[data-lib-pipe]');
   if (pipe) {
     const wrap = pipe.closest('.lib-edit');
