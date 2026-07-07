@@ -1431,10 +1431,12 @@ function renderPilotPlan() {
         <small>${c.chosen ? 'En uso ahora' : (c === next ? 'Siguiente si no cambias nada' : 'Elegir esta pieza')}</small>
       </button>`
     ).join('');
+    const cadence = r.rotation === 'hora' ? 'automático cada hora' : 'automático cada día';
+    const pickState = r.manualPick ? 'fijada para hoy' : cadence;
     return `<div class="pilot-plan-card">
       <div class="pilot-plan-head">
         <b>${esc(r.label)}</b>
-        <span>${r.chosenIndex != null && r.chosenIndex >= 0 ? 'Pieza #' + (r.chosenIndex + 1) : 'Sin pieza activa'}</span>
+        <span>${r.chosenIndex != null && r.chosenIndex >= 0 ? 'Pieza #' + (r.chosenIndex + 1) + ' · ' + pickState : 'Sin pieza activa'}</span>
       </div>
       <div>
         <div class="pilot-plan-now">
@@ -1444,13 +1446,14 @@ function renderPilotPlan() {
         ${pageControls}
         <div class="pilot-choice">${buttons}</div>
         <div class="pilot-plan-tools">
+          ${r.manualPick ? `<button type="button" class="ghost" data-pilot-auto="${esc(r.id)}">Volver a automático</button>` : ''}
           <button type="button" class="ghost" data-pilot-bank="${esc(r.libraryKey || '')}:edit">Editar banco</button>
           <button type="button" class="ghost" data-pilot-bank="${esc(r.libraryKey || '')}:add">Añadir pieza</button>
         </div>
       </div>
     </div>`;
   }).join('');
-  $('#pilotPlan').innerHTML = `<div class="pilot-plan-title"><b>Carruseles de hoy</b><span>${rows.length} bloque(s) con elección manual</span></div>${html}`;
+  $('#pilotPlan').innerHTML = `<div class="pilot-plan-title"><b>Carruseles de hoy</b><span>${rows.length} bloque(s) con carrusel</span></div>${html}`;
 }
 
 function renderPilot() {
@@ -1579,6 +1582,24 @@ $('#pilotPlan').addEventListener('click', async (e) => {
     renderPilotPlan();
     return;
   }
+  const autoBtn = e.target.closest('[data-pilot-auto]');
+  if (autoBtn && PILOT) {
+    const slotId = autoBtn.dataset.pilotAuto;
+    const date = (PILOT.rundown && PILOT.rundown.activeDate) || localDatePart();
+    autoBtn.disabled = true;
+    try {
+      await api('/rundown/pick', { method: 'POST', body: JSON.stringify({ date, slotId, itemIndex: -1 }) });
+      await api('/rundown/materialize', { method: 'POST', body: JSON.stringify({ date }) });
+      toast('Carrusel en automático');
+      load();
+      loadPilot();
+    } catch (err) {
+      toast('Error: ' + err.message);
+    } finally {
+      autoBtn.disabled = false;
+    }
+    return;
+  }
   const bankBtn = e.target.closest('[data-pilot-bank]');
   if (bankBtn) {
     const [key, action] = bankBtn.dataset.pilotBank.split(':');
@@ -1654,8 +1675,8 @@ const PLAN_TYPES = [
   { id: 'tiempo', label: 'Tiempo ahora · automático', def: true, slot: { source: 'worker', workerKey: 'weather', template: 'clima', label: 'Tiempo ahora', rotation: 'hora' } },
   { id: 'prevision', label: 'Previsión 3 días · automático', def: true, slot: { source: 'worker', workerKey: 'forecast', template: 'prevision', label: 'Previsión' } },
   { id: 'agenda', label: 'Agenda viva · programable', def: true, duration: 10, slot: { source: 'library', libraryKey: 'agendaEventos', label: 'Agenda' } },
-  { id: 'meteoaviso', label: 'Aviso meteorológico · programable', slot: { source: 'library', libraryKey: 'avisosMeteorologicos', label: 'Aviso meteorológico', template: 'meteoaviso', theme: 'naranja' } },
-  { id: 'meteoconsejo', label: 'Consejo meteorológico · programable', slot: { source: 'library', libraryKey: 'consejosMeteorologicos', label: 'Consejo meteorológico', template: 'meteoaviso', theme: 'naranja' } },
+  { id: 'meteoaviso', label: 'Aviso meteorológico · programable', slot: { source: 'library', libraryKey: 'avisosMeteorologicos', label: 'Aviso meteorológico', template: 'meteoaviso', theme: 'naranja', rotation: 'hora' } },
+  { id: 'meteoconsejo', label: 'Consejo meteorológico · programable', slot: { source: 'library', libraryKey: 'consejosMeteorologicos', label: 'Consejo meteorológico', template: 'meteoaviso', theme: 'naranja', rotation: 'hora' } },
   { id: 'curioso', label: 'Dato curioso · carrusel', def: true, slot: { source: 'library', libraryKey: 'datosCuriosos', label: 'Dato curioso' } },
   { id: 'utiles', label: 'Aviso útil · carrusel', def: true, slot: { source: 'library', libraryKey: 'datosUtiles', label: 'Aviso útil' } },
   { id: 'consejo', label: 'Consejo informático (Fast2Computer) · carrusel', slot: { source: 'library', libraryKey: 'consejosInformaticos', label: 'Consejo informático' } },

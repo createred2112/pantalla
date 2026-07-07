@@ -55,6 +55,8 @@ const LIBRARY_KEYS = [
   { key: 'consejosMeteorologicos', label: 'Consejos meteorológicos', template: 'meteoaviso', theme: 'naranja' },
 ];
 
+const DEFAULT_HOURLY_LIBRARY_KEYS = new Set(['avisosMeteorologicos', 'consejosMeteorologicos']);
+
 const DEFAULT_RUNDOWN = {
   title: 'Protoescaleta diaria',
   updatedAt: null,
@@ -242,6 +244,7 @@ function upgradeRundown(rundown) {
       slot.theme = '';
     }
   }
+  rundown.slots = rundown.slots.map(normalizeSlot);
   return rundown;
 }
 
@@ -357,6 +360,10 @@ function reset() {
 }
 
 function normalizeSlot(slot) {
+  slot = slot || {};
+  const hourlyByDefault = slot.source === 'library'
+    && DEFAULT_HOURLY_LIBRARY_KEYS.has(slot.libraryKey)
+    && !slot.rotation;
   return {
     id: String(slot.id || ('slot_' + Date.now())),
     label: String(slot.label || slot.id || 'Bloque'),
@@ -380,7 +387,7 @@ function normalizeSlot(slot) {
     duration: Number(slot.duration) || 8,
     video: slot.video === true,
     // Cadencia del carrusel: 'dia' (una pieza por día) u 'hora' (cambia cada hora).
-    rotation: slot.rotation === 'hora' ? 'hora' : 'dia',
+    rotation: slot.rotation === 'hora' || hourlyByDefault ? 'hora' : 'dia',
   };
 }
 
@@ -652,6 +659,8 @@ function report(rundown, library, date) {
       skippedToday,
       note: autoSkipped ? 'Sin agenda activa para este momento' : (missing ? (s.source === 'worker' ? `Pendiente worker: ${s.workerKey}` : (s.source === 'file' ? 'Falta seleccionar el archivo MP4' : 'Pendiente de contenido')) : ''),
       chosenIndex: plan ? plan.chosenIndex : null,
+      manualPick: Object.prototype.hasOwnProperty.call(pick, s.id),
+      rotation: s.rotation,
       choices: plan ? plan.next : [],
     };
   });
