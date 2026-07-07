@@ -1285,6 +1285,7 @@ $('#list').addEventListener('click', async (e) => {
 
 // --- Piloto automático ---
 let PILOT = null;
+const PILOT_PLAN_PAGE = {};
 
 function fmtLastRun(last) {
   if (!last) return 'todavía no se ha ejecutado';
@@ -1409,11 +1410,22 @@ function renderPilotPlan() {
   const rows = (((PILOT.rundown || {}).report) || [])
     .filter((r) => r.source === 'library' && Array.isArray(r.choices) && r.choices.length);
   if (!rows.length) { $('#pilotPlan').innerHTML = ''; return; }
+  const pageSize = 6;
   const html = rows.map((r) => {
     const chosen = r.choices.find((c) => c.chosen) || null;
     const nextIndex = chosen ? (r.choices.findIndex((c) => c.chosen) + 1) % r.choices.length : 0;
     const next = r.choices[nextIndex] || chosen;
-    const buttons = r.choices.slice(0, 6).map((c) =>
+    const pages = Math.max(1, Math.ceil(r.choices.length / pageSize));
+    const currentPage = Math.max(0, Math.min(pages - 1, Number(PILOT_PLAN_PAGE[r.id]) || 0));
+    PILOT_PLAN_PAGE[r.id] = currentPage;
+    const pageChoices = r.choices.slice(currentPage * pageSize, currentPage * pageSize + pageSize);
+    const pageControls = pages > 1
+      ? `<div class="pilot-page"><span>Página ${currentPage + 1}/${pages} · ${r.choices.length} pieza(s)</span><div>
+          <button type="button" data-pilot-page="${esc(r.id)}:-1" ${currentPage <= 0 ? 'disabled' : ''}>Anterior</button>
+          <button type="button" data-pilot-page="${esc(r.id)}:1" ${currentPage >= pages - 1 ? 'disabled' : ''}>Siguiente</button>
+        </div></div>`
+      : `<div class="pilot-page"><span>${r.choices.length} pieza(s)</span></div>`;
+    const buttons = pageChoices.map((c) =>
       `<button type="button" data-pilot-pick="${esc(r.id)}:${c.index}" class="${c.chosen ? 'on' : (c === next ? 'next' : '')}" title="${esc(c.subtitle || '')}">
         <span>${esc(c.title)}</span>
         <small>${c.chosen ? 'En uso ahora' : (c === next ? 'Siguiente si no cambias nada' : 'Elegir esta pieza')}</small>
@@ -1429,7 +1441,12 @@ function renderPilotPlan() {
           <div><small>En pantalla</small><b>${esc(chosen ? chosen.title : (r.title || 'sin contenido'))}</b></div>
           <div><small>Siguiente</small><b>${esc(next ? next.title : 'sin contenido')}</b></div>
         </div>
+        ${pageControls}
         <div class="pilot-choice">${buttons}</div>
+        <div class="pilot-plan-tools">
+          <button type="button" class="ghost" data-pilot-bank="${esc(r.libraryKey || '')}:edit">Editar banco</button>
+          <button type="button" class="ghost" data-pilot-bank="${esc(r.libraryKey || '')}:add">Añadir pieza</button>
+        </div>
       </div>
     </div>`;
   }).join('');
@@ -1555,6 +1572,20 @@ $('#pilotPublishNow').addEventListener('click', async (e) => {
 });
 $('#pilotReview').addEventListener('click', () => { location.href = '/review.html'; });
 $('#pilotPlan').addEventListener('click', async (e) => {
+  const pageBtn = e.target.closest('[data-pilot-page]');
+  if (pageBtn) {
+    const [slotId, delta] = pageBtn.dataset.pilotPage.split(':');
+    PILOT_PLAN_PAGE[slotId] = Math.max(0, (Number(PILOT_PLAN_PAGE[slotId]) || 0) + Number(delta || 0));
+    renderPilotPlan();
+    return;
+  }
+  const bankBtn = e.target.closest('[data-pilot-bank]');
+  if (bankBtn) {
+    const [key, action] = bankBtn.dataset.pilotBank.split(':');
+    if (!key) return;
+    await openBanks(key, { add: action === 'add' });
+    return;
+  }
   const b = e.target.closest('[data-pilot-pick]');
   if (!b || !PILOT) return;
   const [slotId, idx] = b.dataset.pilotPick.split(':');
@@ -1692,17 +1723,33 @@ async function openRundown() {
   rundownDlg.showModal();
 }
 
-async function openBanks() {
+async function openBanks(category = '', opts = {}) {
   setRundownMode('library');
   const today = localDatePart();
   RUNDOWN = await api('/rundown?date=' + encodeURIComponent($('#rundownDate').value || today));
   RUNDOWN_SELECTED = -1;
   LIB_OPEN = -1;
   RD_STAMP = Date.now();
-  rdSetDirty(false);
+  let dirty = false;
+  if (category) LIBRARY_CATEGORY = category;
+  const meta = (RUNDOWN.libraryKeys || []).find((k) => k.key === LIBRARY_CATEGORY) || null;
+  if (opts.add && meta) {
+    if (!RUNDOWN.library) RUNDOWN.library = {};
+    if (!Array.isArray(RUNDOWN.library[meta.key])) RUNDOWN.library[meta.key] = [];
+    RUNDOWN.library[meta.key].push(meta.key === 'agendaEventos' ? blankAgendaLibraryItem() : blankLibraryItem(meta));
+    LIB_OPEN = RUNDOWN.library[meta.key].length - 1;
+    dirty = true;
+  } else if (Number.isInteger(opts.openIndex) && opts.openIndex >= 0) {
+    LIB_OPEN = opts.openIndex;
+  }
+  rdSetDirty(dirty);
   setRundownTab('lib');
   renderRundown();
   rundownDlg.showModal();
+  if (LIB_OPEN >= 0) {
+    const open = $('#libraryList').querySelector(`[data-lib-item="${LIB_OPEN}"]`);
+    if (open) open.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
 }
 
 function reportForSlot(slot) {
