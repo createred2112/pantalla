@@ -15,7 +15,7 @@ function listPublishFiles() {
 }
 
 async function upload({ dryRun, files: plannedFiles, source = 'manual' } = {}) {
-  const files = plannedFiles != null ? plannedFiles : listPublishFiles();
+  const files = (plannedFiles != null ? plannedFiles : listPublishFiles()).map((f) => path.basename(String(f)));
   if (!files.length) {
     const r = { ok: false, source, files, error: dryRun ? 'La prueba no tiene archivos para subir' : 'publish/ está vacío; ejecuta sequence primero' };
     status.set('upload', r);
@@ -35,7 +35,10 @@ async function upload({ dryRun, files: plannedFiles, source = 'manual' } = {}) {
 
   const client = new ftp.Client(30000);
   client.ftp.verbose = false;
+  const progressBase = { source, files, remoteDir: ftpCfg.remoteDir, count: files.length };
+  const setProgress = (patch = {}) => status.set('upload', { ok: null, running: true, ...progressBase, ...patch });
   try {
+    setProgress({ phase: 'connecting', done: 0, current: null });
     await client.access({
       host: ftpCfg.host,
       port: ftpCfg.port,
@@ -47,12 +50,15 @@ async function upload({ dryRun, files: plannedFiles, source = 'manual' } = {}) {
       // en la config o FTP_ALLOW_INVALID_CERT=true en .env.
       secureOptions: { rejectUnauthorized: !ftpCfg.allowInvalidCert },
     });
+    setProgress({ phase: 'connected', done: 0, current: null });
     log.info('upload', `Conectado a ${ftpCfg.host}:${ftpCfg.port} (secure=${ftpCfg.secure})`);
 
+    setProgress({ phase: 'remote-dir', done: 0, current: null });
     await client.ensureDir(ftpCfg.remoteDir);
 
     if (ftpCfg.clearRemoteFirst) {
       try {
+        setProgress({ phase: 'clearing', done: 0, current: null });
         await client.clearWorkingDir();
         log.info('upload', 'Carpeta remota limpiada');
       } catch (e) {
@@ -60,15 +66,40 @@ async function upload({ dryRun, files: plannedFiles, source = 'manual' } = {}) {
       }
     }
 
-    // Sube todo publish/ (incluye playlist.json); sobreescribe por defecto.
-    await client.uploadFromDir(paths.publish);
+    let done = 0;
+    let current = '';
+    let lastProgress = 0;
+    client.trackProgress((info) => {
+      const now = Date.now();
+      if (now - lastProgress < 1000) return;
+      lastProgress = now;
+      setProgress({
+        phase: 'uploading',
+        done,
+        current: path.basename(info.name || current || ''),
+        currentBytes: Number(info.bytes) || 0,
+        bytesOverall: Number(info.bytesOverall) || 0,
+      });
+    });
+
+    for (const file of files) {
+      current = file;
+      const local = path.join(paths.publish, file);
+      if (!fs.existsSync(local)) throw new Error(`No existe ${file} en publish/`);
+      setProgress({ phase: 'uploading', done, current, currentBytes: 0 });
+      await client.uploadFrom(local, file);
+      done++;
+      setProgress({ phase: 'uploading', done, current, currentBytes: 0 });
+      log.info('upload', `Subido ${done}/${files.length}: ${file}`);
+    }
+    client.trackProgress();
     log.info('upload', `Subidos ${files.length} archivo(s) a ${ftpCfg.remoteDir}`);
 
-    const r = { ok: true, source, files, remoteDir: ftpCfg.remoteDir };
+    const r = { ok: true, running: false, source, files, count: files.length, done: files.length, remoteDir: ftpCfg.remoteDir };
     status.set('upload', r);
     return r;
   } catch (e) {
-    const r = { ok: false, source, files, remoteDir: ftpCfg.remoteDir, error: e.message };
+    const r = { ok: false, running: false, source, files, remoteDir: ftpCfg.remoteDir, error: e.message };
     status.set('upload', r);
     log.error('upload', `Fallo FTP: ${e.message}`);
     return r;

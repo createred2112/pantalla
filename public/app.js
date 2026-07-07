@@ -642,6 +642,14 @@ function durationLabel(seconds) {
   return Number.isInteger(n) ? `${n}s` : `${n.toFixed(1)}s`;
 }
 
+function bytesLabel(bytes) {
+  const n = Number(bytes) || 0;
+  if (n <= 0) return '';
+  if (n >= 1024 * 1024) return `${(n / 1024 / 1024).toFixed(1)} MB`;
+  if (n >= 1024) return `${Math.round(n / 1024)} KB`;
+  return `${n} B`;
+}
+
 function mediaUrl(file) {
   const f = String(file || '');
   if (!f) return '';
@@ -652,6 +660,26 @@ function mediaUrl(file) {
 }
 
 function activityFromStatus(st) {
+  const up = st && st.stages && st.stages.upload;
+  if (up && up.running === true) {
+    const done = Number(up.done) || 0;
+    const count = Number(up.count || (up.files && up.files.length) || 0);
+    const current = up.current || '';
+    const phaseMap = {
+      connecting: 'Conectando al FTP',
+      connected: 'FTP conectado',
+      'remote-dir': 'Preparando carpeta remota',
+      clearing: 'Limpiando carpeta remota',
+      uploading: 'Subiendo a pantalla',
+    };
+    const title = phaseMap[up.phase] || 'Subiendo a pantalla';
+    const bits = [];
+    if (count) bits.push(`${done}/${count}`);
+    if (current) bits.push(current);
+    const b = bytesLabel(up.currentBytes || up.bytesOverall);
+    if (b) bits.push(b);
+    return { title, detail: bits.join(' · ') || 'Enviando archivos al FTP...' };
+  }
   const gen = st && st.stages && st.stages.generate;
   if (!gen || gen.running !== true) return null;
   const done = Number(gen.done) || 0;
@@ -707,8 +735,8 @@ function latestUploadActivity() {
 function latestRealUpload() {
   const st = (APP_STATUS && APP_STATUS.stages) || {};
   const stored = APP_STATUS && APP_STATUS.lastRealUpload ? APP_STATUS.lastRealUpload : null;
-  const statusUpload = st.upload && st.upload.dryRun !== true ? st.upload : null;
-  const pilotUpload = PILOT && PILOT.upload && PILOT.upload.dryRun !== true ? PILOT.upload : null;
+  const statusUpload = st.upload && st.upload.ok === true && st.upload.running !== true && st.upload.dryRun !== true ? st.upload : null;
+  const pilotUpload = PILOT && PILOT.upload && PILOT.upload.ok === true && PILOT.upload.running !== true && PILOT.upload.dryRun !== true ? PILOT.upload : null;
   const real = newestByTs([stored, statusUpload, pilotUpload]);
   if (real) return real;
   return APP_STATUS && APP_STATUS.lastPublish
@@ -726,10 +754,16 @@ function uploadResultHtml(upload, compact = false, opts = {}) {
     }
   }
   upload = upload || {};
+  const running = upload.running === true;
   const ok = upload.ok !== false;
   const simulated = upload.dryRun === true;
-  const cls = ok ? (simulated ? 'warn' : 'ok') : 'err';
-  const title = opts.final && ok
+  const cls = running ? 'warn' : (ok ? (simulated ? 'warn' : 'ok') : 'err');
+  const title = running
+    ? (upload.phase === 'connecting' ? 'Conectando al FTP...'
+      : upload.phase === 'remote-dir' ? 'Preparando carpeta remota...'
+        : upload.phase === 'clearing' ? 'Limpiando carpeta remota...'
+          : 'Subiendo archivos a pantalla...')
+    : opts.final && ok
     ? (simulated ? 'Comprobación correcta: todavía no se ha subido' : 'Subida completada: pantalla actualizada')
     : ok
     ? (simulated ? 'Comprobación correcta: no se envió a pantalla' : 'Envío real correcto')
@@ -737,11 +771,17 @@ function uploadResultHtml(upload, compact = false, opts = {}) {
   const source = uploadSourceLabel(upload.source, simulated);
   const files = Array.isArray(upload.files) ? upload.files : [];
   const parts = [];
-  if (files.length) parts.push(`${files.length} archivo(s)`);
+  if (running && upload.count) parts.push(`${Number(upload.done) || 0}/${upload.count} archivo(s)`);
+  else if (files.length) parts.push(`${files.length} archivo(s)`);
+  if (running && upload.current) parts.push(upload.current);
+  if (running) {
+    const b = bytesLabel(upload.currentBytes || upload.bytesOverall);
+    if (b) parts.push(b);
+  }
   if (upload.remoteDir) parts.push(`carpeta ${upload.remoteDir}`);
   if (simulated && upload.reason) parts.push(upload.reason);
   if (!ok && upload.error) parts.push(upload.error);
-  const detail = parts.length ? parts.join(' · ') : (ok ? 'Sin detalle de archivos' : 'Sin detalle del error');
+  const detail = parts.length ? parts.join(' · ') : (running ? 'Enviando archivos al FTP...' : (ok ? 'Sin detalle de archivos' : 'Sin detalle del error'));
   const fileList = !compact && files.length
     ? `<p style="font-family:ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap">${files.map(esc).join('\n')}</p>`
     : '';
@@ -766,6 +806,12 @@ function statusStageLabel(key, value) {
 function statusStageDetail(key, value) {
   if (!value) return '';
   if (value.error) return value.error;
+  if (key === 'upload' && value.running === true) {
+    const done = Number(value.done) || 0;
+    const count = Number(value.count || (value.files && value.files.length) || 0);
+    const b = bytesLabel(value.currentBytes || value.bytesOverall);
+    return `${count ? `${done}/${count}` : 'subiendo'}${value.current ? ' · ' + value.current : ''}${b ? ' · ' + b : ''}`;
+  }
   if (key === 'upload' && value.dryRun === true) {
     return `${(value.files || []).length || 0} archivo(s) revisado(s). No se envió nada a pantalla.`;
   }
@@ -3401,6 +3447,25 @@ async function runPublish(dryRun) {
   toast(dryRun ? 'Probando…' : 'Publicando…');
   $('#dot').style.background = '#e0a106';
   const startedAt = new Date().toISOString();
+  let progressTimer = null;
+  const refreshUploadProgress = async () => {
+    try {
+      await loadStatus(false);
+      const up = APP_STATUS && APP_STATUS.stages && APP_STATUS.stages.upload;
+      if (!dryRun && up && up.running === true && publishDlg && publishDlg.open) {
+        $('#publishPlan').innerHTML = uploadResultHtml(up, false, { now: true, ts: startedAt });
+        return;
+      }
+      const active = activityFromStatus(APP_STATUS);
+      if (!dryRun && active && publishDlg && publishDlg.open) {
+        $('#publishPlan').innerHTML = `<div class="upload-result warn"><div class="ur-head"><b>${esc(active.title)}</b><span>en curso</span></div><p>${esc(active.detail || 'Trabajando...')}</p></div>`;
+      }
+    } catch {}
+  };
+  if (!dryRun) {
+    refreshUploadProgress();
+    progressTimer = setInterval(refreshUploadProgress, 1500);
+  }
   try {
     const r = await api('/publish', { method: 'POST', body: JSON.stringify({ dryRun }) });
     $('#dot').style.background = r.ok ? '#2bb673' : '#e2231a';
@@ -3439,6 +3504,7 @@ async function runPublish(dryRun) {
     loadStatus();
     return null;
   } finally {
+    if (progressTimer) clearInterval(progressTimer);
     setPublishBusy(false);
   }
 }
