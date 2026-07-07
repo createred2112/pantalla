@@ -360,23 +360,25 @@ function airBodyElement(card, ctx, band, base = null) {
   const { W, H, theme } = ctx;
   const pad = Math.round(W * 0.05);
   const bodyText = airBodyText(card);
+  const y = Number(band && band.y != null ? band.y : Math.round(H * 0.62));
+  const h = Number(band && band.h != null ? band.h : Math.round(H * 0.07));
   const fallback = {
     id: 'el_air_body_guard',
     type: 'text',
     bind: 'body',
     x: pad,
-    y: band.y,
+    y,
     w: W - pad * 2,
-    h: band.h,
+    h,
     text: bodyText.toUpperCase(),
-    font: 'display',
-    weight: 800,
-    color: theme.accentText,
-    colorTheme: 'accentText',
+    font: 'text',
+    weight: 900,
+    color: theme.textMuted,
+    colorTheme: 'textMuted',
     align: 'center',
     valign: 'center',
     lineHeight: 1,
-    autofit: { min: Math.round(H * 0.04), max: Math.round(H * 0.075), lines: 1 },
+    autofit: { min: Math.round(H * 0.032), max: Math.round(H * 0.055), lines: 1 },
   };
   const next = {
     ...fallback,
@@ -391,7 +393,7 @@ function airBodyElement(card, ctx, band, base = null) {
     colorTheme: (base && base.colorTheme) || fallback.colorTheme,
     autofit: (base && base.autofit) || fallback.autofit,
   };
-  return applyReadableColor(next, ctx, band.gradient || band.color || theme.accent, next.color || theme.accentText);
+  return applyReadableColor(next, ctx, theme.bg, next.color || theme.textMuted);
 }
 
 function repairAirFrame(card, ctx, frame, opts = {}) {
@@ -403,57 +405,34 @@ function repairAirFrame(card, ctx, frame, opts = {}) {
     (el.type === 'text' || el.type === 'chip') &&
     (el.bind === 'body' || sameText(el.text, bodyText))
   );
+  const detailBox = {
+    x: Math.round(W * 0.05),
+    y: Math.round(H * 0.615),
+    w: Math.round(W * 0.9),
+    h: Math.round(H * 0.075),
+  };
+  const rule = {
+    id: 'el_air_detail_rule',
+    type: 'rect',
+    x: Math.round(W * 0.36),
+    y: Math.round(H * 0.585),
+    w: Math.round(W * 0.28),
+    h: Math.max(6, Math.round(H * 0.011)),
+    color: theme.accent,
+    colorTheme: 'accent',
+    radius: 3,
+  };
 
   if (opts.preserveLayout && idx >= 0) {
-    const originalBody = elements[idx];
-    let band = airBandFor(elements, ctx, originalBody);
-    if (!band) {
-      band = {
-        id: 'el_air_band_guard',
-        type: 'rect',
-        x: 0,
-        y: Number(originalBody.y || Math.round(H * 0.64)),
-        w: W,
-        h: Number(originalBody.h || Math.round(H * 0.13)),
-        color: theme.accent,
-        colorTheme: 'accent',
-      };
-      elements.splice(idx, 0, band);
-    }
-    const body = airBodyElement(card, ctx, band, originalBody);
-    elements = elements.filter((el) => el === band || !isAirBodyCandidate(el, card, band));
-    const bandIndex = elements.indexOf(band);
-    elements.splice(Math.max(0, bandIndex + 1), 0, body);
+    const body = airBodyElement(card, ctx, detailBox, elements[idx]);
+    elements = elements.filter((el) => el.id !== 'el_air_band_guard' && el.id !== 'el_air_detail_rule' && !isAirBodyCandidate(el, card, null));
+    elements.push(rule, body);
     return { ...frame, elements };
   }
 
-  let band = airBandFor(elements, ctx, idx >= 0 ? elements[idx] : null);
-  if (!band) {
-    band = {
-      id: 'el_air_band_guard',
-      type: 'rect',
-      x: 0,
-      y: Math.round(H * 0.64),
-      w: W,
-      h: Math.round(H * 0.13),
-      color: theme.accent,
-      colorTheme: 'accent',
-    };
-    elements.push(band);
-  } else {
-    band.x = 0;
-    band.w = W;
-    if (!opts.preserveLayout) {
-      band.color = theme.accent;
-      band.colorTheme = 'accent';
-      delete band.colorFixed;
-    }
-  }
-
-  const body = idx >= 0 ? airBodyElement(card, ctx, band, elements[idx]) : airBodyElement(card, ctx, band);
-  elements = elements.filter((el) => el === band || !isAirBodyCandidate(el, card, band));
-  const bandIndex = elements.indexOf(band);
-  elements.splice(Math.max(0, bandIndex + 1), 0, body);
+  const body = idx >= 0 ? airBodyElement(card, ctx, detailBox, elements[idx]) : airBodyElement(card, ctx, detailBox);
+  elements = elements.filter((el) => el.id !== 'el_air_band_guard' && el.id !== 'el_air_detail_rule' && !isAirBodyCandidate(el, card, null));
+  elements.push(rule, body);
   return { ...frame, elements };
 }
 
