@@ -16,6 +16,7 @@ const MARK = {
 };
 
 function dataFor(template) {
+  if (template === 'clima') return { max: 28, min: 14, isDay: true };
   if (template === 'gasolina') return {
     stations: [
       { g95: 1.429, name: 'ESTACION QA UNO', addr: 'CALLE PRUEBA 1' },
@@ -76,6 +77,10 @@ function stripLegacyMetadata(frame) {
 function staticAudit() {
   const themes = Object.keys(cfg.palette || {});
   const list = templates.list();
+  const clima = templates.get('clima');
+  assert.strictEqual(clima.keyForCard({ subtitle: 'Despejado', data: { isDay: false } }), 'luna', 'clima: despejado nocturno debe usar luna');
+  assert.strictEqual(clima.keyForCard({ subtitle: 'Poco nuboso', data: { isDay: false } }), 'lunanube', 'clima: nubes nocturnas deben usar luna y nube');
+  assert.strictEqual(clima.keyForCard({ subtitle: 'Despejado', data: { isDay: true } }), 'sol', 'clima: despejado diurno debe usar sol');
   const assertExpectedFields = (tpl, frame, label) => {
     if (!['gasolina', 'prevision'].includes(tpl.id)) assertContains(frame, MARK.title, label);
     if (tpl.hint.subtitle !== '—') assertContains(frame, MARK.subtitle, label);

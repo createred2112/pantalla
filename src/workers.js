@@ -47,7 +47,7 @@ function wmoLabel(code) {
 async function weather() {
   const j = await fetchJson(
     `https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}` +
-    `&current=temperature_2m,weather_code&daily=temperature_2m_max,temperature_2m_min&timezone=Europe%2FMadrid&forecast_days=1`
+    `&current=temperature_2m,weather_code,is_day&daily=temperature_2m_max,temperature_2m_min&timezone=Europe%2FMadrid&forecast_days=1`
   );
   const t = Math.round(j.current.temperature_2m);
   const max = Math.round(j.daily.temperature_2m_max[0]);
@@ -58,7 +58,7 @@ async function weather() {
     subtitle: wmoLabel(Number(j.current.weather_code)),
     body: '',
     date: 'AHORA',
-    extra: { max, min },
+    extra: { max, min, isDay: Number(j.current.is_day) === 1, observedAt: j.current.time || '' },
   };
 }
 

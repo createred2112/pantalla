@@ -3,6 +3,9 @@
 
 function keyOf(text) {
   const t = String(text || '').toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '');
+  const night = /noche|nocturn|luna|estrell/.test(t);
+  if (night && /nub/.test(t)) return 'lunanube';
+  if (night) return 'luna';
   if (/torment|rayo/.test(t)) return 'tormenta';
   if (/niev|nevad/.test(t)) return 'nieve';
   if (/lluv|llovizn|chubas|aguac/.test(t)) return 'lluvia';
@@ -11,6 +14,26 @@ function keyOf(text) {
   if (/poco nubos|interval|nubes y claros|claros/.test(t)) return 'solnube';
   if (/cubiert|nubl|nubos/.test(t)) return 'nube';
   return 'sol';
+}
+function localHour() {
+  try {
+    return Number(new Intl.DateTimeFormat('en-GB', { hour: '2-digit', hourCycle: 'h23', timeZone: 'Europe/Madrid' }).format(new Date()));
+  } catch { return new Date().getHours(); }
+}
+function isDayFor(card) {
+  const data = (card && card.data) || {};
+  if (typeof data.isDay === 'boolean') return data.isDay;
+  if (data.isDay === 0 || data.isDay === 1) return data.isDay === 1;
+  if (data.is_day === 0 || data.is_day === 1) return data.is_day === 1;
+  const hour = localHour();
+  return hour >= 7 && hour < 21;
+}
+function keyForCard(card) {
+  const key = keyOf(card && card.subtitle);
+  if (isDayFor(card)) return key;
+  if (key === 'sol') return 'luna';
+  if (key === 'solnube') return 'lunanube';
+  return key;
 }
 function rgb(color) {
   const s = String(color || '').trim().toLowerCase();
@@ -57,6 +80,12 @@ function iconSvg(key, c) {
       '<line x1="3.4" y1="3.4" x2="4.4" y2="4.4"/><line x1="11.6" y1="11.6" x2="12.6" y2="12.6"/>' +
       '<line x1="3.4" y1="12.6" x2="4.4" y2="11.6"/><line x1="11.6" y1="4.4" x2="12.6" y2="3.4"/>' +
       '<path d="M18.5 19.5H9a4.5 4.5 0 0 1 .5-9 5.9 5.9 0 0 1 10.8 2.9 3.2 3.2 0 0 1-1.8 6.1z"/>',
+    luna: '<path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5 8.7 8.7 0 1 0 20.5 14.2z"/>' +
+      '<line x1="18" y1="3" x2="18" y2="5"/><line x1="17" y1="4" x2="19" y2="4"/>' +
+      '<line x1="22" y1="7" x2="22" y2="8.5"/><line x1="21.25" y1="7.75" x2="22.75" y2="7.75"/>',
+    lunanube: '<g transform="translate(7 -1) scale(.65)"><path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5 8.7 8.7 0 1 0 20.5 14.2z"/></g>' +
+      '<line x1="5" y1="4" x2="5" y2="6"/><line x1="4" y1="5" x2="6" y2="5"/>' +
+      '<path d="M18.5 21H8.8a4.2 4.2 0 0 1 .5-8.4 5.5 5.5 0 0 1 10.1 2.7A3 3 0 0 1 18.5 21z"/>',
     nube: '<path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/>',
     lluvia: '<path d="M20 16.58A5 5 0 0 0 18 7h-1.26A8 8 0 1 0 4 15.25"/>' +
       '<line x1="16" y1="13" x2="16" y2="21"/><line x1="8" y1="13" x2="8" y2="21"/><line x1="12" y1="15" x2="12" y2="23"/>',
@@ -75,7 +104,7 @@ function iconSvg(key, c) {
 }
 
 module.exports = {
-  iconSvg, keyOf, iconColor, animFor, // reutilizados por la plantilla "prevision"
+  iconSvg, keyOf, keyForCard, isDayFor, iconColor, animFor, // reutilizados por la plantilla "prevision"
   id: 'clima',
   label: 'Tiempo ahora (temperatura + icono)',
   hint: { title: 'Temperatura ahora (p. ej. 24º)', subtitle: 'Condición actual: SOLEADO, LLUVIA…', body: 'Nota secundaria opcional', date: 'Momento: AHORA, 13:45…' },
@@ -101,7 +130,7 @@ module.exports = {
       align: 'left', valign: 'center', lineHeight: 1, letterSpacingEm: -0.02,
       autofit: { min: Math.round(H * 0.22), max: Math.round(H * 0.44), lines: 1 },
     });
-    const icoKey = keyOf(card.subtitle);
+    const icoKey = keyForCard(card);
     // Ajustable desde el panel (Ajustes → Icono del tiempo): tamaño y posición.
     const conf = (ctx.brand && ctx.brand.climaIcon) || {};
     const scale = Math.max(40, Math.min(140, Number(conf.scale) || 100)) / 100;

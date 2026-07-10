@@ -283,7 +283,7 @@ function refreshDynamicElement(el, card, ctx, svgOrder) {
   if (next.type === 'svg' && /<svg/i.test(String(next.svg || ''))) {
     const clima = require('./templates/clima');
     if (card.template === 'clima') {
-      const key = clima.keyOf(card.subtitle);
+      const key = clima.keyForCard(card);
       next.anim = clima.animFor(key);
       next.svg = clima.iconSvg(key, clima.iconColor(ctx.theme));
     } else if (card.template === 'prevision') {
@@ -585,12 +585,12 @@ function weatherIconElement(card, ctx) {
   return {
     id: 'el_weather_icon_guard',
     type: 'svg',
-    anim: clima.animFor(clima.keyOf(card.subtitle)),
+    anim: clima.animFor(clima.keyForCard(card)),
     x: Math.round(W - pad - icoS),
     y: Math.round(zoneY + (zoneH - icoS) / 2),
     w: icoS,
     h: icoS,
-    svg: clima.iconSvg(clima.keyOf(card.subtitle), clima.iconColor(theme)),
+    svg: clima.iconSvg(clima.keyForCard(card), clima.iconColor(theme)),
   };
 }
 
