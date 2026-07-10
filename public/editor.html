@@ -50,11 +50,11 @@
   <h1>Editor de cartela</h1>
   <span id="hint" style="font-size:12px;color:var(--muted)">cargando…</span>
   <span id="scope" class="scope">cargando…</span>
-  <button class="ghost" id="btnReset">Restablecer</button>
+  <button class="ghost" id="btnReset">Volver al diseño de plantilla</button>
   <button class="ghost" onclick="location.href='/'">← Volver</button>
-  <button class="ghost" id="btnResetDefault" title="Borra el predeterminado guardado de esta plantilla y este esquema de color">Reset plantilla + color</button>
-  <button class="ghost" id="btnDefaultAll" title="Aplica esta composición a todos los colores de esta plantilla">Guardar plantilla base</button>
-  <button class="ghost" id="btnDefault" title="Aplicar este diseño a las cartelas de esta plantilla con este esquema de color">Guardar plantilla + color</button>
+  <button class="ghost" id="btnResetDefault" hidden>Reset plantilla + color</button>
+  <button class="ghost" id="btnDefaultAll" title="Hace que todas las cartelas de este tipo usen esta composición, conservando sus colores">Usar como plantilla</button>
+  <button class="ghost" id="btnDefault" hidden>Guardar plantilla + color</button>
   <button class="primary" id="btnSave">Guardar esta cartela</button>
 </header>
 <div class="wrap">

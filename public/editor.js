@@ -52,15 +52,6 @@ function applyFrame(frame) {
   FONT_TEXT = FRAME.fontText || FONT_TEXT;
   $('#hint').textContent = FRAME.template + ' · ' + FRAME.W + '×' + FRAME.H;
   $('#scope').innerHTML = `Editando <b>${FRAME.hasOwnLayout ? 'esta cartela' : 'plantilla base'}</b> · tema <b>${FRAME.theme && FRAME.theme.key ? FRAME.theme.key : 'auto'}</b>`;
-  if (FRAME.template === 'agenda') {
-    $('#btnDefault').disabled = true;
-    $('#btnDefaultAll').disabled = true;
-    $('#btnResetDefault').disabled = true;
-    $('#btnDefault').title = 'Agenda cambia mucho segun tenga horas o solo frases. Guarda el diseno solo en esta cartela.';
-    $('#btnDefaultAll').title = 'Agenda cambia mucho segun tenga horas o solo frases. Guarda el diseno solo en esta cartela.';
-    $('#btnDefault').textContent = 'Predeterminado bloqueado';
-    $('#btnDefaultAll').textContent = 'Base bloqueada';
-  }
   fit(); build();
   panel();
 }
@@ -391,29 +382,17 @@ $('#btnSave').addEventListener('click', async () => {
   }
 });
 $('#btnDefault').addEventListener('click', async () => {
-  if (FRAME.template === 'agenda') {
-    toast('En Agenda usa Guardar diseño: el predeterminado global esta bloqueado');
-    return;
-  }
   const theme = FRAME.theme && FRAME.theme.key ? FRAME.theme.key : '';
   if (!confirm('¿Aplicar este diseño como PREDETERMINADO de la plantilla "' + FRAME.template + '" SOLO para el tema "' + theme + '"?')) return;
   const r = await fetch('/api/templates/' + FRAME.template + '/layout', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ theme, layout: layoutPayload() }) });
   toast(r.ok ? 'Guardado como plantilla + color ✓' : 'Error');
 });
 $('#btnDefaultAll').addEventListener('click', async () => {
-  if (FRAME.template === 'agenda') {
-    toast('Agenda no tiene predeterminado global');
-    return;
-  }
   if (!confirm('¿Aplicar esta composición como PLANTILLA BASE para todos los colores de "' + FRAME.template + '"? Se borran excepciones de color de esa plantilla y los colores vinculados seguirán cambiando con cada tema.')) return;
   const r = await fetch('/api/templates/' + FRAME.template + '/layout', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ theme: '', layout: layoutPayload(), clearThemes: true }) });
   toast(r.ok ? 'Guardado como plantilla base ✓' : 'Error');
 });
 $('#btnResetDefault').addEventListener('click', async () => {
-  if (FRAME.template === 'agenda') {
-    toast('Agenda no tiene predeterminado global');
-    return;
-  }
   const theme = FRAME.theme && FRAME.theme.key ? FRAME.theme.key : '';
   if (!confirm('¿Borrar el diseño PREDETERMINADO de la plantilla "' + FRAME.template + '" SOLO para el tema "' + theme + '"? Las cartelas volverán al diseño sano de código.')) return;
   const r = await fetch('/api/templates/' + FRAME.template + '/layout?theme=' + encodeURIComponent(theme), { method: 'DELETE' });

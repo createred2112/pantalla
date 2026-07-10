@@ -248,6 +248,21 @@ function showResult(result, cards, note) {
   $('#status').innerHTML = `${note} <b>${manifest.length}</b> vídeo(s); al publicar se subirían <b>${files.length}</b> archivo(s).`;
 }
 
+async function loadHistory() {
+  const box = $('#historyList');
+  try {
+    const r = await api('/review/history');
+    const items = Array.isArray(r.items) ? r.items : [];
+    box.innerHTML = items.length ? items.map((item) => `<article class="history-item">
+      <video src="${esc(item.url)}" controls muted playsinline preload="metadata"></video>
+      <b>${item.automatic ? 'Subida automática' : 'Exportación manual'}</b>
+      <small>${esc(new Date(item.mtime).toLocaleString('es-ES'))} · ${esc(item.name)}</small>
+    </article>`).join('') : '<div class="empty">Todavía no hay emisiones guardadas.</div>';
+  } catch (e) {
+    box.innerHTML = `<div class="error">${esc(e.message)}</div>`;
+  }
+}
+
 // Con memoria: si nada cambió desde la última simulación, se muestra al
 // instante. Solo se regenera si hay cambios o al pulsar el botón.
 async function load(force) {
@@ -291,6 +306,7 @@ $('#btnExport').addEventListener('click', async () => {
   try {
     const r = await api('/review/export', { method: 'POST' });
     $('#status').innerHTML = `Histórico guardado: <a class="button" href="${esc(r.url)}" download="${esc(r.file)}">${esc(r.file)}</a> · ${r.count} pieza(s), 240px.`;
+    loadHistory();
   } catch (e) {
     $('#status').textContent = e.message;
   } finally {
@@ -317,4 +333,5 @@ document.addEventListener('visibilitychange', () => {
 });
 
 renderSteps(null);
+loadHistory();
 load(); // al entrar: instantánea si nada cambió; se genera sola si hay cambios

@@ -71,7 +71,7 @@ async function loadConfig() {
 
 function dayThemeOptions(selected) {
   const auto = selected ? '' : ' selected';
-  return `<option value=""${auto}>Automático rotativo</option>` +
+  return `<option value=""${auto}>Auto: color de cada plantilla</option>` +
     Object.keys(PALETTE || {}).map((k) => `<option value="${esc(k)}" ${k === selected ? 'selected' : ''}>${esc(k)}</option>`).join('');
 }
 
@@ -680,6 +680,10 @@ function activityFromStatus(st) {
     if (b) bits.push(b);
     return { title, detail: bits.join(' · ') || 'Enviando archivos al FTP...' };
   }
+  const history = st && st.stages && st.stages.history;
+  if (history && history.running === true) {
+    return { title: 'Guardando histórico de emisión', detail: `${history.count || 0} archivo(s) · copia ligera para revisar después` };
+  }
   const gen = st && st.stages && st.stages.generate;
   if (!gen || gen.running !== true) return null;
   const done = Number(gen.done) || 0;
@@ -799,6 +803,7 @@ function statusStageLabel(key, value) {
     generate: 'Generación MP4',
     sequence: 'Orden de 8 archivos',
     upload: uploadDry ? 'Comprobación sin enviar' : 'Envío a pantalla',
+    history: 'Histórico automático',
   };
   return map[key] || key;
 }
@@ -818,6 +823,7 @@ function statusStageDetail(key, value) {
   if (key === 'upload') return `${(value.files || []).length || 0} archivo(s) enviados al FTP`;
   if (key === 'sequence') return `${(value.files || []).length || value.count || 0} archivo(s) finales`;
   if (key === 'generate') return `${value.count || 0} MP4 preparado(s)${value.reused ? `, ${value.reused} reutilizado(s)` : ''}`;
+  if (key === 'history') return value.ok === false ? (value.error || 'No se pudo guardar') : `${value.count || 0} pieza(s) · ${value.file || 'copia ligera'}`;
   return '';
 }
 
@@ -923,10 +929,10 @@ async function loadEditorRundown(card) {
       box.innerHTML = `
         <div class="status">Producida por el bloque <b>«${esc(slot.label)}»</b> · carrusel: <b>${esc(catLabel)}</b>.
           ${editablePiece ? 'Puedes editar aquí la pieza elegida; el texto superior es el campo "Texto superior".' : 'La plantilla, el tema y el diseño se mantienen en este bloque aunque rote la pieza (vacío = cada pieza con el suyo).'}</div>
-        <label>Cambia de pieza<select id="edSlotRotation">
+        ${isAgendaLib ? '<div class="status"><b>Agenda programada:</b> cambia únicamente al comenzar la siguiente franja.</div>' : `<label>Cambia de pieza<select id="edSlotRotation">
           <option value="dia" ${slot.rotation !== 'hora' ? 'selected' : ''}>Cada día</option>
           <option value="hora" ${slot.rotation === 'hora' ? 'selected' : ''}>Cada hora</option>
-        </select></label>
+        </select></label>`}
         <label>Piezas del carrusel (marcadas = en emisión)</label>
         <div style="max-height:220px;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:6px 10px">
           ${items.map((p, i) => `<label class="chk"><input type="checkbox" data-ed-lib="${i}" ${p.enabled !== false ? 'checked' : ''}>${esc(p.title || p.body || '(sin título)')} <span class="hint">${esc(scheduleSummary(p))}</span></label>`).join('') || '<div class="hint">Sin piezas. Añádalas en Escaleta → Carrusel.</div>'}
@@ -1750,8 +1756,7 @@ const PLAN_TYPES = [
   { id: 'luz', label: 'Precio de la luz · automático', slot: { source: 'worker', workerKey: 'powerPrice', label: 'Precio de la luz' } },
   { id: 'gasolina', label: 'Gasolineras más baratas · automático', slot: { source: 'worker', workerKey: 'fuel', label: 'Gasolina más barata' } },
   { id: 'aire', label: 'Calidad del aire · automático', def: true, slot: { source: 'worker', workerKey: 'airQuality', template: 'aire', label: 'Calidad del aire', rotation: 'hora' } },
-  { id: 'noticia1', label: 'Noticia propia 1 · manual', def: true, slot: { source: 'fixed', template: 'noticia', label: 'Noticia propia 1', title: 'Noticia propia', subtitle: 'GasteizBerri', body: '' } },
-  { id: 'noticia2', label: 'Noticia propia 2 · manual', def: true, slot: { source: 'fixed', template: 'noticia', label: 'Noticia propia 2', title: 'Noticia propia', subtitle: 'GasteizBerri', body: '' } },
+  { id: 'noticia', label: 'Noticia propia · manual', slot: { source: 'fixed', template: 'noticia', label: 'Noticia propia', title: '', subtitle: 'GasteizBerri', body: '' } },
   { id: 'promo', label: 'Vídeo promo MP4 · archivo listo', slot: { source: 'file', type: 'video', file: '', label: 'Vídeo promo', title: 'Vídeo promo', subtitle: 'MP4 listo', duration: 8 } },
   { id: 'piscinas', label: 'Aforo piscinas · manual', slot: { source: 'worker', workerKey: 'poolCapacity', template: 'dato', label: 'Aforo piscinas', subtitle: 'Personas en las piscinas' } },
   { id: 'ultima', label: 'Última hora · reservado (desactivado)', enabled: false, slot: { source: 'fixed', template: 'alerta', label: 'Última hora', subtitle: 'ÚLTIMA HORA' } },
@@ -1759,9 +1764,29 @@ const PLAN_TYPES = [
 
 function wizardCountState() {
   const required = requiredVideoCount();
-  const selected = WZ ? WZ.sel.size : 0;
+  const selected = WZ && Array.isArray(WZ.items) ? WZ.items.length : 0;
   const diff = selected - required;
   return { required, selected, diff, ok: diff === 0 };
+}
+
+function wizardChosenTypes() {
+  const seen = {};
+  return ((WZ && WZ.items) || []).map((rec) => {
+    const base = PLAN_TYPES.find((type) => type.id === rec.typeId);
+    if (!base) return null;
+    seen[base.id] = (seen[base.id] || 0) + 1;
+    return {
+      ...base,
+      id: rec.uid,
+      typeId: base.id,
+      instanceNumber: seen[base.id],
+      slot: { ...base.slot },
+    };
+  }).filter(Boolean);
+}
+
+function hasWizardType(typeId) {
+  return ((WZ && WZ.items) || []).some((item) => item.typeId === typeId);
 }
 
 function wizardCountHtml() {
@@ -1852,7 +1877,7 @@ function renderRundown() {
   $('#rundownTitle').value = rd.title || 'Escaleta';
   $('#rundownDate').value = RUNDOWN.activeDate || localDatePart();
   const dayRec = ((rd.days || {})[RUNDOWN.activeDate] || {});
-  const visibleDayTheme = dayRec.theme || RUNDOWN.autoDayTheme || RUNDOWN.dayTheme || '';
+  const visibleDayTheme = dayRec.theme || RUNDOWN.dayTheme || '';
   if ($('#rundownTheme')) $('#rundownTheme').innerHTML = dayThemeOptions(dayRec.theme || '');
   const rep = RUNDOWN.report || [];
   const emits = (s, i) => s.enabled !== false && !(rep[i] && (rep[i].skippedToday || rep[i].autoSkipped));
@@ -1964,10 +1989,10 @@ function slotEditHtml(s, i) {
       ${isLib ? `<label>Tipo de carrusel<select data-rd-current="libraryKey">
         ${keys.map((k) => `<option value="${esc(k.key)}" ${k.key === s.libraryKey ? 'selected' : ''}>${esc(k.label)}</option>`).join('')}
       </select></label>
-      <label>Cambia de pieza<select data-rd-current="rotation">
+      ${s.libraryKey === 'agendaEventos' ? `<div class="status"><b>Agenda programada</b><br>Cambia únicamente cuando empieza o termina una franja de Agenda viva.</div>` : `<label>Cambia de pieza<select data-rd-current="rotation">
         <option value="dia" ${s.rotation !== 'hora' ? 'selected' : ''}>Cada día</option>
         <option value="hora" ${s.rotation === 'hora' ? 'selected' : ''}>Cada hora</option>
-      </select></label>` : ''}
+      </select></label>`}` : ''}
       ${isWorker ? (() => {
         const ws = RUNDOWN.workers || [];
         const known = ws.some((w) => w.key === s.workerKey);
@@ -1986,7 +2011,7 @@ function slotEditHtml(s, i) {
           return `<div class="slot-wide">
             <label>Piezas del carrusel (marcadas = en emisión)</label>
             <div style="max-height:200px;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:6px 10px">${list || '<div class="hint">Sin piezas. Añádalas en la pestaña «Carrusel».</div>'}</div>
-            <div class="hint" style="margin-top:4px">${s.rotation === 'hora' ? 'Cambia de pieza cada hora; con la publicación automática activa se emite un pase horario.' : 'Cambia de pieza cada día, en ciclo, sin repetir.'} Crear o programar piezas: pestaña «Carrusel».</div>
+            <div class="hint" style="margin-top:4px">${s.libraryKey === 'agendaEventos' ? 'Agenda cambia solo al entrar en vigor la siguiente franja programada.' : (s.rotation === 'hora' ? 'Cambia de pieza cada hora; con la publicación automática activa se emite un pase horario.' : 'Cambia de pieza cada día, en ciclo, sin repetir.')} Crear o programar piezas: pestaña «Carrusel».</div>
           </div>`;
         })()
         : (isFile
@@ -2035,6 +2060,7 @@ function blankLibraryItem(meta) {
 
 function blankAgendaLibraryItem() {
   const meta = (RUNDOWN.libraryKeys || []).find((k) => k.key === 'agendaEventos') || { template: 'agenda', theme: 'blanco' };
+  const startAt = localDateTimePart();
   return {
     ...blankLibraryItem(meta),
     title: '',
@@ -2042,21 +2068,21 @@ function blankAgendaLibraryItem() {
     body: '',
     template: 'agenda',
     theme: 'blanco',
-    startAt: '',
-    endAt: '',
+    startAt,
+    endAt: addMinutesLocal(startAt, 120),
     eventIds: [],
   };
 }
 
 function agendaEventId(ev) {
-  const raw = `${ev && ev.time || ''}|${ev && ev.title || ''}|${ev && ev.subtitle || ''}|${ev && ev.place || ''}`.toLowerCase();
+  const raw = `${ev && ev.date || ''}|${ev && ev.time || ''}|${ev && ev.title || ''}|${ev && ev.subtitle || ''}|${ev && ev.place || ''}`.toLowerCase();
   let hash = 0;
   for (const ch of raw) hash = ((hash * 31) + ch.charCodeAt(0)) >>> 0;
   return 'evt_' + hash.toString(36);
 }
 
 function blankAgendaBankEvent() {
-  return { id: 'evt_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), time: '', title: '', subtitle: '', place: '', notes: '', enabled: true };
+  return { id: 'evt_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), date: (RUNDOWN && RUNDOWN.activeDate) || localDatePart(), time: '', title: '', subtitle: '', place: '', notes: '', enabled: true };
 }
 
 function ensureAgendaBank() {
@@ -2071,32 +2097,35 @@ function ensureAgendaBank() {
 
 function agendaEventLine(ev) {
   const detail = [ev.subtitle, ev.place].map((x) => String(x || '').trim()).filter(Boolean).join(' · ');
-  return [ev.time, ev.title, detail].map((x) => String(x || '').trim()).filter(Boolean).join(' | ');
+  return [ev.date, ev.time, ev.title, detail].map((x) => String(x || '').trim()).filter(Boolean).join(' | ');
 }
 
 function agendaResolvedBody(item) {
   const ids = Array.isArray(item && item.eventIds) ? item.eventIds.map(String) : [];
   if (!ids.length) return String(item && item.body || '');
   const bank = new Map(ensureAgendaBank().map((ev) => [String(ev.id), ev]));
+  const fallbackDate = String(item && (item.startAt || item.start || (item.dates && item.dates[0])) || '').slice(0, 10);
   const lines = ids
     .map((id) => bank.get(id))
     .filter((ev) => ev && ev.enabled !== false)
-    .map(agendaEventLine)
+    .map((ev) => agendaEventLine(ev.date ? ev : { ...ev, date: fallbackDate }))
     .filter(Boolean);
   return lines.join('\n') || String(item && item.body || '');
 }
 
 function agendaBankLabel(ev) {
-  return [ev.time, ev.title, ev.subtitle, ev.place].map((x) => String(x || '').trim()).filter(Boolean).join(' · ') || '(evento sin rellenar)';
+  return [ev.date ? fmtShortDate(ev.date) : '', ev.time, ev.title, ev.subtitle, ev.place].map((x) => String(x || '').trim()).filter(Boolean).join(' · ') || '(evento sin rellenar)';
 }
 
 function agendaLineToEvent(line) {
   const parts = String(line || '').split('|').map((x) => x.trim());
+  const dated = /^\d{4}-\d{2}-\d{2}$/.test(parts[0] || '');
   const ev = blankAgendaBankEvent();
-  ev.time = parts.length >= 3 ? parts[0] : '';
-  ev.title = parts.length >= 3 ? parts[1] : (parts[0] || '');
-  ev.subtitle = parts.length >= 4 ? parts[2] : '';
-  ev.place = parts.length >= 4 ? parts[3] : (parts.length >= 3 ? parts[2] : (parts[1] || ''));
+  ev.date = dated ? parts[0] : '';
+  ev.time = dated ? (parts[1] || '') : (parts.length >= 3 ? parts[0] : '');
+  ev.title = dated ? (parts[2] || '') : (parts.length >= 3 ? parts[1] : (parts[0] || ''));
+  ev.subtitle = dated && parts.length >= 5 ? parts[3] : (!dated && parts.length >= 4 ? parts[2] : '');
+  ev.place = dated ? (parts.length >= 5 ? parts[4] : (parts[3] || '')) : (parts.length >= 4 ? parts[3] : (parts.length >= 3 ? parts[2] : (parts[1] || '')));
   ev.id = agendaEventId(ev);
   return ev.title ? ev : null;
 }
@@ -2390,6 +2419,7 @@ function renderAgendaBankPanel() {
   syncAgendaBankFromBlocks();
   const bank = ensureAgendaBank();
   const rows = bank.length ? bank.map((ev, i) => `<div class="agenda-bank-row ${ev.enabled === false ? 'off' : ''}" data-agenda-bank-item="${i}">
+      <label>Día<input type="date" data-agenda-bank-field="date" value="${esc(ev.date || '')}"></label>
       <label>Hora<input data-agenda-bank-field="time" value="${esc(ev.time || '')}" placeholder="19:30"></label>
       <label>Evento<input data-agenda-bank-field="title" value="${esc(ev.title || '')}" placeholder="Nombre del evento"></label>
       <label>Subtítulo<input data-agenda-bank-field="subtitle" value="${esc(ev.subtitle || '')}" placeholder="Tipo, compañía..."></label>
@@ -2441,7 +2471,8 @@ function weekdayBox(item, n, label) {
 }
 
 function agendaEventPickerHtml(item, index, scope) {
-  const bank = ensureAgendaBank().filter((ev) => ev.title || ev.time || ev.place);
+  const bank = ensureAgendaBank().filter((ev) => ev.title || ev.time || ev.place)
+    .sort((a, b) => `${a.date || '9999'}T${a.time || '99:99'}`.localeCompare(`${b.date || '9999'}T${b.time || '99:99'}`));
   if (!bank.length) return '<div class="agenda-event-picker"><div class="hint">Añade eventos al banco para poder insertarlos aquí.</div></div>';
   const ids = new Set(Array.isArray(item && item.eventIds) ? item.eventIds.map(String) : []);
   return `<div class="agenda-event-picker">
@@ -2475,7 +2506,7 @@ function libraryItemHtml(meta, item, i) {
   if (i !== LIB_OPEN) {
     return `<div class="library-item ${item.enabled === false ? 'off' : ''}" data-lib-item="${i}">${head}</div>`;
   }
-  const sched = isScheduled(item);
+  const sched = isAgenda || isScheduled(item);
   return `<div class="library-item ${item.enabled === false ? 'off' : ''}" data-lib-item="${i}">
     ${head}
     <div class="lib-edit">
@@ -2489,15 +2520,15 @@ function libraryItemHtml(meta, item, i) {
         ${agendaEventPickerHtml(item, i, 'lib')}
         <details class="agenda-manual">
           <summary>Texto manual avanzado</summary>
-          <div class="agenda-format"><b>Formato:</b> Hora | Evento | Subtítulo/lugar <button type="button" class="ghost" data-lib-pipe>Insertar separador |</button></div>
-          <textarea data-lib-field="body" placeholder="21:00 | Concierto | Plaza Nueva">${esc(agendaBody || item.body || '')}</textarea>
+          <div class="agenda-format"><b>Formato:</b> Fecha | Hora | Evento | Detalle <button type="button" class="ghost" data-lib-pipe>Insertar separador |</button></div>
+          <textarea data-lib-field="body" placeholder="2026-07-10 | 21:00 | Concierto | Plaza Nueva">${esc(agendaBody || item.body || '')}</textarea>
         </details>
       </div>` : `<label>Texto
         <textarea data-lib-field="body" placeholder="${isMeteo ? 'Evita actividad física en las horas centrales y bebe agua con frecuencia.' : ''}">${esc(item.body || '')}</textarea>
       </label>`}
-      <label>¿Cuándo sale?
+      <label>${isAgenda ? 'Franja de emisión' : '¿Cuándo sale?'}
         <select data-lib-mode>
-          <option value="always" ${!sched ? 'selected' : ''}>Cada día / cuando lo marque yo (sin hora fija)</option>
+          ${isAgenda ? '' : `<option value="always" ${!sched ? 'selected' : ''}>Siempre disponible (sin hora fija)</option>`}
           <option value="scheduled" ${sched ? 'selected' : ''}>Solo en una franja programada</option>
         </select>
       </label>
@@ -2505,7 +2536,7 @@ function libraryItemHtml(meta, item, i) {
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin:6px 0 8px">
           <button type="button" class="ghost" data-quick-time="now">Sale desde ahora</button>
           ${isAgenda
-            ? '<button type="button" class="ghost" data-quick-time="tonight">Quitar a las 22:00</button><button type="button" class="ghost" data-quick-time="tomorrow1320">Mañana 13:20</button><button type="button" class="ghost" data-quick-time="tomorrow1342">Mañana 13:42</button>'
+            ? '<button type="button" class="ghost" data-quick-time="2h">Durante 2 horas</button><button type="button" class="ghost" data-quick-time="tomorrowNoon">Hasta mañana 12:00</button><button type="button" class="ghost" data-quick-time="sunday23">Hasta domingo 23:00</button>'
             : '<button type="button" class="ghost" data-quick-time="midnight">Hasta las 23:59</button><button type="button" class="ghost" data-quick-time="tomorrow">Mañana todo el día</button><button type="button" class="ghost" data-quick-time="48h">Próximas 48 h</button>'}
         </div>
         <div class="mini">
@@ -2716,7 +2747,7 @@ async function openWizard() {
   const date = localDatePart();
   RUNDOWN = await api('/rundown?date=' + encodeURIComponent(date)); // trae almacén, workers y claves
   const rec = (((RUNDOWN.rundown || {}).days || {})[date] || {});
-  WZ = { step: 1, date, theme: rec.theme || '', days: 3, sel: new Set(PLAN_TYPES.filter((t) => t.def).map((t) => t.id)), manual: {}, adds: {}, picks: {}, error: '', agenda: initialAgendaMoments() };
+  WZ = { step: 1, date, theme: rec.theme || '', days: 3, items: [], manual: {}, adds: {}, picks: {}, error: '', agenda: initialAgendaMoments() };
   renderWizard();
   wizardDlg.showModal();
 }
@@ -2764,12 +2795,19 @@ function blankAgendaMoment(afterIndex = -1) {
 }
 
 function freshAgendaMoment() {
-  const startAt = dateAtTime(agendaBaseDate(), '08:00');
-  return { title: 'Agenda', subtitle: 'Hoy', body: '', startAt, endAt: addMinutesLocal(startAt, 60) };
+  const startAt = localDateTimePart();
+  return { title: 'Agenda', subtitle: 'Ahora', body: '', startAt, endAt: addMinutesLocal(startAt, 120), eventIds: [] };
 }
 
 function initialAgendaMoments() {
-  return [freshAgendaMoment()];
+  const source = RUNDOWN && RUNDOWN.library && Array.isArray(RUNDOWN.library.agendaEventos)
+    ? RUNDOWN.library.agendaEventos
+    : [];
+  const now = localDateTimePart();
+  const reusable = source
+    .filter((item) => !item.endAt || item.endAt >= now)
+    .map((item) => ({ ...item, eventIds: Array.isArray(item.eventIds) ? [...item.eventIds] : [] }));
+  return reusable.length ? normalizeAgendaMoments(reusable) : [freshAgendaMoment()];
 }
 
 function agendaMomentSummary(m) {
@@ -2788,10 +2826,9 @@ function agendaMomentHtml(m, i) {
       <button type="button" class="ghost" data-wz-agenda-del="${i}" ${WZ.agenda.length <= 1 ? 'disabled' : ''}>Quitar</button>
     </div>
     <div class="agenda-quick">
-      <button type="button" class="ghost" data-wz-agenda-quick="now" data-i="${i}">Sale ahora</button>
-      <button type="button" class="ghost" data-wz-agenda-quick="tonight" data-i="${i}">Hasta las 22:00</button>
-      <button type="button" class="ghost" data-wz-agenda-quick="day1320" data-i="${i}">Día elegido 13:20</button>
-      <button type="button" class="ghost" data-wz-agenda-quick="day1342" data-i="${i}">Día elegido 13:42</button>
+      <button type="button" class="ghost" data-wz-agenda-quick="now2h" data-i="${i}">Ahora durante 2 horas</button>
+      <button type="button" class="ghost" data-wz-agenda-quick="tomorrowNoon" data-i="${i}">Hasta mañana a las 12:00</button>
+      <button type="button" class="ghost" data-wz-agenda-quick="sunday23" data-i="${i}">Hasta el domingo a las 23:00</button>
     </div>
     <div class="agenda-grid">
       <label>Título<input data-wz-agenda-field="title" value="${esc(m.title || '')}" placeholder="Agenda"></label>
@@ -2804,8 +2841,8 @@ function agendaMomentHtml(m, i) {
         ${agendaEventPickerHtml(m, i, 'wz')}
         <details class="agenda-manual">
           <summary>Texto manual avanzado</summary>
-          <div class="agenda-format"><b>Formato:</b> Hora | Evento | Subtítulo/lugar <button type="button" class="ghost" data-wz-agenda-pipe="${i}">Insertar separador |</button></div>
-          <textarea data-wz-agenda-field="body" placeholder="21:00 | Concierto en la Virgen Blanca | Casco Viejo">${esc(body || '')}</textarea>
+          <div class="agenda-format"><b>Formato:</b> Fecha | Hora | Evento | Detalle <button type="button" class="ghost" data-wz-agenda-pipe="${i}">Insertar separador |</button></div>
+          <textarea data-wz-agenda-field="body" placeholder="2026-07-10 | 21:00 | Concierto | Plaza Nueva">${esc(body || '')}</textarea>
         </details>
       </div>
     </div>
@@ -2819,6 +2856,7 @@ function renderAgendaWizard() {
         <div><b>Banco de eventos</b><span>${ensureAgendaBank().length} evento(s) guardado(s)</span></div>
       </div>
       <div class="agenda-bank-row wz-event-new">
+        <label>Día<input type="date" data-wz-bank-new="date" value="${esc(agendaBaseDate())}"></label>
         <label>Hora<input data-wz-bank-new="time" placeholder="19:30"></label>
         <label>Evento<input data-wz-bank-new="title" placeholder="Nombre del evento"></label>
         <label>Subtítulo<input data-wz-bank-new="subtitle" placeholder="Tipo, compañía..."></label>
@@ -2953,14 +2991,14 @@ function renderWizard() {
   $('#wzProgress').className = `tag ${count.ok ? 'ok' : 'warn'}`;
   $('#wzBack').hidden = WZ.step === 1;
   $('#wzNext').textContent = WZ.step === 3 ? '✅ Guardar y ver vista previa' : 'Siguiente →';
-  const chosen = PLAN_TYPES.filter((t) => WZ.sel.has(t.id));
+  const chosen = wizardChosenTypes();
 
   if (WZ.step === 1) {
     const today = localDatePart();
     const tomorrow = addDays(today, 1);
     $('#wzBody').innerHTML = `
       ${wizardErrorHtml()}
-      <p class="hint" style="margin-top:0">Elige los 8 huecos de emisión. Pueden ser automáticos, carruseles, noticias propias o un MP4 promo ya listo.</p>
+      <p class="hint" style="margin-top:0">La escaleta empieza vacía. Añade exactamente los huecos que quieras, repite cualquier tipo y ordénalos antes de continuar.</p>
       ${wizardCountHtml()}
       <label>Día de emisión</label>
       <input id="wzDate" type="date" value="${esc(WZ.date || today)}">
@@ -2970,24 +3008,32 @@ function renderWizard() {
       </div>
       <label>Paleta del día</label>
       <select id="wzTheme">${dayThemeOptions(WZ.theme || '')}</select>
-      <div class="hint" style="margin:5px 0 10px">Las cartelas en Auto usarán esta paleta. Si una cartela tiene color fijo, se respeta.</div>
+      <div class="hint" style="margin:5px 0 10px">Auto usa el color propio de cada plantilla. Esta paleta solo se aplica porque tú la eliges aquí.</div>
       <label>Días a cubrir</label>
       <input id="wzDays" type="number" min="1" max="14" value="${WZ.days}">
-      <label>Tipos de cartela</label>
-      <div style="display:grid;gap:2px">${PLAN_TYPES.map((t) =>
-        `<label class="chk" style="display:block"><input type="checkbox" data-wz-type="${t.id}" ${WZ.sel.has(t.id) ? 'checked' : ''}>${t.label}${wizardBumperLine(t)}</label>`).join('')}</div>`;
+      <label>Añadir cartela</label>
+      <div class="wz-catalog">${PLAN_TYPES.map((t) =>
+        `<button type="button" class="ghost" data-wz-add-type="${t.id}">+ ${esc(t.label)}</button>`).join('')}</div>
+      <label>Orden de emisión</label>
+      <div class="wz-sequence">${chosen.length ? chosen.map((t, i) => `<div class="wz-sequence-row">
+        <b>${i + 1}. ${esc((t.slot && t.slot.label) || t.label)}${chosen.filter((x) => x.typeId === t.typeId).length > 1 ? ` ${t.instanceNumber}` : ''}</b>
+        <button type="button" class="ghost" data-wz-item-move="${t.id}:-1" ${i === 0 ? 'disabled' : ''} title="Subir">↑</button>
+        <button type="button" class="ghost" data-wz-item-move="${t.id}:1" ${i === chosen.length - 1 ? 'disabled' : ''} title="Bajar">↓</button>
+        <button type="button" class="ghost" data-wz-item-del="${t.id}">Quitar</button>
+      </div>`).join('') : '<div class="empty">Aún no has añadido ninguna cartela.</div>'}</div>`;
     return;
   }
 
   if (WZ.step === 2) {
+    let agendaShown = false;
     const sections = chosen.map((t) => {
       const head = `<h3 style="margin:14px 0 4px;font-size:14px">${t.label}</h3>${wizardBumperLine(t)}`;
       if (t.slot.source === 'worker' && t.slot.workerKey !== 'poolCapacity') {
         return head + `<div class="status">${esc(wzWorkerLine(t.slot.workerKey))}</div>`;
       }
-      if (t.id === 'piscinas') {
+      if (t.typeId === 'piscinas') {
         return head + `<label>Aforo actual (lo escribes tú)</label>
-          <input data-wz-manual="piscinas:title" value="${esc((WZ.manual.piscinas || {}).title || '')}" placeholder="p. ej. 1.240">`;
+          <input data-wz-manual="${t.id}:title" value="${esc((WZ.manual[t.id] || {}).title || '')}" placeholder="p. ej. 1.240">`;
       }
       if (t.slot.source === 'file') {
         const cur = WZ.manual[t.id] || {};
@@ -2998,16 +3044,18 @@ function renderWizard() {
           <input data-wz-manual="${t.id}:file" value="${esc(cur.file || '')}" placeholder="data/uploads/promo.mp4">
           <div class="hint" style="margin-top:5px">La duración se calcula desde el MP4 real.</div>`;
       }
-      if (t.slot.source === 'fixed' && t.id.startsWith('noticia')) {
+      if (t.slot.source === 'fixed' && t.typeId === 'noticia') {
         const cur = WZ.manual[t.id] || {};
         return head + `<label>Titular</label><input data-wz-manual="${t.id}:title" value="${esc(cur.title || '')}" placeholder="Titular de la noticia">
           <label>Subtítulo</label><input data-wz-manual="${t.id}:subtitle" value="${esc(cur.subtitle || 'GasteizBerri')}" placeholder="Sección o firma">
           <label>Texto</label><textarea data-wz-manual="${t.id}:body" placeholder="Texto breve para pantalla">${esc(cur.body || '')}</textarea>`;
       }
-      if (t.id === 'agenda') {
+      if (t.typeId === 'agenda') {
+        if (agendaShown) return head + '<div class="status">Usa la misma programación de Agenda viva. Esta segunda cartela ocupa otro hueco de la escaleta.</div>';
+        agendaShown = true;
         return head + renderAgendaWizard();
       }
-      if (t.id === 'ultima') {
+      if (t.typeId === 'ultima') {
         return head + `<div class="status">Reservado y desactivado. Se activa desde el botón 🚨 del panel cuando haga falta.</div>`;
       }
       if (t.slot.source === 'library') {
@@ -3021,7 +3069,7 @@ function renderWizard() {
 
   // Paso 3: confirmación
   const newPieces = Object.values(WZ.adds).reduce((n, txt) => n + String(txt || '').split(/\r?\n/).filter((l) => l.trim()).length, 0);
-  const agendaMoments = WZ.sel.has('agenda')
+  const agendaMoments = hasWizardType('agenda')
     ? (WZ.agenda || []).filter((m) => String(m.body || '').trim() || (String(m.title || '').trim() && String(m.title || '').trim() !== 'Agenda')).length
     : 0;
   const bumperRows = chosen
@@ -3036,7 +3084,7 @@ function renderWizard() {
     <div class="status" style="line-height:1.7">
       Guion de <b>${chosen.length}</b> cartelas: ${chosen.map((t) => esc(t.slot.label)).join(' → ')}<br>
       ${wizardCountHtml()}
-      Paleta del día: <b>${esc(WZ.theme || 'Automático rotativo')}</b><br>
+      Paleta del día: <b>${esc(WZ.theme || 'Color propio de cada plantilla')}</b><br>
       Cobertura: <b>${WZ.days}</b> día(s); el carrusel cambia a diario sin repetir<br>
       ${agendaMoments ? `Agenda viva: <b>${agendaMoments}</b> mensaje(s) programado(s)<br>` : ''}
       ${newPieces ? `Se incorporan <b>${newPieces}</b> pieza(s) nuevas al carrusel<br>` : ''}
@@ -3063,9 +3111,6 @@ function wzCollect() {
       return obj;
     });
   }
-  $('#wzBody').querySelectorAll('[data-wz-type]').forEach((el) => {
-    if (el.checked) WZ.sel.add(el.dataset.wzType); else WZ.sel.delete(el.dataset.wzType);
-  });
   $('#wzBody').querySelectorAll('[data-wz-manual]').forEach((el) => {
     const [id, field] = el.dataset.wzManual.split(':');
     WZ.manual[id] = WZ.manual[id] || {};
@@ -3091,9 +3136,12 @@ async function wizardFinish() {
   btn.textContent = '⏳ Guardando y creando cartelas…';
   try {
     const stamp = Date.now().toString(36);
-    const chosen = PLAN_TYPES.filter((t) => WZ.sel.has(t.id));
+    const chosen = wizardChosenTypes();
+    const totals = chosen.reduce((acc, t) => ({ ...acc, [t.typeId]: (acc[t.typeId] || 0) + 1 }), {});
     const slots = chosen.map((t) => {
-      const s = { id: `plan_${t.id}_${stamp}`, enabled: t.enabled !== false, duration: t.duration || 8, video: false, theme: '', title: '', subtitle: '', body: '', date: '', template: '', libraryKey: '', workerKey: '', ...t.slot };
+      const suffix = totals[t.typeId] > 1 ? ` ${t.instanceNumber}` : '';
+      const s = { id: `plan_${t.typeId}_${t.id}_${stamp}`, enabled: t.enabled !== false, duration: t.duration || 8, video: false, theme: '', title: '', subtitle: '', body: '', date: '', template: '', libraryKey: '', workerKey: '', ...t.slot };
+      s.label = `${s.label || t.label}${suffix}`;
       Object.assign(s, WZ.manual[t.id] || {});
       s.bumperKey = defaultBumperKeyForSlot(s);
       s.duration = Number(s.duration) || 8;
@@ -3101,7 +3149,7 @@ async function wizardFinish() {
     });
     const lib = RUNDOWN.library || {};
     const activeDate = (WZ && WZ.date) || (RUNDOWN && RUNDOWN.activeDate) || localDatePart();
-    if (WZ.sel.has('agenda')) {
+    if (hasWizardType('agenda')) {
       const meta = (RUNDOWN.libraryKeys || []).find((k) => k.key === 'agendaEventos') || { key: 'agendaEventos', template: 'agenda', theme: 'blanco' };
       const agendaMoments = normalizeAgendaMoments(WZ.agenda || [])
         .filter((m) => String(agendaResolvedBody(m) || m.body || '').trim() || (Array.isArray(m.eventIds) && m.eventIds.length))
@@ -3119,7 +3167,10 @@ async function wizardFinish() {
         }))
         .filter((item) => String(item.title || item.body || '').trim());
       if (agendaMoments.length) {
-        lib.agendaEventos = [...(Array.isArray(lib.agendaEventos) ? lib.agendaEventos : []), ...agendaMoments];
+        const now = localDateTimePart();
+        const history = (Array.isArray(lib.agendaEventos) ? lib.agendaEventos : [])
+          .filter((item) => item.endAt && item.endAt < now);
+        lib.agendaEventos = [...history, ...agendaMoments];
       }
     }
     for (const [key, text] of Object.entries(WZ.adds)) {
@@ -3160,17 +3211,16 @@ function applyAgendaQuick(i, kind) {
   const m = (WZ.agenda || [])[i];
   if (!m) return;
   const day = agendaBaseDate();
-  if (kind === 'now') m.startAt = localDateTimePart();
-  if (kind === 'tonight') m.endAt = dateAtTime(day, '22:00');
-  if (kind === 'day1320' || kind === 'tomorrow1320') {
-    m.subtitle = m.subtitle || (day === localDatePart() ? 'Hoy' : 'Mañana');
-    m.startAt = dateAtTime(day, '13:20');
-    m.endAt = '';
+  if (kind === 'now2h') {
+    m.startAt = localDateTimePart();
+    m.endAt = addMinutesLocal(m.startAt, 120);
+    m.subtitle = m.subtitle || 'Ahora';
   }
-  if (kind === 'day1342' || kind === 'tomorrow1342') {
-    m.subtitle = m.subtitle || (day === localDatePart() ? 'Hoy' : 'Mañana');
-    m.startAt = dateAtTime(day, '13:42');
-    m.endAt = '';
+  if (kind === 'tomorrowNoon') m.endAt = dateAtTime(addDays(day, 1), '12:00');
+  if (kind === 'sunday23') {
+    let endDay = day;
+    while (clientDayNumber(endDay) !== 7) endDay = addDays(endDay, 1);
+    m.endAt = dateAtTime(endDay, '23:00');
   }
   WZ.agenda = normalizeAgendaMoments(WZ.agenda);
   renderWizard();
@@ -3182,6 +3232,34 @@ $('#wzClose').addEventListener('click', () => wizardDlg.close());
 $('#wzAdvanced').addEventListener('click', () => { wizardDlg.close(); openRundown(); });
 $('#wzBack').addEventListener('click', () => { wzCollect(); WZ.step = Math.max(1, WZ.step - 1); renderWizard(); });
 $('#wzBody').addEventListener('click', (e) => {
+  const addType = e.target.closest('[data-wz-add-type]');
+  if (addType) {
+    wzCollect();
+    WZ.items.push({ typeId: addType.dataset.wzAddType, uid: `wz_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 5)}` });
+    WZ.error = '';
+    renderWizard();
+    return;
+  }
+  const delItem = e.target.closest('[data-wz-item-del]');
+  if (delItem) {
+    wzCollect();
+    WZ.items = WZ.items.filter((item) => item.uid !== delItem.dataset.wzItemDel);
+    renderWizard();
+    return;
+  }
+  const moveItem = e.target.closest('[data-wz-item-move]');
+  if (moveItem) {
+    wzCollect();
+    const [uid, deltaRaw] = moveItem.dataset.wzItemMove.split(':');
+    const from = WZ.items.findIndex((item) => item.uid === uid);
+    const to = from + Number(deltaRaw);
+    if (from >= 0 && to >= 0 && to < WZ.items.length) {
+      const [item] = WZ.items.splice(from, 1);
+      WZ.items.splice(to, 0, item);
+    }
+    renderWizard();
+    return;
+  }
   const dateBtn = e.target.closest('[data-wz-date]');
   if (dateBtn) {
     wzCollect();
@@ -3292,11 +3370,6 @@ $('#wzBody').addEventListener('change', async (e) => {
     renderWizard();
     return;
   }
-  if (e.target && e.target.matches('[data-wz-type]')) {
-    wzCollect();
-    renderWizard();
-    return;
-  }
   if (e.target && e.target.matches('[data-wz-upload]') && e.target.files && e.target.files[0]) {
     const id = e.target.dataset.wzUpload;
     try {
@@ -3316,13 +3389,13 @@ $('#wzNext').addEventListener('click', () => {
   try {
     wzCollect();
     WZ.error = '';
-    if (WZ.step === 1 && !WZ.sel.size) { WZ.error = 'Marca al menos un tipo de cartela.'; renderWizard(); toast(WZ.error); return; }
+    if (WZ.step === 1 && !WZ.items.length) { WZ.error = 'Añade al menos una cartela.'; renderWizard(); toast(WZ.error); return; }
     if (WZ.step === 1 && !wizardCountState().ok) {
       WZ.error = wizardCountState().diff < 0 ? 'Faltan cartelas para llegar a 8.' : 'Sobran cartelas: deja exactamente 8.';
       renderWizard(); toast(WZ.error); return;
     }
     if (WZ.step === 2) {
-      const missingFile = PLAN_TYPES.find((t) => WZ.sel.has(t.id) && t.slot.source === 'file' && !((WZ.manual[t.id] || {}).file || t.slot.file));
+      const missingFile = wizardChosenTypes().find((t) => t.slot.source === 'file' && !((WZ.manual[t.id] || {}).file || t.slot.file));
       if (missingFile) {
         WZ.error = `Falta elegir o subir el MP4 de "${missingFile.slot.label}". Puedes escoger uno guardado en la biblioteca o quitar esa cartela.`;
         renderWizard(); toast('Falta el MP4'); return;
@@ -3626,11 +3699,19 @@ $('#libraryList').addEventListener('click', (e) => {
         end.value = `${in48.getFullYear()}-${String(in48.getMonth() + 1).padStart(2, '0')}-${String(in48.getDate()).padStart(2, '0')}T${String(in48.getHours()).padStart(2, '0')}:${String(in48.getMinutes()).padStart(2, '0')}`;
       }
     }
-    if (quick.dataset.quickTime === 'tomorrow1320') {
-      if (start) start.value = dtLocal(tomorrow, '13:20');
-      if (end && !end.value) end.value = dtLocal(tomorrow, '13:42');
+    if (quick.dataset.quickTime === '2h') {
+      if (start && !start.value) start.value = nowLocal;
+      if (end) {
+        const in2 = new Date(new Date(start && start.value ? start.value : nowLocal).getTime() + 2 * 3600000);
+        end.value = `${in2.getFullYear()}-${String(in2.getMonth() + 1).padStart(2, '0')}-${String(in2.getDate()).padStart(2, '0')}T${String(in2.getHours()).padStart(2, '0')}:${String(in2.getMinutes()).padStart(2, '0')}`;
+      }
     }
-    if (quick.dataset.quickTime === 'tomorrow1342' && start) start.value = dtLocal(tomorrow, '13:42');
+    if (quick.dataset.quickTime === 'tomorrowNoon' && end) end.value = dtLocal(tomorrow, '12:00');
+    if (quick.dataset.quickTime === 'sunday23' && end) {
+      let sunday = active;
+      while (clientDayNumber(sunday) !== 7) sunday = addDays(sunday, 1);
+      end.value = dtLocal(sunday, '23:00');
+    }
     collectLibraryCategory();
     rdSetDirty(true);
     renderLibraryPanel();

@@ -145,7 +145,7 @@ function normalizeLibraryItem(item, defaults) {
 }
 
 function agendaEventId(item) {
-  const raw = `${item && item.time || ''}|${item && item.title || ''}|${item && item.subtitle || ''}|${item && item.place || ''}`.toLowerCase();
+  const raw = `${item && item.date || ''}|${item && item.time || ''}|${item && item.title || ''}|${item && item.subtitle || ''}|${item && item.place || ''}`.toLowerCase();
   let hash = 0;
   for (const ch of raw) hash = ((hash * 31) + ch.charCodeAt(0)) >>> 0;
   return `evt_${hash.toString(36)}`;
@@ -155,6 +155,7 @@ function normalizeAgendaEvent(item) {
   const ev = item && typeof item === 'object' ? item : {};
   const next = {
     id: String(ev.id || agendaEventId(ev)),
+    date: String(ev.date || ev.day || '').trim().slice(0, 10),
     time: String(ev.time || '').trim(),
     title: String(ev.title || ev.name || '').trim(),
     subtitle: String(ev.subtitle || '').trim(),
@@ -167,18 +168,22 @@ function normalizeAgendaEvent(item) {
 
 function agendaLineToEvent(line) {
   const parts = String(line || '').split('|').map((x) => x.trim());
+  const dated = /^\d{4}-\d{2}-\d{2}$/.test(parts[0] || '');
   const ev = normalizeAgendaEvent({
-    time: parts.length >= 3 ? parts[0] : '',
-    title: parts.length >= 3 ? parts[1] : (parts[0] || ''),
-    subtitle: parts.length >= 4 ? parts[2] : '',
-    place: parts.length >= 4 ? parts[3] : (parts.length >= 3 ? parts[2] : (parts[1] || '')),
+    date: dated ? parts[0] : '',
+    time: dated ? (parts[1] || '') : (parts.length >= 3 ? parts[0] : ''),
+    title: dated ? (parts[2] || '') : (parts.length >= 3 ? parts[1] : (parts[0] || '')),
+    subtitle: dated && parts.length >= 5 ? parts[3] : (!dated && parts.length >= 4 ? parts[2] : ''),
+    place: dated
+      ? (parts.length >= 5 ? parts[4] : (parts[3] || ''))
+      : (parts.length >= 4 ? parts[3] : (parts.length >= 3 ? parts[2] : (parts[1] || ''))),
   });
   return ev.title ? ev : null;
 }
 
 function agendaEventLine(ev) {
   const detail = [ev.subtitle, ev.place].map((x) => String(x || '').trim()).filter(Boolean).join(' · ');
-  return [ev.time, ev.title, detail].map((x) => String(x || '').trim()).filter(Boolean).join(' | ');
+  return [ev.date, ev.time, ev.title, detail].map((x) => String(x || '').trim()).filter(Boolean).join(' | ');
 }
 
 function dayNumber(date) {
@@ -186,8 +191,8 @@ function dayNumber(date) {
   return jsDay === 0 ? 7 : jsDay;
 }
 
-// LOOK DEL DÍA: tema rotativo por día de la semana (L..D) para los bloques y
-// piezas sin tema fijo ("Auto"). La pantalla cambia de paleta sola cada día.
+// Sugerencia histórica por día. Ya no se aplica automáticamente: "Auto"
+// significa usar el color propio de la pieza o de su plantilla.
 const DAY_THEMES = ['azul', 'lima', 'carbon', 'rojo', 'azul', 'lima', 'carbon'];
 function autoDayTheme(date) {
   return DAY_THEMES[(dayNumber(date || todayKey()) - 1) % DAY_THEMES.length];
@@ -196,7 +201,7 @@ function dayTheme(date, rundown) {
   const day = String(date || todayKey()).slice(0, 10);
   const rec = rundown && rundown.days && rundown.days[day];
   const chosen = rec && String(rec.theme || '').trim();
-  return chosen || autoDayTheme(day);
+  return chosen || '';
 }
 
 function itemApplies(item, date) {
@@ -270,10 +275,11 @@ function resolveAgendaItem(item, library) {
   const ids = Array.isArray(item && item.eventIds) ? item.eventIds.map(String).filter(Boolean) : [];
   if (!ids.length) return item;
   const bank = new Map((library.agendaBanco || []).map((ev) => [String(ev.id), ev]));
+  const fallbackDate = String(item.startAt || item.start || (item.dates && item.dates[0]) || '').slice(0, 10);
   const lines = ids
     .map((id) => bank.get(id))
     .filter((ev) => ev && ev.enabled !== false)
-    .map(agendaEventLine)
+    .map((ev) => agendaEventLine(ev.date ? ev : { ...ev, date: fallbackDate }))
     .filter(Boolean);
   return { ...item, body: lines.join('\n') || item.body || '' };
 }
@@ -481,7 +487,9 @@ function normalizeSlot(slot) {
     duration: Number(slot.duration) || 8,
     video: slot.video === true,
     // Cadencia del carrusel: 'dia' (una pieza por día) u 'hora' (cambia cada hora).
-    rotation: slot.rotation === 'hora' || hourlyByDefault ? 'hora' : 'dia',
+    rotation: slot.source === 'library' && slot.libraryKey === 'agendaEventos'
+      ? 'programada'
+      : (slot.rotation === 'hora' || hourlyByDefault ? 'hora' : 'dia'),
   };
 }
 
@@ -512,11 +520,22 @@ function libraryChoice(items, key, date, rotation, pickIndex, autoPick) {
   return pickDaily(items, key, date, rotation, autoPick);
 }
 
+// Agenda no es un carrusel. La pieza visible la decide exclusivamente su
+// ventana de inicio/fin; si por error hay solapes, gana la que empezó después.
+function agendaChoice(items) {
+  if (!Array.isArray(items) || !items.length) return null;
+  const scheduled = items.filter((item) => item.startAt || item.endAt || item.start || item.end || (item.dates && item.dates.length));
+  const pool = scheduled.length ? scheduled : items;
+  return [...pool].sort((a, b) => String(b.startAt || b.start || '').localeCompare(String(a.startAt || a.start || '')))[0] || null;
+}
+
 function libraryPlanForSlot(slot, library, date, pickIndex, autoPick) {
   const s = normalizeSlot(slot);
   if (s.source !== 'library') return null;
   const items = libraryItems(library, s.libraryKey, date);
-  const chosen = libraryChoice(items, s.id, date, s.rotation, pickIndex, autoPick);
+  const chosen = s.libraryKey === 'agendaEventos'
+    ? agendaChoice(items)
+    : libraryChoice(items, s.id, date, s.rotation, pickIndex, autoPick);
   const chosenIndex = chosen ? items.indexOf(chosen) : -1;
   const next = items.map((item, index) => ({
     index,
@@ -544,7 +563,10 @@ function slotPayload(slot, library, date, options = {}) {
     };
   }
   if (s.source === 'library') {
-    const item = libraryChoice(libraryItems(library, s.libraryKey, date), s.id, date, s.rotation, options.pickIndex, options.autoPick);
+    const items = libraryItems(library, s.libraryKey, date);
+    const item = s.libraryKey === 'agendaEventos'
+      ? agendaChoice(items)
+      : libraryChoice(items, s.id, date, s.rotation, options.pickIndex, options.autoPick);
     return item ? { ...item } : {
       title: s.label,
       subtitle: 'Pendiente',
@@ -648,8 +670,9 @@ function toCard(slot, library, order, date, pickMap = {}, dayThemeKey = '', auto
     enabled: s.enabled,
     type: 'generated',
     template: tplOverride ? s.template : (p.template || s.template || 'noticia'),
-    // Sin tema fijo → look del día (paleta rotativa determinista).
-    theme: themeOverride ? s.theme : (p.theme || s.theme || dayThemeKey || autoDayTheme(date)),
+    // Auto significa el color de la pieza/plantilla. El color del día solo se
+    // aplica cuando el usuario lo ha elegido expresamente.
+    theme: themeOverride ? s.theme : (p.theme || dayThemeKey || null),
     title: p.title || s.title || s.label,
     subtitle: p.subtitle || s.subtitle || '',
     body: p.body || s.body || '',

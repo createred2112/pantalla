@@ -5,7 +5,7 @@
 module.exports = {
   id: 'agenda',
   label: 'Agenda / Lista del día',
-  hint: { title: 'Etiqueta de la banda (p. ej. AGENDA)', subtitle: '—', body: 'Una línea por evento: HORA | Nombre | Lugar', date: '—' },
+  hint: { title: 'Etiqueta de la banda (p. ej. AGENDA)', subtitle: 'Periodo visible', body: 'Una línea por evento: FECHA | HORA | Nombre | Detalle', date: '—' },
   defaultTheme: 'blanco',
   logo: false, // dibuja su propia marca en la banda inferior
   build(card, ctx) {
@@ -54,6 +54,18 @@ module.exports = {
     const items = String(card.body || '').split(/\r?\n/).map((s) => s.trim()).filter(Boolean).slice(0, 3)
       .map((l) => {
         const p = l.split('|').map((x) => x.trim());
+        const dated = /^\d{4}-\d{2}-\d{2}$/.test(p[0] || '');
+        if (dated) {
+          let day = p[0];
+          try {
+            day = new Date(`${p[0]}T12:00:00`).toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric' }).replace('.', '').toUpperCase();
+          } catch {}
+          return {
+            time: [day, p[1]].filter(Boolean).join(' · '),
+            name: (p[2] || '').toUpperCase(),
+            venue: p.slice(3).filter(Boolean).join(' · ').toUpperCase(),
+          };
+        }
         if (p.length > 1) return {
           time: p[0] || '',
           name: (p[1] || p[0] || '').toUpperCase(),

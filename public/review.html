@@ -49,6 +49,13 @@
   .thumb-title{font-size:11px;margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
   .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  .history{margin-top:22px;border-top:1px solid var(--line);padding-top:16px}
+  .history h2{font-size:16px;margin:0 0 4px}.history p{margin:0 0 10px}
+  .history-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}
+  .history-item{border:1px solid var(--line);border-radius:10px;background:var(--panel);padding:10px}
+  .history-item video{display:block;width:100%;aspect-ratio:16/9;background:#000;border-radius:7px}
+  .history-item b,.history-item small{display:block;margin-top:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .history-item small{color:var(--muted)}
   .media{width:100%;aspect-ratio:16/9;background:#000;display:block;object-fit:contain}
   .meta{padding:10px 12px}
   .top{display:flex;align-items:center;gap:8px;margin-bottom:6px}
@@ -105,6 +112,11 @@
   </section>
 
   <div id="content"><div class="empty">No se usará CPU ni Chromium hasta que pulses <b>Generar vista previa</b>.</div></div>
+  <section class="history">
+    <h2>Histórico de emisiones</h2>
+    <p class="status">Cada subida automática real guarda aquí una copia ligera de lo que se envió.</p>
+    <div class="history-list" id="historyList"><div class="empty">Cargando histórico...</div></div>
+  </section>
 </main>
 <script src="review.js"></script>
 </body>

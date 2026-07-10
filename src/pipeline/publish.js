@@ -58,6 +58,18 @@ async function publishLocked({ dryRun, skipImport, uploadSource = 'manual', runI
   }
   const plannedFiles = dryRun ? (steps.sequence.files || []) : undefined;
   steps.upload = await upload({ dryRun, files: plannedFiles, source: uploadSource });
+  const automatic = /^automatic-/.test(String(uploadSource || ''));
+  if (!dryRun && automatic && steps.upload.ok === true && steps.upload.dryRun !== true) {
+    try {
+      steps.history = await require('../util/automaticHistory').create(steps.upload.files, uploadSource);
+      audit.event('publish.history', `Histórico automático guardado: ${steps.history.file}`, { runId, ok: true, source: uploadSource, result: steps.history });
+    } catch (e) {
+      steps.history = { ok: false, error: e.message, source: uploadSource };
+      status.set('history', steps.history);
+      audit.event('publish.history', 'No se pudo guardar el histórico automático', { runId, ok: false, source: uploadSource, error: e.message });
+      log.warn('history', `No se pudo guardar el histórico automático: ${e.message}`);
+    }
+  }
   const ok = steps.generate.ok && steps.sequence.ok && steps.upload.ok;
   audit.event('publish.upload', ok
     ? `${dryRun ? 'Comprobacion' : 'Subida'} OK: ${(steps.upload.files || []).length} archivo(s)`

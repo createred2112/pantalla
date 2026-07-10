@@ -340,9 +340,6 @@ app.put('/api/cards/:id/layout', (req, res) => {
 
 // Guardar un layout como PREDETERMINADO de una plantilla (afecta a todas sus cartelas).
 app.put('/api/templates/:id/layout', (req, res) => {
-  if (req.params.id === 'agenda') {
-    return res.status(400).json({ error: 'La plantilla Agenda no permite predeterminado global: usa diseño propio por cartela.' });
-  }
   const theme = String((req.body && req.body.theme) || req.query.theme || '').trim();
   const clearThemes = !theme && req.body && req.body.clearThemes === true;
   require('./templateLayouts').set(req.params.id, theme, req.body && req.body.layout ? req.body.layout : null, { clearThemes });
@@ -786,6 +783,20 @@ function stampName() {
   const p = (n) => String(n).padStart(2, '0');
   return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
 }
+
+app.get('/api/review/history', (req, res) => {
+  const historyDir = path.join(paths.output, 'history');
+  fs.mkdirSync(historyDir, { recursive: true });
+  const items = fs.readdirSync(historyDir)
+    .filter((name) => /\.mp4$/i.test(name))
+    .map((name) => {
+      const st = fs.statSync(path.join(historyDir, name));
+      return { name, url: `/media/output/history/${encodeURIComponent(name)}`, size: st.size, mtime: st.mtime.toISOString(), automatic: name.startsWith('auto-') };
+    })
+    .sort((a, b) => b.mtime.localeCompare(a.mtime))
+    .slice(0, 60);
+  res.json({ items });
+});
 
 app.post('/api/review/export', async (req, res) => {
   try {
