@@ -205,7 +205,8 @@ async function elHtml(el, ctx) {
   }
   if (el.type === 'text') {
     const fam = famOf(el.font);
-    const color = ctx._elBg ? ensureContrast(el.color || '#fff', ctx._elBg) : (el.color || '#fff');
+    const chosen = el.color || '#fff';
+    const color = el.colorFixed === true ? chosen : (ctx._elBg ? ensureContrast(chosen, ctx._elBg) : chosen);
     const align = el.align || 'left';
     const valign = el.valign === 'center' ? 'center' : el.valign === 'bottom' ? 'flex-end' : 'flex-start';
     const just = align === 'center' ? 'center' : align === 'right' ? 'flex-end' : 'flex-start';

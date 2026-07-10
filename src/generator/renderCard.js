@@ -413,6 +413,9 @@ function readableBgColor(raw, fallback) {
 }
 
 function applyReadableColor(el, ctx, bg, preferred) {
+  // "Color fijo" es una decision explicita del usuario en el disenador. No se
+  // corrige automaticamente: debe llegar intacto al editor y al render final.
+  if (el && el.colorFixed === true && el.color) return { ...el, color: el.color };
   const current = preferred || el.color || ctx.theme.accentText || '#0E0E0E';
   const color = readableTextColor(current, readableBgColor(bg, ctx.theme.accent), '#0E0E0E', '#FFFFFF');
   const next = { ...el, color };
@@ -626,7 +629,8 @@ function weatherBandTextElement(card, ctx, band, base = null) {
     font: (base && base.font) || fallback.font,
     weight: (base && base.weight) || fallback.weight,
     color: (base && base.color) || fallback.color,
-    colorTheme: (base && base.colorTheme) || fallback.colorTheme,
+    colorTheme: base && base.colorFixed === true ? undefined : ((base && base.colorTheme) || fallback.colorTheme),
+    colorFixed: base && base.colorFixed === true,
     autofit: (base && base.autofit) || fallback.autofit,
   };
   return applyReadableColor(next, ctx, band.color || theme.accent, next.color || theme.accentText);
@@ -680,7 +684,7 @@ function repairWeatherFrame(card, ctx, frame, opts = {}) {
         colorTheme: 'accent',
       };
       elements.push(band);
-    } else {
+    } else if (!opts.preserveLayout) {
       band.x = 0;
       band.w = W;
       band.h = Math.max(Number(band.h) || 0, Math.round(H * 0.14));

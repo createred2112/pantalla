@@ -525,7 +525,7 @@ const SAMPLES_META = path.join(SAMPLES_DIR, 'meta.json');
 function samplesHash(matrix = false) {
   const crypto = require('crypto');
   return crypto.createHash('sha1').update(JSON.stringify({
-    v: 12, // subir al cambiar el diseño de las plantillas en código
+    v: 13, // subir al cambiar el diseño de las plantillas en código
     matrix,
     brand: cfg.brand, palette: cfg.palette, screen: cfg.screen,
     tpls: templates.list().map((t) => t.id), data: SAMPLE_DATA,

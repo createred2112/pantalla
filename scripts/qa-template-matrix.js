@@ -129,6 +129,30 @@ function staticAudit() {
   assert(!textOf(fixedAgenda).includes('EVENTO ANTIGUO'), 'agenda: el layout congelo el evento anterior');
   assert.strictEqual(fixedAgenda.background.color.toLowerCase(), cfg.palette.carbon.bg.toLowerCase(), 'agenda: no respeto la paleta');
 
+  const weatherCard = {
+    ...cardFor('clima', 'carbon'),
+    subtitle: 'Nublado',
+    body: 'Max 33o - Min 20o',
+  };
+  const weatherBase = renderer.resolveForEditor(weatherCard);
+  const weatherLayout = JSON.parse(JSON.stringify({ background: weatherBase.background, elements: weatherBase.elements }));
+  const weatherText = weatherLayout.elements.find((el) => el.type === 'text' && el.bind === 'weatherSummary');
+  const weatherBand = weatherLayout.elements.find((el) =>
+    (el.type === 'rect' || el.type === 'band') && Number(el.y || 0) > weatherBase.H * 0.5 && Number(el.y || 0) < weatherBase.H * 0.85
+  );
+  assert(weatherText && weatherBand, 'clima: no se localizaron la franja y su texto');
+  weatherText.color = '#000000';
+  weatherText.colorFixed = true;
+  delete weatherText.colorTheme;
+  weatherBand.color = '#CCFF22';
+  weatherBand.colorFixed = true;
+  delete weatherBand.colorTheme;
+  const fixedWeather = renderer.resolveForEditor({ ...weatherCard, layout: weatherLayout });
+  const fixedWeatherText = fixedWeather.elements.find((el) => el.type === 'text' && el.bind === 'weatherSummary');
+  const fixedWeatherBand = fixedWeather.elements.find((el) => el.id === weatherBand.id);
+  assert.strictEqual(fixedWeatherText.color.toLowerCase(), '#000000', 'clima: se perdio el color fijo del texto de la franja');
+  assert.strictEqual(fixedWeatherBand.color.toLowerCase(), '#ccff22', 'clima: se perdio el color fijo de la franja');
+
   return { templates: list.length, themes: themes.length, combinations: list.length * themes.length };
 }
 

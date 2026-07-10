@@ -368,29 +368,58 @@ function layoutPayload() {
   });
   return { background: bg, elements };
 }
+
+async function renderSavedCard() {
+  toast('Diseño guardado. Generando el MP4...');
+  return requestJson('/api/cards/' + ID + '/render', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ force: true }),
+  }, 180000);
+}
+
 $('#btnSave').addEventListener('click', async () => {
   const btn = $('#btnSave');
   try {
-    await withBusy(btn, 'Guardando...', () => requestJson('/api/cards/' + ID + '/layout', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ layout: layoutPayload() }),
-    }));
-    toast('Diseño guardado en esta cartela y su bloque ✓');
+    await withBusy(btn, 'Guardando y generando...', async () => {
+      await requestJson('/api/cards/' + ID + '/layout', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ layout: layoutPayload() }),
+      });
+      await renderSavedCard();
+    });
+    toast('Diseño guardado y MP4 actualizado');
   } catch (e) {
-    toast(e.message || 'Error al guardar');
+    toast(e.message || 'Error al guardar o generar');
   }
 });
 $('#btnDefault').addEventListener('click', async () => {
   const theme = FRAME.theme && FRAME.theme.key ? FRAME.theme.key : '';
   if (!confirm('¿Aplicar este diseño como PREDETERMINADO de la plantilla "' + FRAME.template + '" SOLO para el tema "' + theme + '"?')) return;
-  const r = await fetch('/api/templates/' + FRAME.template + '/layout', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ theme, layout: layoutPayload() }) });
-  toast(r.ok ? 'Guardado como plantilla + color ✓' : 'Error');
+  const btn = $('#btnDefault');
+  try {
+    await withBusy(btn, 'Guardando y generando...', async () => {
+      const layout = layoutPayload();
+      await requestJson('/api/templates/' + FRAME.template + '/layout', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ theme, layout }) });
+      await requestJson('/api/cards/' + ID + '/layout', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ layout }) });
+      await renderSavedCard();
+    });
+    toast('Plantilla, cartela y MP4 actualizados');
+  } catch (e) { toast(e.message || 'Error al guardar o generar'); }
 });
 $('#btnDefaultAll').addEventListener('click', async () => {
   if (!confirm('¿Aplicar esta composición como PLANTILLA BASE para todos los colores de "' + FRAME.template + '"? Se borran excepciones de color de esa plantilla y los colores vinculados seguirán cambiando con cada tema.')) return;
-  const r = await fetch('/api/templates/' + FRAME.template + '/layout', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ theme: '', layout: layoutPayload(), clearThemes: true }) });
-  toast(r.ok ? 'Guardado como plantilla base ✓' : 'Error');
+  const btn = $('#btnDefaultAll');
+  try {
+    await withBusy(btn, 'Guardando y generando...', async () => {
+      const layout = layoutPayload();
+      await requestJson('/api/templates/' + FRAME.template + '/layout', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ theme: '', layout, clearThemes: true }) });
+      await requestJson('/api/cards/' + ID + '/layout', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ layout }) });
+      await renderSavedCard();
+    });
+    toast('Plantilla, cartela y MP4 actualizados');
+  } catch (e) { toast(e.message || 'Error al guardar o generar'); }
 });
 $('#btnResetDefault').addEventListener('click', async () => {
   const theme = FRAME.theme && FRAME.theme.key ? FRAME.theme.key : '';
