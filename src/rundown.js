@@ -141,6 +141,7 @@ function normalizeLibraryItem(item, defaults) {
     weekdays: weekdays.map((d) => Number(d)).filter((n) => n >= 1 && n <= 7),
     notes: String((item && item.notes) || ''),
     eventIds: Array.isArray(item && item.eventIds) ? item.eventIds.map(String).filter(Boolean) : [],
+    showEventDates: !item || item.showEventDates !== false,
   };
 }
 
@@ -276,10 +277,14 @@ function resolveAgendaItem(item, library) {
   if (!ids.length) return item;
   const bank = new Map((library.agendaBanco || []).map((ev) => [String(ev.id), ev]));
   const fallbackDate = String(item.startAt || item.start || (item.dates && item.dates[0]) || '').slice(0, 10);
+  const showEventDates = item.showEventDates !== false;
   const lines = ids
     .map((id) => bank.get(id))
     .filter((ev) => ev && ev.enabled !== false)
-    .map((ev) => agendaEventLine(ev.date ? ev : { ...ev, date: fallbackDate }))
+    .map((ev) => {
+      const dated = ev.date ? ev : { ...ev, date: fallbackDate };
+      return agendaEventLine(showEventDates ? dated : { ...dated, date: '' });
+    })
     .filter(Boolean);
   return { ...item, body: lines.join('\n') || item.body || '' };
 }

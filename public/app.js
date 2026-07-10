@@ -2076,6 +2076,7 @@ function blankAgendaLibraryItem(afterItem = null) {
     startAt,
     endAt: addMinutesLocal(startAt, 120),
     eventIds: [],
+    showEventDates: true,
   };
 }
 
@@ -2110,10 +2111,14 @@ function agendaResolvedBody(item) {
   if (!ids.length) return String(item && item.body || '');
   const bank = new Map(ensureAgendaBank().map((ev) => [String(ev.id), ev]));
   const fallbackDate = String(item && (item.startAt || item.start || (item.dates && item.dates[0])) || '').slice(0, 10);
+  const showEventDates = !item || item.showEventDates !== false;
   const lines = ids
     .map((id) => bank.get(id))
     .filter((ev) => ev && ev.enabled !== false)
-    .map((ev) => agendaEventLine(ev.date ? ev : { ...ev, date: fallbackDate }))
+    .map((ev) => {
+      const dated = ev.date ? ev : { ...ev, date: fallbackDate };
+      return agendaEventLine(showEventDates ? dated : { ...dated, date: '' });
+    })
     .filter(Boolean);
   return lines.join('\n') || String(item && item.body || '');
 }
@@ -2478,6 +2483,10 @@ function agendaPassCardHtml(item, i) {
       <button type="button" class="ghost" data-agenda-pass-quick="${i}:tomorrowNoon">Terminar mañana a las 12:00</button>
       <button type="button" class="ghost" data-agenda-pass-quick="${i}:sunday23">Terminar el domingo a las 23:00</button>
     </div>
+    <label class="agenda-date-toggle">
+      <input type="checkbox" data-agenda-pass-field="showEventDates" ${item.showEventDates !== false ? 'checked' : ''}>
+      <span><b>Mostrar el día junto a cada hora</b><small>Desmárcalo si los eventos de este pase son del mismo día.</small></span>
+    </label>
     <label style="margin-top:10px">Eventos que aparecen en este pase</label>
     <div class="agenda-pass-events">${agendaPassEventOptions(item, i)}</div>
     <details class="agenda-pass-options">
@@ -2926,12 +2935,12 @@ function blankAgendaMoment(afterIndex = -1) {
   const next = afterIndex >= 0 ? (WZ.agenda || [])[afterIndex + 1] : null;
   const startAt = (prev && (prev.endAt || prev.startAt)) || dateAtTime(today, '08:00');
   const endAt = (next && next.startAt && next.startAt > startAt) ? next.startAt : addMinutesLocal(startAt, 60);
-  return { title: 'Agenda', subtitle: 'Hoy', body: '', startAt, endAt };
+  return { title: 'Agenda', subtitle: 'Hoy', body: '', startAt, endAt, showEventDates: true };
 }
 
 function freshAgendaMoment() {
   const startAt = localDateTimePart();
-  return { title: 'Agenda', subtitle: 'Ahora', body: '', startAt, endAt: addMinutesLocal(startAt, 120), eventIds: [] };
+  return { title: 'Agenda', subtitle: 'Ahora', body: '', startAt, endAt: addMinutesLocal(startAt, 120), eventIds: [], showEventDates: true };
 }
 
 function initialAgendaMoments() {
@@ -2971,6 +2980,10 @@ function agendaMomentHtml(m, i) {
       <label>Empieza a salir<input type="datetime-local" data-wz-agenda-field="startAt" value="${esc(m.startAt || '')}"></label>
       <label>Deja de salir<input type="datetime-local" data-wz-agenda-field="endAt" value="${esc(m.endAt || '')}"></label>
       <div class="agenda-wide agenda-block-chooser">
+        <label class="agenda-date-toggle">
+          <input type="checkbox" data-wz-agenda-field="showEventDates" ${m.showEventDates !== false ? 'checked' : ''}>
+          <span><b>Mostrar el día junto a cada hora</b><small>Desmárcalo si los eventos de este momento son del mismo día.</small></span>
+        </label>
         <b>Eventos elegidos</b>
         ${agendaSelectedEventsHtml(m)}
         ${agendaEventPickerHtml(m, i, 'wz')}
@@ -3097,6 +3110,7 @@ function normalizeAgendaMoments(items) {
   const out = orderedAgendaMoments(items);
   for (let i = 0; i < out.length; i++) {
     const cur = out[i];
+    if (cur.showEventDates == null) cur.showEventDates = true;
     const next = out[i + 1];
     if (cur.startAt) {
       if (!cur.endAt) cur.endAt = next && next.startAt ? next.startAt : addMinutesLocal(cur.startAt, 60);
@@ -3242,7 +3256,9 @@ function wzCollect() {
     const prevAgenda = WZ.agenda || [];
     WZ.agenda = agendaBoxes.map((box, idx) => {
       const obj = { ...(prevAgenda[idx] || {}) };
-      box.querySelectorAll('[data-wz-agenda-field]').forEach((el) => { obj[el.dataset.wzAgendaField] = el.value; });
+      box.querySelectorAll('[data-wz-agenda-field]').forEach((el) => {
+        obj[el.dataset.wzAgendaField] = el.type === 'checkbox' ? el.checked : el.value;
+      });
       return obj;
     });
   }
