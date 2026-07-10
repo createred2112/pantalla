@@ -1801,7 +1801,7 @@ function wizardCountHtml() {
 
 function rdSetDirty(v) {
   RD_DIRTY = v;
-  const base = RUNDOWN_MODE === 'library' ? 'Guardar bancos' : 'Guardar cambios';
+  const base = RUNDOWN_MODE === 'agenda' ? 'Guardar agenda' : (RUNDOWN_MODE === 'library' ? 'Guardar bancos' : 'Guardar cambios');
   $('#btnRundownSave').textContent = v ? `${base} ●` : base;
 }
 
@@ -1812,12 +1812,12 @@ function setRundownTab(tab) {
 }
 
 function setRundownMode(mode) {
-  RUNDOWN_MODE = mode === 'library' ? 'library' : 'rundown';
-  const libraryMode = RUNDOWN_MODE === 'library';
+  RUNDOWN_MODE = mode === 'agenda' ? 'agenda' : (mode === 'library' ? 'library' : 'rundown');
+  const libraryMode = RUNDOWN_MODE !== 'rundown';
   const title = $('#rundownDlgTitle');
-  if (title) title.textContent = libraryMode ? 'Bancos de contenido' : 'Escaleta';
+  if (title) title.textContent = RUNDOWN_MODE === 'agenda' ? 'Agenda' : (libraryMode ? 'Bancos de contenido' : 'Escaleta');
   const tabs = document.querySelector('#rundownDlg .rd-tabs');
-  if (tabs) tabs.hidden = libraryMode;
+  if (tabs) { tabs.hidden = libraryMode; tabs.style.display = libraryMode ? 'none' : ''; }
   $('#btnRundownReset').hidden = libraryMode;
   $('#btnRundownMake').hidden = libraryMode;
   rdSetDirty(RD_DIRTY);
@@ -1837,7 +1837,7 @@ async function openRundown() {
 }
 
 async function openBanks(category = '', opts = {}) {
-  setRundownMode('library');
+  setRundownMode(opts.agenda ? 'agenda' : 'library');
   const today = localDatePart();
   RUNDOWN = await api('/rundown?date=' + encodeURIComponent($('#rundownDate').value || today));
   RUNDOWN_SELECTED = -1;
@@ -1845,6 +1845,7 @@ async function openBanks(category = '', opts = {}) {
   RD_STAMP = Date.now();
   let dirty = false;
   if (category) LIBRARY_CATEGORY = category;
+  else if (RUNDOWN_MODE === 'library' && LIBRARY_CATEGORY === 'agendaEventos') LIBRARY_CATEGORY = 'datosUtiles';
   const meta = (RUNDOWN.libraryKeys || []).find((k) => k.key === LIBRARY_CATEGORY) || null;
   if (opts.add && meta) {
     if (!RUNDOWN.library) RUNDOWN.library = {};
@@ -1863,6 +1864,10 @@ async function openBanks(category = '', opts = {}) {
     const open = $('#libraryList').querySelector(`[data-lib-item="${LIB_OPEN}"]`);
     if (open) open.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
+}
+
+async function openAgenda() {
+  return openBanks('agendaEventos', { agenda: true });
 }
 
 function reportForSlot(slot) {
@@ -2058,9 +2063,9 @@ function blankLibraryItem(meta) {
   return { title: '', subtitle: '', body: '', template: meta.template || 'noticia', theme: meta.theme || '', enabled: true, start: '', end: '', startAt: '', endAt: '', dates: [], weekdays: [] };
 }
 
-function blankAgendaLibraryItem() {
+function blankAgendaLibraryItem(afterItem = null) {
   const meta = (RUNDOWN.libraryKeys || []).find((k) => k.key === 'agendaEventos') || { template: 'agenda', theme: 'blanco' };
-  const startAt = localDateTimePart();
+  const startAt = String(afterItem && afterItem.endAt || localDateTimePart());
   return {
     ...blankLibraryItem(meta),
     title: '',
@@ -2418,46 +2423,129 @@ function renderAgendaTimeline(items, date) {
 function renderAgendaBankPanel() {
   syncAgendaBankFromBlocks();
   const bank = ensureAgendaBank();
-  const rows = bank.length ? bank.map((ev, i) => `<div class="agenda-bank-row ${ev.enabled === false ? 'off' : ''}" data-agenda-bank-item="${i}">
+  const rows = bank.length ? bank.map((ev, i) => `<article class="agenda-event-card ${ev.enabled === false ? 'off' : ''}" data-agenda-bank-item="${i}">
       <label>Día<input type="date" data-agenda-bank-field="date" value="${esc(ev.date || '')}"></label>
-      <label>Hora<input data-agenda-bank-field="time" value="${esc(ev.time || '')}" placeholder="19:30"></label>
-      <label>Evento<input data-agenda-bank-field="title" value="${esc(ev.title || '')}" placeholder="Nombre del evento"></label>
-      <label>Subtítulo<input data-agenda-bank-field="subtitle" value="${esc(ev.subtitle || '')}" placeholder="Tipo, compañía..."></label>
-      <label>Lugar<input data-agenda-bank-field="place" value="${esc(ev.place || '')}" placeholder="Lugar"></label>
-      <label>Notas<input data-agenda-bank-field="notes" value="${esc(ev.notes || '')}" placeholder="Interno"></label>
-      <label class="chk"><input type="checkbox" data-agenda-bank-field="enabled" ${ev.enabled !== false ? 'checked' : ''}> Activo</label>
+      <label>Hora<input type="time" data-agenda-bank-field="time" value="${esc(ev.time || '')}"></label>
+      <label class="agenda-event-main">Evento<input data-agenda-bank-field="title" value="${esc(ev.title || '')}" placeholder="Nombre del evento"></label>
+      <label class="agenda-event-main">Lugar<input data-agenda-bank-field="place" value="${esc(ev.place || '')}" placeholder="Lugar"></label>
       <button type="button" class="ghost" data-agenda-bank-del="${i}">Quitar</button>
-    </div>`).join('') : '<div class="hint">No hay eventos guardados todavía.</div>';
-  return `<div class="agenda-bank">
-    <div class="agenda-bank-head">
-      <div><b>Banco de eventos</b><span>Guarda cada evento una vez y úsalo en tantos bloques como quieras.</span></div>
-      <button type="button" class="ghost" data-agenda-bank-add>Añadir evento</button>
+      <details>
+        <summary>Más datos</summary>
+        <div class="mini">
+          <label>Subtítulo<input data-agenda-bank-field="subtitle" value="${esc(ev.subtitle || '')}" placeholder="Tipo, compañía..."></label>
+          <label>Notas internas<input data-agenda-bank-field="notes" value="${esc(ev.notes || '')}"></label>
+        </div>
+        <label class="chk"><input type="checkbox" data-agenda-bank-field="enabled" ${ev.enabled !== false ? 'checked' : ''}> Disponible para usar</label>
+      </details>
+    </article>`).join('') : '<div class="empty">Todavía no hay eventos. Pulsa “Añadir evento”.</div>';
+  return `<div class="agenda-section">
+    <div class="agenda-section-head">
+      <div><h3>1. Eventos</h3><p>Cada evento se escribe una sola vez, con su día y hora.</p></div>
+      <button type="button" class="primary" data-agenda-bank-add>+ Añadir evento</button>
     </div>
-    ${rows}
+    <div class="agenda-events">${rows}</div>
+  </div>`;
+}
+
+function agendaPassEventOptions(item, passIndex) {
+  const ids = new Set(Array.isArray(item.eventIds) ? item.eventIds.map(String) : []);
+  const bank = ensureAgendaBank()
+    .filter((ev) => ev.enabled !== false && (ev.title || ev.time || ev.place))
+    .sort((a, b) => `${a.date || '9999'}T${a.time || '99:99'}`.localeCompare(`${b.date || '9999'}T${b.time || '99:99'}`));
+  if (!bank.length) return '<div class="status">Primero añade al menos un evento.</div>';
+  return bank.map((ev) => `<label class="agenda-pick-row">
+    <input type="checkbox" data-agenda-pass-event="${passIndex}:${esc(ev.id)}" ${ids.has(String(ev.id)) ? 'checked' : ''}>
+    <span><b>${esc(ev.title || '(sin nombre)')}</b><small>${esc([ev.date ? fmtShortDate(ev.date) : '', ev.time, ev.place].filter(Boolean).join(' · '))}</small></span>
+  </label>`).join('');
+}
+
+function agendaPassCardHtml(item, i) {
+  const live = clientItemApplies(item, localDatePart());
+  const count = Array.isArray(item.eventIds) ? item.eventIds.length : 0;
+  return `<article class="agenda-pass-card ${live ? 'live' : ''}" data-agenda-pass-item="${i}">
+    <div class="agenda-pass-head">
+      <b>Pase ${i + 1}${live ? ' · EN PANTALLA AHORA' : ''}</b>
+      <span>${count} evento(s)</span>
+      <button type="button" class="ghost" data-agenda-pass-del="${i}">Quitar pase</button>
+    </div>
+    <div class="agenda-pass-times">
+      <label>Se empieza a mostrar<input type="datetime-local" data-agenda-pass-field="startAt" value="${esc(item.startAt || '')}"></label>
+      <label>Se deja de mostrar<input type="datetime-local" data-agenda-pass-field="endAt" value="${esc(item.endAt || '')}"></label>
+    </div>
+    <div class="agenda-quick">
+      <button type="button" class="ghost" data-agenda-pass-quick="${i}:now">Empezar ahora</button>
+      <button type="button" class="ghost" data-agenda-pass-quick="${i}:2h">Terminar en 2 horas</button>
+      <button type="button" class="ghost" data-agenda-pass-quick="${i}:tomorrowNoon">Terminar mañana a las 12:00</button>
+      <button type="button" class="ghost" data-agenda-pass-quick="${i}:sunday23">Terminar el domingo a las 23:00</button>
+    </div>
+    <label style="margin-top:10px">Eventos que aparecen en este pase</label>
+    <div class="agenda-pass-events">${agendaPassEventOptions(item, i)}</div>
+    <details class="agenda-pass-options">
+      <summary>Texto de cabecera y otras opciones</summary>
+      <div class="mini">
+        <label>Cabecera<input data-agenda-pass-field="title" value="${esc(item.title || 'Agenda')}" placeholder="Agenda"></label>
+        <label>Texto superior<input data-agenda-pass-field="subtitle" value="${esc(item.subtitle || '')}" placeholder="Hoy, Mañana..."></label>
+      </div>
+      <label class="chk"><input type="checkbox" data-agenda-pass-field="enabled" ${item.enabled !== false ? 'checked' : ''}> Pase activo</label>
+    </details>
+  </article>`;
+}
+
+function renderAgendaWorkspace(items) {
+  const ordered = agendaViewItems(items, RUNDOWN.activeDate || localDatePart());
+  const passes = ordered.length
+    ? ordered.map(({ item, i }) => agendaPassCardHtml(item, i)).join('')
+    : '<div class="empty">Todavía no hay ningún pase. Añade uno para decidir qué se ve ahora y después.</div>';
+  return `<div class="agenda-workspace">
+    ${renderAgendaBankPanel()}
+    <div class="agenda-section">
+      <div class="agenda-section-head">
+        <div><h3>2. Pases en pantalla</h3><p>Cada pase dice qué eventos se ven y durante qué intervalo.</p></div>
+        <button type="button" class="primary" data-agenda-pass-add>+ Añadir pase</button>
+      </div>
+      <div class="agenda-pass-list">${passes}</div>
+    </div>
   </div>`;
 }
 
 function renderLibraryPanel() {
   const keys = RUNDOWN.libraryKeys || [];
+  if (RUNDOWN_MODE === 'agenda') LIBRARY_CATEGORY = 'agendaEventos';
+  else if (LIBRARY_CATEGORY === 'agendaEventos') LIBRARY_CATEGORY = 'datosUtiles';
   if (!keys.some((x) => x.key === LIBRARY_CATEGORY) && keys[0]) LIBRARY_CATEGORY = keys[0].key;
-  $('#libraryCategory').innerHTML = keys.map((meta) => `<option value="${esc(meta.key)}" ${meta.key === LIBRARY_CATEGORY ? 'selected' : ''}>${esc(meta.label)}</option>`).join('');
+  const visibleKeys = RUNDOWN_MODE === 'agenda' ? keys.filter((meta) => meta.key === 'agendaEventos') : keys.filter((meta) => meta.key !== 'agendaEventos');
+  $('#libraryCategory').innerHTML = visibleKeys.map((meta) => `<option value="${esc(meta.key)}" ${meta.key === LIBRARY_CATEGORY ? 'selected' : ''}>${esc(meta.label)}</option>`).join('');
   const meta = currentLibraryMeta();
   const isAgenda = meta.key === 'agendaEventos';
+  const agendaMode = isAgenda && RUNDOWN_MODE === 'agenda';
   if (isAgenda) syncAgendaBankFromBlocks();
   const items = (RUNDOWN.library && Array.isArray(RUNDOWN.library[meta.key])) ? RUNDOWN.library[meta.key] : [];
   const activeDate = RUNDOWN.activeDate || localDatePart();
   const eligible = items.filter((item) => clientItemApplies(item, activeDate)).length;
   const viewItems = isAgenda ? agendaViewItems(items, activeDate) : items.map((item, i) => ({ item, i }));
   const libTitle = document.querySelector('#rdTabLib .library-head h3');
-  if (libTitle) libTitle.textContent = isAgenda ? 'Agenda viva' : 'Carrusel';
-  $('#btnLibraryAdd').textContent = isAgenda ? '＋ Añadir momento en pantalla' : '＋ Añadir pieza';
-  $('#btnLibraryAdd').title = isAgenda ? 'Crea una aparición de agenda con horario propio usando eventos guardados.' : 'Añade una pieza a este carrusel.';
+  if (libTitle) libTitle.textContent = agendaMode ? 'Agenda' : 'Carrusel';
+  $('#btnLibraryAdd').hidden = agendaMode;
+  $('#btnLibraryAdd').textContent = '＋ Añadir pieza';
+  $('#btnLibraryAdd').title = 'Añade una pieza a este carrusel.';
+  $('#libraryIntro').hidden = agendaMode;
+  $('#libraryCategoryLabel').hidden = agendaMode;
+  $('#libraryBulkBox').hidden = agendaMode;
+  $('#libraryIntro').style.display = agendaMode ? 'none' : '';
+  $('#libraryBulkBox').style.display = agendaMode ? 'none' : '';
+  document.querySelector('#rdTabLib .library-head').style.display = agendaMode ? 'none' : '';
+  document.querySelector('#rdTabLib .library-tools').style.display = agendaMode ? 'none' : '';
   $('#librarySummary').innerHTML =
     isAgenda
-      ? `<b>${items.length}</b> momento(s) de agenda · <b style="color:${eligible ? '#bff0d5' : '#ffd98a'}">${eligible}</b> pueden salir el ${esc(fmtShortDate(activeDate))}`
+      ? `<b>${items.length}</b> pase(s) de Agenda · <b style="color:${eligible ? '#bff0d5' : '#ffd98a'}">${eligible}</b> activos el ${esc(fmtShortDate(activeDate))}`
       : `<b>${items.length}</b> pieza(s) en esta categoría · <b style="color:${eligible ? '#bff0d5' : '#ffd98a'}">${eligible}</b> pueden salir el ${esc(fmtShortDate(activeDate))}`;
-  if (isAgenda) renderAgendaTimeline(items, activeDate);
+  if (agendaMode) $('#libraryPlanner').innerHTML = '';
+  else if (isAgenda) renderAgendaTimeline(items, activeDate);
   else renderPlanner();
+  if (agendaMode) {
+    $('#libraryList').innerHTML = renderAgendaWorkspace(items);
+    return;
+  }
   const listHtml = items.length ? viewItems.map(({ item, i }) => libraryItemHtml(meta, item, i)).join('') :
     `<div class="empty">Esta categoría está vacía. ${isAgenda ? 'Añade un momento en pantalla.' : 'Añade una pieza o importa un lote.'}</div>`;
   $('#libraryList').innerHTML = isAgenda
@@ -2611,6 +2699,10 @@ function collectRundown() {
 
 // Recoge SOLO la pieza expandida del DOM al modelo (las demás no tienen campos).
 function collectLibraryCategory() {
+  if (RUNDOWN_MODE === 'agenda') {
+    collectAgendaPasses();
+    return;
+  }
   if (!RUNDOWN || !RUNDOWN.library || LIB_OPEN < 0) return;
   const meta = currentLibraryMeta();
   const arr = RUNDOWN.library[meta.key];
@@ -2628,11 +2720,30 @@ function collectLibraryCategory() {
   if (mode && mode.value === 'always') { obj.start = ''; obj.end = ''; obj.startAt = ''; obj.endAt = ''; obj.dates = []; obj.weekdays = []; }
 }
 
+function collectAgendaPasses() {
+  if (!RUNDOWN || !RUNDOWN.library || !Array.isArray(RUNDOWN.library.agendaEventos)) return;
+  $('#libraryList').querySelectorAll('[data-agenda-pass-item]').forEach((wrap) => {
+    const i = Number(wrap.dataset.agendaPassItem);
+    const item = RUNDOWN.library.agendaEventos[i];
+    if (!item) return;
+    wrap.querySelectorAll('[data-agenda-pass-field]').forEach((field) => {
+      item[field.dataset.agendaPassField] = field.type === 'checkbox' ? field.checked : field.value;
+    });
+    item.eventIds = [...wrap.querySelectorAll('[data-agenda-pass-event]:checked')].map((field) => {
+      const value = String(field.dataset.agendaPassEvent || '');
+      return value.slice(value.indexOf(':') + 1);
+    }).filter(Boolean);
+    item.body = agendaResolvedBody(item);
+    item.template = item.template || 'agenda';
+    item.theme = item.theme || 'blanco';
+  });
+}
+
 function collectAgendaBank() {
   if (!RUNDOWN || !RUNDOWN.library) return;
   const rows = [...document.querySelectorAll('[data-agenda-bank-item]')];
   if (!rows.length) return;
-  RUNDOWN.library.agendaBanco = rows.map((row) => {
+  const entries = rows.map((row) => {
     const i = Number(row.dataset.agendaBankItem);
     const prev = ensureAgendaBank()[i] || blankAgendaBankEvent();
     const next = { ...prev };
@@ -2642,7 +2753,10 @@ function collectAgendaBank() {
     });
     if (!next.id) next.id = agendaEventId(next);
     return next;
-  }).filter((ev) => ev.title || ev.time || ev.place);
+  });
+  RUNDOWN.library.agendaBanco = RUNDOWN_MODE === 'agenda'
+    ? entries
+    : entries.filter((ev) => ev.title || ev.time || ev.place);
 }
 
 function sortAgendaLibraryForSave(startDate) {
@@ -2650,6 +2764,23 @@ function sortAgendaLibraryForSave(startDate) {
   const openItem = RUNDOWN.library.agendaEventos[LIB_OPEN] || null;
   RUNDOWN.library.agendaEventos = agendaViewItems(RUNDOWN.library.agendaEventos, startDate).map(({ item }) => item);
   if (openItem) LIB_OPEN = RUNDOWN.library.agendaEventos.indexOf(openItem);
+}
+
+function agendaValidationError() {
+  const items = (RUNDOWN && RUNDOWN.library && RUNDOWN.library.agendaEventos) || [];
+  const now = localDateTimePart();
+  const active = items.filter((item) => item.enabled !== false && (!item.endAt || item.endAt >= now));
+  for (let i = 0; i < active.length; i++) {
+    const item = active[i];
+    if (!item.startAt || !item.endAt) return `El pase ${i + 1} necesita fecha y hora de inicio y de fin.`;
+    if (item.endAt <= item.startAt) return `En el pase ${i + 1}, el final debe ser posterior al inicio.`;
+    if (!Array.isArray(item.eventIds) || !item.eventIds.length) return `El pase ${i + 1} no tiene ningún evento marcado.`;
+  }
+  const ordered = [...active].sort((a, b) => String(a.startAt).localeCompare(String(b.startAt)));
+  for (let i = 1; i < ordered.length; i++) {
+    if (ordered[i].startAt < ordered[i - 1].endAt) return `Los pases ${i} y ${i + 1} se solapan. Ajusta el inicio o el final.`;
+  }
+  return '';
 }
 
 function parseWeekdays(text) {
@@ -2690,10 +2821,14 @@ function parseBulkItems(text, meta) {
 // Guarda TODO de una vez: secuencia + contenido programado.
 async function saveAllRundown(opts = {}) {
   const date = $('#rundownDate').value || localDatePart();
-  const libraryOnly = opts.libraryOnly === true || RUNDOWN_MODE === 'library';
+  const libraryOnly = opts.libraryOnly === true || RUNDOWN_MODE !== 'rundown';
   if (!libraryOnly) collectRundown();
   collectAgendaBank();
   collectLibraryCategory();
+  if (RUNDOWN_MODE === 'agenda') {
+    const error = agendaValidationError();
+    if (error) { toast(error); return null; }
+  }
   sortAgendaLibraryForSave(date);
   const lib = RUNDOWN.library;
   if (!libraryOnly) {
@@ -2715,7 +2850,7 @@ async function saveAllRundown(opts = {}) {
   rdSetDirty(false);
   renderRundown();
   if (!opts.silent) toast(libraryOnly
-    ? 'Bancos guardados. Las cartelas de carrusel quedan actualizadas para regenerar (⟳)'
+    ? (RUNDOWN_MODE === 'agenda' ? 'Agenda guardada. Los cambios quedan listos para la siguiente actualización.' : 'Bancos guardados. Las cartelas de carrusel quedan actualizadas para regenerar (⟳)')
     : 'Guardado. Las cartelas con cambios quedan marcadas para regenerar (⟳)');
 }
 
@@ -3051,9 +3186,9 @@ function renderWizard() {
           <label>Texto</label><textarea data-wz-manual="${t.id}:body" placeholder="Texto breve para pantalla">${esc(cur.body || '')}</textarea>`;
       }
       if (t.typeId === 'agenda') {
-        if (agendaShown) return head + '<div class="status">Usa la misma programación de Agenda viva. Esta segunda cartela ocupa otro hueco de la escaleta.</div>';
+        if (agendaShown) return head + '<div class="status">Esta cartela usa la misma Agenda. Solo ocupa otro hueco de la secuencia.</div>';
         agendaShown = true;
-        return head + renderAgendaWizard();
+        return head + '<div class="status"><b>Agenda se gestiona desde su botón propio en la portada.</b><br>Aquí solo decides cuántas cartelas de Agenda hay en la secuencia.</div>';
       }
       if (t.typeId === 'ultima') {
         return head + `<div class="status">Reservado y desactivado. Se activa desde el botón 🚨 del panel cuando haga falta.</div>`;
@@ -3070,7 +3205,7 @@ function renderWizard() {
   // Paso 3: confirmación
   const newPieces = Object.values(WZ.adds).reduce((n, txt) => n + String(txt || '').split(/\r?\n/).filter((l) => l.trim()).length, 0);
   const agendaMoments = hasWizardType('agenda')
-    ? (WZ.agenda || []).filter((m) => String(m.body || '').trim() || (String(m.title || '').trim() && String(m.title || '').trim() !== 'Agenda')).length
+    ? ((RUNDOWN.library && RUNDOWN.library.agendaEventos) || []).length
     : 0;
   const bumperRows = chosen
     .map((t) => {
@@ -3086,7 +3221,7 @@ function renderWizard() {
       ${wizardCountHtml()}
       Paleta del día: <b>${esc(WZ.theme || 'Color propio de cada plantilla')}</b><br>
       Cobertura: <b>${WZ.days}</b> día(s); el carrusel cambia a diario sin repetir<br>
-      ${agendaMoments ? `Agenda viva: <b>${agendaMoments}</b> mensaje(s) programado(s)<br>` : ''}
+      ${hasWizardType('agenda') ? `Agenda: <b>${agendaMoments}</b> pase(s) guardado(s); se editan desde la portada<br>` : ''}
       ${newPieces ? `Se incorporan <b>${newPieces}</b> pieza(s) nuevas al carrusel<br>` : ''}
       ${bumperRows.length ? `Cortinillas automáticas:<br>${bumperRows.join('<br>')}<br>` : ''}
       Se generan las cartelas y se abre la vista previa del bucle<br>
@@ -3149,30 +3284,6 @@ async function wizardFinish() {
     });
     const lib = RUNDOWN.library || {};
     const activeDate = (WZ && WZ.date) || (RUNDOWN && RUNDOWN.activeDate) || localDatePart();
-    if (hasWizardType('agenda')) {
-      const meta = (RUNDOWN.libraryKeys || []).find((k) => k.key === 'agendaEventos') || { key: 'agendaEventos', template: 'agenda', theme: 'blanco' };
-      const agendaMoments = normalizeAgendaMoments(WZ.agenda || [])
-        .filter((m) => String(agendaResolvedBody(m) || m.body || '').trim() || (Array.isArray(m.eventIds) && m.eventIds.length))
-        .map((m) => ({
-          ...blankLibraryItem(meta),
-          title: m.title || 'Agenda',
-          subtitle: m.subtitle || '',
-          body: agendaResolvedBody(m) || m.body || '',
-          startAt: m.startAt || '',
-          endAt: m.endAt || '',
-          start: m.start || '',
-          end: m.end || '',
-          dates: Array.isArray(m.dates) ? m.dates : [],
-          eventIds: Array.isArray(m.eventIds) ? m.eventIds : [],
-        }))
-        .filter((item) => String(item.title || item.body || '').trim());
-      if (agendaMoments.length) {
-        const now = localDateTimePart();
-        const history = (Array.isArray(lib.agendaEventos) ? lib.agendaEventos : [])
-          .filter((item) => item.endAt && item.endAt < now);
-        lib.agendaEventos = [...history, ...agendaMoments];
-      }
-    }
     for (const [key, text] of Object.entries(WZ.adds)) {
       const meta = (RUNDOWN.libraryKeys || []).find((k) => k.key === key) || { key, template: 'noticia', theme: '' };
       const items = parseBulkItems(text || '', meta);
@@ -3227,6 +3338,7 @@ function applyAgendaQuick(i, kind) {
 }
 
 $('#btnRundown').addEventListener('click', openWizard);
+$('#btnAgenda').addEventListener('click', openAgenda);
 $('#btnBanks').addEventListener('click', openBanks);
 $('#wzClose').addEventListener('click', () => wizardDlg.close());
 $('#wzAdvanced').addEventListener('click', () => { wizardDlg.close(); openRundown(); });
@@ -3631,12 +3743,59 @@ $('#libraryList').addEventListener('change', (e) => {
 });
 $('#libraryList').addEventListener('click', (e) => {
   if (!RUNDOWN) return;
+  const passAdd = e.target.closest('[data-agenda-pass-add]');
+  if (passAdd) {
+    collectAgendaBank();
+    collectAgendaPasses();
+    const items = RUNDOWN.library.agendaEventos || [];
+    const previous = [...items].sort((a, b) => String(a.endAt || '').localeCompare(String(b.endAt || ''))).pop() || null;
+    items.push(blankAgendaLibraryItem(previous));
+    rdSetDirty(true);
+    renderLibraryPanel();
+    const cards = $('#libraryList').querySelectorAll('[data-agenda-pass-item]');
+    if (cards.length) cards[cards.length - 1].scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return;
+  }
+  const passDel = e.target.closest('[data-agenda-pass-del]');
+  if (passDel) {
+    collectAgendaBank();
+    collectAgendaPasses();
+    const i = Number(passDel.dataset.agendaPassDel);
+    if (!confirm('¿Quitar este pase de Agenda? Los eventos guardados no se borran.')) return;
+    (RUNDOWN.library.agendaEventos || []).splice(i, 1);
+    rdSetDirty(true);
+    renderLibraryPanel();
+    return;
+  }
+  const passQuick = e.target.closest('[data-agenda-pass-quick]');
+  if (passQuick) {
+    collectAgendaBank();
+    collectAgendaPasses();
+    const [idxRaw, action] = passQuick.dataset.agendaPassQuick.split(':');
+    const item = RUNDOWN.library.agendaEventos && RUNDOWN.library.agendaEventos[Number(idxRaw)];
+    if (!item) return;
+    const now = localDateTimePart();
+    const today = localDatePart();
+    if (action === 'now') item.startAt = now;
+    if (action === '2h') item.endAt = addMinutesLocal(item.startAt || now, 120);
+    if (action === 'tomorrowNoon') item.endAt = dtLocal(addDays(today, 1), '12:00');
+    if (action === 'sunday23') {
+      let sunday = today;
+      while (clientDayNumber(sunday) !== 7) sunday = addDays(sunday, 1);
+      item.endAt = dtLocal(sunday, '23:00');
+    }
+    rdSetDirty(true);
+    renderLibraryPanel();
+    return;
+  }
   const bankAdd = e.target.closest('[data-agenda-bank-add]');
   if (bankAdd) {
     collectAgendaBank();
     ensureAgendaBank().push(blankAgendaBankEvent());
     rdSetDirty(true);
     renderLibraryPanel();
+    const titles = $('#libraryList').querySelectorAll('[data-agenda-bank-field="title"]');
+    if (titles.length) titles[titles.length - 1].focus();
     return;
   }
   const bankDel = e.target.closest('[data-agenda-bank-del]');
