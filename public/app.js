@@ -47,6 +47,8 @@ let SIMPLE_MODE = false;
 let galleryOpen = false;
 let galleryToken = 0;
 const tplCache = new Map(); // clave: template|datos -> objectURL
+const rotationPreviewCache = new Map();
+let rotationPreviewToken = 0;
 
 async function loadConfig() {
   try {
@@ -544,10 +546,178 @@ async function load() {
   try {
     applyUserMode(await api('/whoami'));
   } catch {}
-  cards = await api('/cards');
+  const date = localDatePart();
+  const [nextCards, nextRundown] = await Promise.all([
+    api('/cards'),
+    api('/rundown?date=' + encodeURIComponent(date)).catch(() => null),
+  ]);
+  cards = nextCards;
+  if (nextRundown) RUNDOWN = nextRundown;
   cards.sort((a, b) => (a.order || 0) - (b.order || 0));
   render();
   loadStatus();
+}
+
+function workerDisplayName(key) {
+  return ({
+    weather: 'Tiempo actual', forecast: 'Previsión', airQuality: 'Calidad del aire',
+    powerPrice: 'Precio de la luz', fuel: 'Gasolina', poolCapacity: 'Aforo',
+  })[key] || 'Dato automático';
+}
+
+function futureScheduleStamp(item) {
+  const now = Date.now();
+  if (item && item.startAt) {
+    const stamp = Date.parse(item.startAt);
+    if (Number.isFinite(stamp) && stamp > now) return stamp;
+  }
+  const today = localDatePart();
+  const date = [...((item && item.dates) || [])].sort().find((value) => value > today) || (item && item.start > today ? item.start : '');
+  return date ? Date.parse(`${date}T00:00:00`) : null;
+}
+
+function activationFor(item, rotation, offset = 1) {
+  if (item && item.startAt) return `Se activará ${fmtMoment(item.startAt)}`;
+  if (item && item.dates && item.dates.length) {
+    const dates = [...item.dates].sort();
+    const date = dates.find((value) => value >= localDatePart()) || dates[0];
+    return `Se activará el ${fmtShortDate(date)}`;
+  }
+  if (item && item.start) return `Se activará el ${fmtShortDate(item.start)}`;
+  const next = new Date();
+  if (rotation === 'hora') {
+    next.setMinutes(0, 0, 0);
+    next.setHours(next.getHours() + offset);
+    return `Se activará a las ${next.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', timeZone: DISPLAY_TIME_ZONE })}`;
+  }
+  next.setDate(next.getDate() + offset);
+  const firstPass = (PILOT && PILOT.time) || '08:00';
+  return `Siguiente rotación: ${next.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short', timeZone: DISPLAY_TIME_ZONE })} · ${firstPass}`;
+}
+
+function futureCardFromItem(item, key) {
+  const meta = libraryMetaForKey(key);
+  return {
+    type: 'generated',
+    template: item.template || meta.template || 'noticia',
+    theme: item.theme || meta.theme || null,
+    title: item.title || '',
+    subtitle: item.subtitle || '',
+    body: key === 'agendaEventos' ? agendaResolvedBody(item) : (item.body || ''),
+    date: item.date || '',
+    duration: 8,
+    video: false,
+  };
+}
+
+function currentLibraryIndexForCard(card) {
+  const key = card && card.rundownLibraryKey;
+  const items = key && RUNDOWN && RUNDOWN.library && Array.isArray(RUNDOWN.library[key]) ? RUNDOWN.library[key] : [];
+  const bodyOf = (item) => key === 'agendaEventos' ? agendaResolvedBody(item) : String(item.body || '');
+  let index = items.findIndex((item) =>
+    String(item.title || '') === String(card.title || '') &&
+    String(item.subtitle || '') === String(card.subtitle || '') &&
+    bodyOf(item) === String(card.body || ''));
+  if (index < 0) index = items.findIndex((item) =>
+    String(item.title || '') === String(card.title || '') && String(item.subtitle || '') === String(card.subtitle || ''));
+  return index;
+}
+
+function rotationPlanFor(card) {
+  if (!RUNDOWN || !card || !card.rundownSlot) return null;
+  const slots = ((RUNDOWN.rundown || {}).slots || []);
+  const slot = slots.find((item) => String(item.id) === String(card.rundownSlot));
+  if (!slot) return null;
+  const workerKey = card.rundownWorkerKey || slot.workerKey;
+  if (slot.source === 'worker' || workerKey) {
+    const every = Number(PILOT && PILOT.syncEveryMinutes) || 60;
+    return {
+      kind: 'worker',
+      title: 'Se actualiza automáticamente',
+      detail: `${workerDisplayName(workerKey)} · el piloto comprueba cambios cada ${every} min`,
+    };
+  }
+  if (slot.source !== 'library' || !slot.libraryKey) return null;
+  const key = slot.libraryKey;
+  const items = ((RUNDOWN.library || {})[key] || []).map((item, index) => ({ item, index }))
+    .filter(({ item }) => item && item.enabled !== false && (item.title || item.body || (item.eventIds && item.eventIds.length)));
+  if (!items.length) return { kind: 'note', title: 'Banco vacío', detail: 'Añade una pieza para programar la siguiente sustitución.' };
+  const report = ((RUNDOWN.report || []).find((row) => String(row.id) === String(slot.id))) || {};
+  if (key !== 'agendaEventos' && report.manualPick) {
+    return { kind: 'note', title: 'Pieza fijada para hoy', detail: 'Mañana volverá al carrusel automático.' };
+  }
+  const now = Date.now();
+  let candidates = items.map((entry) => ({ ...entry, futureStamp: futureScheduleStamp(entry.item) }))
+    .filter((entry) => entry.futureStamp && entry.futureStamp > now)
+    .sort((a, b) => a.futureStamp - b.futureStamp);
+  if (!candidates.length && key !== 'agendaEventos' && items.length > 1) {
+    let current = items.findIndex(({ item }) =>
+      String(item.title || '') === String(card.title || '') && String(item.subtitle || '') === String(card.subtitle || ''));
+    if (current < 0) current = 0;
+    candidates = [...items.slice(current + 1), ...items.slice(0, current)];
+  }
+  if (!candidates.length) {
+    return {
+      kind: 'note',
+      title: key === 'agendaEventos' ? 'Sin otro pase programado' : 'Una sola pieza activa',
+      detail: key === 'agendaEventos' ? 'Esta cartela seguirá hasta el final de su franja.' : 'No cambiará de mensaje mientras el banco tenga una sola pieza.',
+    };
+  }
+  const next = candidates[0];
+  return {
+    kind: 'future', key, index: next.index,
+    card: futureCardFromItem(next.item, key),
+    when: activationFor(next.item, slot.rotation, 1),
+    title: next.item.title || next.item.body || 'Siguiente pieza',
+    theme: next.item.theme || '',
+    more: Math.max(0, candidates.length - 1),
+  };
+}
+
+function rotationSideHtml(plan, previewId) {
+  if (!plan) return '';
+  if (plan.kind === 'worker' || plan.kind === 'note') {
+    return `<aside class="rotation-branch"><span class="rotation-arrow">›</span><div class="rotation-note ${plan.kind === 'worker' ? 'worker' : ''}"><b>${esc(plan.title)}</b><small>${esc(plan.detail)}</small></div></aside>`;
+  }
+  return `<aside class="rotation-branch">
+    <span class="rotation-arrow">›</span>
+    <div>
+      <button type="button" class="rotation-future" data-rotation-key="${esc(plan.key)}" data-rotation-index="${plan.index}" title="Editar texto, plantilla y color">
+        <div class="rotation-future-thumb" data-rotation-preview="${esc(previewId)}"><span class="rotation-future-loading">Preparando vista...</span><span class="rotation-when">${esc(plan.when)}</span></div>
+        <span class="rotation-future-meta"><b>${esc(plan.title)}</b><small class="rotation-mobile-when">${esc(plan.when)}</small><small>Editar texto, plantilla y color${plan.theme ? ` · ${esc(plan.theme)}` : ''}</small></span>
+      </button>
+      ${plan.more ? `<span class="rotation-more">+ ${plan.more} cambio(s) después</span>` : ''}
+    </div>
+  </aside>`;
+}
+
+function rotationPreviewKey(card) {
+  return JSON.stringify([card.template, card.theme, card.title, card.subtitle, card.body, card.date]);
+}
+
+async function loadRotationPreviews(queue, token) {
+  for (const entry of queue) {
+    if (token !== rotationPreviewToken) return;
+    const target = document.querySelector(`[data-rotation-preview="${entry.id}"]`);
+    if (!target) continue;
+    const key = rotationPreviewKey(entry.card);
+    let url = rotationPreviewCache.get(key);
+    if (!url) {
+      try {
+        const response = await fetch('/api/preview', { method: 'POST', headers: H, body: JSON.stringify({ ...entry.card, _thumbW: 420 }) });
+        if (!response.ok) throw new Error('preview');
+        url = URL.createObjectURL(await response.blob());
+        rotationPreviewCache.set(key, url);
+      } catch { url = ''; }
+    }
+    if (token !== rotationPreviewToken) return;
+    const current = document.querySelector(`[data-rotation-preview="${entry.id}"]`);
+    if (current && url) {
+      const loading = current.querySelector('.rotation-future-loading');
+      if (loading) loading.remove();
+      current.insertAdjacentHTML('afterbegin', `<img src="${url}" alt="">`);
+    }
+  }
 }
 
 function render() {
@@ -566,6 +736,8 @@ function render() {
     sum.textContent = `${act.length} activa(s) · vuelta de ${durationLabel(secs)}${pending ? ` · ${pending} por generar` : ''}`;
   }
   el.innerHTML = '';
+  const previewQueue = [];
+  const previewToken = ++rotationPreviewToken;
   cards.forEach((c, i) => {
     const rendered = c.rendered || null;
     const staleRendered = c.staleRendered || null;
@@ -605,14 +777,24 @@ function render() {
         <span class="spacer"></span>
         <button class="iconbtn" data-up="${i}" ${i===0?'disabled':''} title="Subir">▲</button>
         <button class="iconbtn" data-down="${i}" ${i===cards.length-1?'disabled':''} title="Bajar">▼</button>
-        <button class="iconbtn" data-edit="${c.id}" title="Editar contenido">✎</button>
+        <button class="iconbtn" data-edit="${c.id}" title="${c.rundownLibraryKey ? 'Editar texto, plantilla y color' : 'Editar contenido'}">✎</button>
         ${c.type === 'generated' ? `<button class="iconbtn ${!rendered ? 'attn' : ''}" data-render="${c.id}" title="${rendered ? 'Regenerar archivo (no suele hacer falta)' : 'Generar el archivo'}">⟳</button>` : ''}
         ${rendered && rendered.type === 'video' ? `<button class="iconbtn" data-view-video="${c.id}" title="Ver vídeo generado">▶</button>` : ''}
         ${c.type === 'generated' && c.template !== 'gasolina' ? `<button class="iconbtn" data-design="${c.id}" title="Editor de diseño">🎨</button>` : ''}
         <button class="iconbtn danger" data-del="${c.id}" title="Eliminar">🗑</button>
       </div>`;
-    el.appendChild(div);
+    const plan = rotationPlanFor(c);
+    const row = document.createElement('div');
+    row.className = 'rotation-row' + (plan ? '' : ' no-branch');
+    row.appendChild(div);
+    if (plan) {
+      const previewId = `rot_${previewToken}_${i}`;
+      row.insertAdjacentHTML('beforeend', rotationSideHtml(plan, previewId));
+      if (plan.kind === 'future') previewQueue.push({ id: previewId, card: plan.card });
+    }
+    el.appendChild(row);
   });
+  loadRotationPreviews(previewQueue, previewToken);
 }
 
 function todayState() {
@@ -1299,13 +1481,25 @@ $('#btnSaveRender').addEventListener('click', () => saveEditor({ renderAfter: tr
 // --- Delegación de eventos de la lista ---
 $('#list').addEventListener('click', async (e) => {
   const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.rotationKey && b.dataset.rotationIndex != null) {
+    const key = b.dataset.rotationKey;
+    const index = Number(b.dataset.rotationIndex);
+    await openBanks(key, { openIndex: index, agenda: key === 'agendaEventos' });
+    return;
+  }
   if (SIMPLE_MODE && (b.dataset.up != null || b.dataset.down != null || b.dataset.edit || b.dataset.render || b.dataset.design || b.dataset.del)) {
     toast('Modo simple: cambia la emisión desde Crear emisión.');
     return;
   }
   if (b.dataset.up != null) move(+b.dataset.up, -1);
   else if (b.dataset.down != null) move(+b.dataset.down, +1);
-  else if (b.dataset.edit) openEditor(cards.find(c => c.id === b.dataset.edit));
+  else if (b.dataset.edit) {
+    const card = cards.find((c) => c.id === b.dataset.edit);
+    const key = card && card.rundownLibraryKey;
+    const index = key ? currentLibraryIndexForCard(card) : -1;
+    if (key && index >= 0) await openBanks(key, { openIndex: index, agenda: key === 'agendaEventos' });
+    else openEditor(card);
+  }
   else if (b.dataset.render) {
     b.disabled = true;
     const card = cards.find((c) => c.id === b.dataset.render);
