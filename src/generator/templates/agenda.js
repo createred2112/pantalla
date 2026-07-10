@@ -7,15 +7,16 @@ module.exports = {
   label: 'Agenda / Lista del día',
   hint: { title: 'Etiqueta de la banda (p. ej. AGENDA)', subtitle: 'Periodo visible', body: 'Una línea por evento: FECHA | HORA | Nombre | Detalle', date: '—' },
   defaultTheme: 'blanco',
+  dynamicLayoutText: true,
   logo: false, // dibuja su propia marca en la banda inferior
   build(card, ctx) {
-    const { W, H } = ctx;
+    const { W, H, theme } = ctx;
     const pad = Math.round(W * 0.052);
-    const red = '#FF2D2D';
-    const white = '#FFFFFF';
-    const paper = '#F2F1ED';
-    const dark = '#0E0E0E';
-    const rowText = '#0E0E0E';
+    const red = theme.accent;
+    const white = theme.accentText;
+    const paper = theme.bg;
+    const dark = theme.text;
+    const rowText = theme.text;
     const topH = Math.round(H * 0.145);
     const botH = Math.round(H * 0.13);
     const els = [];
@@ -36,8 +37,9 @@ module.exports = {
     els.push({
       type: 'text', x: pad, y: headTextY, w: Math.round(W * (subtitle ? 0.38 : 0.6)), h: headTextH,
       text: title.toUpperCase(), font: 'display', weight: 800, color: white,
-      align: 'left', valign: 'center', size: Math.round(topH * 0.72),
+      align: 'left', valign: 'center',
       lineHeight: 0.9, letterSpacingEm: 0.01,
+      autofit: { min: Math.round(topH * 0.3), max: Math.round(topH * 0.72), lines: 1 },
     });
     if (subtitle) {
       els.push({
@@ -83,7 +85,7 @@ module.exports = {
       const rowTop = top + i * rowH, cyy = rowTop + rowH / 2;
       const boxW = Math.round(W * (n === 1 ? 0.24 : 0.2));
       const boxH = Math.round(Math.min(rowH * (n === 1 ? 0.72 : 0.66), H * (n === 1 ? 0.32 : 0.22)));
-      if (i > 0) els.push({ type: 'rect', x: pad, y: Math.round(rowTop), w: W - pad * 2, h: 2, color: 'rgba(14,14,14,0.18)' });
+      if (i > 0) els.push({ type: 'rect', x: pad, y: Math.round(rowTop), w: W - pad * 2, h: 2, color: theme.textMuted });
       const hasTime = Boolean(it.time);
       const nameX = hasTime ? pad + boxW + Math.round(W * 0.018) : pad;
       const nameW = W - nameX - pad;
@@ -99,7 +101,7 @@ module.exports = {
 
     // Banda inferior: marca textual + chevrons.
     els.push({ type: 'rect', x: 0, y: H - botH, w: W, h: botH, color: dark });
-    els.push({ type: 'logo', x: pad, y: Math.round(H - botH + botH * 0.18), w: Math.round(W * 0.43), h: Math.round(botH * 0.66), text: brandText, color: white, font: 'text', weight: 900, size: Math.round(botH * 0.62) });
+    els.push({ type: 'logo', x: pad, y: Math.round(H - botH + botH * 0.18), w: Math.round(W * 0.43), h: Math.round(botH * 0.66), text: brandText, color: paper, font: 'text', weight: 900, size: Math.round(botH * 0.62) });
     const cs = Math.round(botH * 0.22), chx = W - pad - Math.round(W * 0.02), chy = H - botH / 2;
     let chev = '';
     [0, 1].forEach((k) => { const x = chx - k * cs * 1.1; chev += `<polyline points="${x - cs},${chy - cs} ${x},${chy} ${x - cs},${chy + cs}" fill="none" stroke="${red}" stroke-width="${Math.round(cs * 0.4)}" stroke-linecap="round" stroke-linejoin="round"/>`; });

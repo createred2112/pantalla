@@ -7,6 +7,7 @@ module.exports = {
   label: 'Gasolina (más baratas hoy)',
   hint: { title: 'Precio más barato (lo rellena el worker)', subtitle: 'Etiqueta (chip)', body: '—', date: 'Fuente' },
   defaultTheme: 'carbon',
+  dynamicLayoutText: true,
   logoPos: 'bl',
   build(card, ctx) {
     const { W, H, theme } = ctx;
@@ -23,7 +24,7 @@ module.exports = {
 
     els.push({ type: 'chip', x: pad, y: Math.round(H * 0.065), size: Math.round(H * 0.04), bg: theme.accent, color: theme.accentText, text: card.subtitle || 'GASOLINA 95 · HOY', letterSpacing: 2 });
     if (card.date) {
-      els.push({ type: 'text', x: Math.round(W * 0.56), y: Math.round(H * 0.065), w: Math.round(W * 0.44) - pad, h: Math.round(H * 0.08), text: 'MITECO', font: 'text', weight: 800, color: theme.textMuted, align: 'right', valign: 'center', size: Math.round(H * 0.033) });
+      els.push({ type: 'text', x: Math.round(W * 0.56), y: Math.round(H * 0.065), w: Math.round(W * 0.44) - pad, h: Math.round(H * 0.08), text: card.date.toUpperCase(), font: 'text', weight: 800, color: theme.textMuted, align: 'right', valign: 'center', size: Math.round(H * 0.033) });
     }
 
     // Dos filas máximo: si metemos tres, en la pantalla real no se leen.

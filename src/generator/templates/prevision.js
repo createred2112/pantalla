@@ -9,6 +9,7 @@ module.exports = {
   label: 'Previsión (3 días)',
   hint: { title: '(lo rellena el worker)', subtitle: 'Etiqueta (chip)', body: '—', date: 'Fuente' },
   defaultTheme: 'carbon',
+  dynamicLayoutText: true,
   logoPos: 'bl',
   build(card, ctx) {
     const { W, H, theme } = ctx;

@@ -5,9 +5,9 @@ module.exports = {
   id: 'meteoaviso',
   label: 'Aviso meteorologico',
   hint: {
-    title: 'Nivel: ALERTA NARANJA, AMARILLA...',
-    subtitle: 'Riesgo: temperaturas extremas, tormentas...',
-    body: 'Mensaje o consejos principales',
+    title: 'Mensaje principal',
+    subtitle: 'Texto de la etiqueta superior',
+    body: 'Detalle o consejo adicional',
     date: 'Vigencia o fuente',
   },
   defaultTheme: 'naranja',

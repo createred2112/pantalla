@@ -18,6 +18,9 @@ module.exports = {
       els.push({ type: 'rect', x: pad, y: Math.round(H * 0.79), w: Math.round(W * 0.07), h: Math.max(6, Math.round(H * 0.009)), color: theme.accent, radius: 3 });
       els.push({ type: 'text', x: pad, y: Math.round(H * 0.815), w, h: Math.round(H * 0.08), text: card.subtitle, font: 'text', weight: 700, color: theme.accent, align: 'left', valign: 'center', size: Math.round(H * 0.048) });
     }
+    if (card.date) {
+      els.push({ type: 'text', x: Math.round(W * 0.62), y: Math.round(H * 0.815), w: Math.round(W * 0.3), h: Math.round(H * 0.08), text: card.date.toUpperCase(), font: 'text', weight: 800, color: theme.textMuted, align: 'right', valign: 'center', size: Math.round(H * 0.038) });
+    }
     return { background: { type: 'solid', color: theme.bg }, elements: els };
   },
 };

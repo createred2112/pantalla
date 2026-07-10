@@ -137,6 +137,131 @@ function inferBind(el, card) {
   return null;
 }
 
+function inferTransform(el, card, bind) {
+  if (!bind || card[bind] == null) return null;
+  const raw = String(card[bind]);
+  return raw && String(el.text || '') === raw.toUpperCase() && raw !== raw.toUpperCase() ? 'upper' : null;
+}
+
+function tokenForThemeValue(value, theme) {
+  const raw = norm(value);
+  if (!raw) return null;
+  return TOKEN_KEYS.find((key) => norm(theme && theme[key]) === raw) || null;
+}
+
+function annotateGeneratedFrame(frame, card, ctx) {
+  const background = frame && frame.background ? { ...frame.background } : { type: 'solid', color: ctx.theme.bg };
+  if (background.color && !background.colorTheme && !background.colorFixed) {
+    background.colorTheme = tokenForThemeValue(background.color, ctx.theme);
+  }
+  const elements = ((frame && frame.elements) || []).map((source, i) => {
+    const el = { id: 'el' + i, ...source };
+    const bind = el.bind || inferBind(el, card);
+    if (bind) {
+      el.bind = bind;
+      if (!el.transform) el.transform = inferTransform(el, card, bind) || undefined;
+    }
+    if (el.color && !el.colorTheme && !el.colorFixed) el.colorTheme = tokenForThemeValue(el.color, ctx.theme);
+    if (el.bg && !el.bgTheme && !el.bgFixed) el.bgTheme = tokenForThemeValue(el.bg, ctx.theme);
+    return el;
+  });
+  return { ...(frame || {}), background, elements };
+}
+
+function valueLooksLikeThemeRole(value, role) {
+  const raw = norm(value);
+  if (!raw || !role) return false;
+  return Object.values(cfg.palette || {}).some((theme) => norm(theme && theme[role]) === raw);
+}
+
+// Los primeros diseños del editor guardaban posiciones junto con el texto y
+// los colores visibles, pero sin indicar de qué campo o rol de paleta venían.
+// Recuperamos esos vínculos comparando cada elemento con la plantilla actual.
+// Así se conserva el diseño del usuario sin congelar mensajes ni paletas.
+function reconcileSavedLayout(layout, card, ctx, tpl) {
+  let canonical;
+  try { canonical = annotateGeneratedFrame(tpl.build(card, ctx) || { elements: [] }, card, ctx); }
+  catch { return layout; }
+  if (tpl.dynamicLayoutText === true) {
+    const saved = layout.elements || [];
+    const savedById = new Map(saved.map((el) => [String(el.id), el]));
+    const used = new Set();
+    const distance = (a, b) => Math.abs(Number(a.x || 0) - Number(b.x || 0)) / Math.max(1, ctx.W) +
+      Math.abs(Number(a.y || 0) - Number(b.y || 0)) / Math.max(1, ctx.H) +
+      Math.abs(Number(a.w || 0) - Number(b.w || 0)) / Math.max(1, ctx.W) +
+      Math.abs(Number(a.h || 0) - Number(b.h || 0)) / Math.max(1, ctx.H);
+    const elements = (canonical.elements || []).map((fresh) => {
+      const direct = savedById.get(String(fresh.id));
+      let old = direct && direct.type === fresh.type && !used.has(direct) ? direct : null;
+      if (!old) {
+        const options = saved.filter((el) => el.type === fresh.type && !used.has(el)).sort((a, b) => distance(a, fresh) - distance(b, fresh));
+        if (options.length && distance(options[0], fresh) <= 0.2) old = options[0];
+      }
+      if (!old) return fresh;
+      used.add(old);
+      const el = { ...fresh, ...old, id: fresh.id };
+      if (fresh.text != null) el.text = fresh.text;
+      if (fresh.svg != null) el.svg = fresh.svg;
+      if (fresh.anim != null) el.anim = fresh.anim;
+      if (fresh.bind) el.bind = fresh.bind;
+      if (fresh.transform) el.transform = fresh.transform;
+      if (!el.colorTheme && !el.colorFixed && fresh.colorTheme && valueLooksLikeThemeRole(el.color, fresh.colorTheme)) el.colorTheme = fresh.colorTheme;
+      if (!el.bgTheme && !el.bgFixed && fresh.bgTheme && valueLooksLikeThemeRole(el.bg, fresh.bgTheme)) el.bgTheme = fresh.bgTheme;
+      return el;
+    });
+    const background = layout.background ? { ...layout.background } : canonical.background;
+    if (background && !background.colorTheme && !background.colorFixed && canonical.background && canonical.background.colorTheme &&
+        valueLooksLikeThemeRole(background.color, canonical.background.colorTheme)) background.colorTheme = canonical.background.colorTheme;
+    return { ...layout, background, elements };
+  }
+  const byId = new Map((canonical.elements || []).map((el) => [String(el.id), el]));
+  const represented = new Set();
+  const nearestFresh = (el) => {
+    const candidates = (canonical.elements || []).filter((fresh) => fresh.type === el.type && !represented.has(String(fresh.id)));
+    if (!candidates.length) return null;
+    const score = (fresh) => Math.abs(Number(fresh.x || 0) - Number(el.x || 0)) / Math.max(1, ctx.W) +
+      Math.abs(Number(fresh.y || 0) - Number(el.y || 0)) / Math.max(1, ctx.H) +
+      Math.abs(Number(fresh.w || 0) - Number(el.w || 0)) / Math.max(1, ctx.W) +
+      Math.abs(Number(fresh.h || 0) - Number(el.h || 0)) / Math.max(1, ctx.H);
+    candidates.sort((a, b) => score(a) - score(b));
+    return score(candidates[0]) <= 0.2 ? candidates[0] : null;
+  };
+  const elements = (layout.elements || []).map((source) => {
+    const el = { ...source };
+    const direct = byId.get(String(el.id));
+    const fresh = direct && direct.type === el.type ? direct : nearestFresh(el);
+    if (!fresh) return el;
+    represented.add(String(fresh.id));
+    if (fresh.bind && (!el.bind || el.bind === fresh.bind)) {
+      if (!el.bind) el.bind = fresh.bind;
+      if (fresh.transform) el.transform = fresh.transform;
+    }
+    if (!el.colorTheme && !el.colorFixed && fresh.colorTheme && valueLooksLikeThemeRole(el.color, fresh.colorTheme)) {
+      el.colorTheme = fresh.colorTheme;
+    }
+    if (!el.bgTheme && !el.bgFixed && fresh.bgTheme && valueLooksLikeThemeRole(el.bg, fresh.bgTheme)) {
+      el.bgTheme = fresh.bgTheme;
+    }
+    return el;
+  });
+
+  // Si el layout se guardó cuando un campo estaba vacío, su elemento ni
+  // siquiera existía. Se añade ahora que hay contenido, ya vinculado.
+  for (const fresh of canonical.elements || []) {
+    if (!fresh.bind || represented.has(String(fresh.id))) continue;
+    if (card[fresh.bind] == null || String(card[fresh.bind]).trim() === '') continue;
+    if (elements.some((el) => el.bind === fresh.bind)) continue;
+    elements.push(fresh);
+  }
+
+  const background = layout.background ? { ...layout.background } : canonical.background;
+  if (background && !background.colorTheme && !background.colorFixed && canonical.background && canonical.background.colorTheme &&
+      valueLooksLikeThemeRole(background.color, canonical.background.colorTheme)) {
+    background.colorTheme = canonical.background.colorTheme;
+  }
+  return { ...layout, background, elements };
+}
+
 function themeValue(ctx, key) {
   const theme = (ctx && ctx.theme) || {};
   return theme[key] || null;
@@ -657,14 +782,15 @@ function repairFrameForCard(card, ctx, frame, opts = {}) {
 // de la plantilla > el que genera la plantilla en código.
 function resolveFrame(card, ctx, tpl) {
   if (card.layout && Array.isArray(card.layout.elements)) {
-    return repairFrameForCard(card, ctx, applyLayout(card.layout, card, ctx, tpl), { preserveLayout: true });
+    const layout = reconcileSavedLayout(card.layout, card, ctx, tpl);
+    return repairFrameForCard(card, ctx, applyLayout(layout, card, ctx, tpl), { preserveLayout: true });
   }
   const tl = require('../templateLayouts').get(card.template, ctx.theme && ctx.theme.key);
   if (tl && Array.isArray(tl.elements)) {
-    return repairFrameForCard(card, ctx, applyLayout(tl, card, ctx, tpl), { preserveLayout: true });
+    const layout = reconcileSavedLayout(tl, card, ctx, tpl);
+    return repairFrameForCard(card, ctx, applyLayout(layout, card, ctx, tpl), { preserveLayout: true });
   }
-  const frame = tpl.build(card, ctx) || { elements: [] };
-  frame.elements = (frame.elements || []).map((e, i) => Object.assign({ id: 'el' + i, bind: inferBind(e, card) }, e));
+  const frame = annotateGeneratedFrame(tpl.build(card, ctx) || { elements: [] }, card, ctx);
   return ensureLogoElement(repairFrameForCard(card, ctx, frame), ctx, tpl);
 }
 

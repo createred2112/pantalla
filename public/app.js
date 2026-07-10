@@ -221,10 +221,10 @@ function applyHints() {
   const h = (t && t.hint) || {};
   const tpl = t && t.id;
   $('#edTitleLabel').textContent = 'Título';
-  $('#edSubtitleLabel').textContent = tpl === 'datocurioso' ? 'Texto superior' : 'Subtítulo';
+  $('#edSubtitleLabel').textContent = tpl === 'datocurioso' ? 'Texto superior' : (tpl === 'meteoaviso' ? 'Etiqueta superior' : 'Subtítulo');
   $('#edBodyLabel').textContent = 'Texto';
   $('#edDateLabel').textContent = 'Fecha';
-  $('#edSubtitle').placeholder = tpl === 'datocurioso' ? 'GasteizBerri, Dato curioso, Sabías que...' : 'Sección';
+  $('#edSubtitle').placeholder = tpl === 'datocurioso' ? 'GasteizBerri, Dato curioso, Sabías que...' : (tpl === 'meteoaviso' ? 'Aviso amarillo por calor' : 'Sección');
   $('#hTitle').textContent = h.title ? '· ' + h.title : '';
   $('#hSubtitle').textContent = h.subtitle ? '· ' + h.subtitle : '';
   $('#hBody').textContent = h.body && h.body !== '—' ? '· ' + h.body : '';
@@ -2584,7 +2584,7 @@ function libraryItemHtml(meta, item, i) {
   const isAgenda = meta.key === 'agendaEventos';
   const isCurious = meta.key === 'datosCuriosos';
   const isMeteo = meta.key === 'avisosMeteorologicos' || meta.key === 'consejosMeteorologicos';
-  const subtitleLabel = isAgenda ? 'Etiqueta' : (isCurious ? 'Cabecera superior' : (isMeteo ? 'Riesgo o tipo de aviso' : 'Firma/sección'));
+  const subtitleLabel = isAgenda ? 'Etiqueta' : (isCurious ? 'Cabecera superior' : (isMeteo ? 'Etiqueta superior' : 'Firma/sección'));
   const agendaBody = isAgenda ? agendaResolvedBody(item) : '';
   const head = `<button type="button" class="lib-row" data-lib-open="${i}">
       <span class="lib-dot ${item.enabled !== false ? 'on' : ''}"></span>
@@ -2599,7 +2599,7 @@ function libraryItemHtml(meta, item, i) {
     ${head}
     <div class="lib-edit">
       <div class="mini">
-        <label>${isAgenda ? 'Cabecera' : 'Título'}<input data-lib-field="title" value="${esc(item.title || '')}" placeholder="${isAgenda ? 'Agenda, Ahora en..., Mañana...' : (isMeteo ? 'Alerta naranja' : '')}"></label>
+        <label>${isAgenda ? 'Cabecera' : 'Título'}<input data-lib-field="title" value="${esc(item.title || '')}" placeholder="${isAgenda ? 'Agenda, Ahora en..., Mañana...' : (isMeteo ? 'El coche al sol puede superar los 60 grados' : '')}"></label>
         <label>${subtitleLabel}<input data-lib-field="subtitle" value="${esc(item.subtitle || '')}" placeholder="${isAgenda ? 'Hoy, Mañana, Festival...' : (isCurious ? 'Lo que quieras que aparezca arriba' : '')}"></label>
       </div>
       ${isAgenda ? `<div class="agenda-block-chooser">

@@ -15,6 +15,7 @@ module.exports = {
   label: 'Luz (precio claro)',
   hint: { title: 'Precio ahora (lo rellena el worker)', subtitle: 'Etiqueta (chip)', body: 'Consejo o contexto', date: 'Fuente' },
   defaultTheme: 'azul',
+  dynamicLayoutText: true,
   logoPos: 'bl',
   build(card, ctx) {
     const { W, H, theme } = ctx;

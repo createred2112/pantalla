@@ -1,6 +1,6 @@
 {
   "name": "pantalla",
-  "version": "0.132.0",
+  "version": "0.133.0",
   "description": "Motor de cartelería digital para LA PANTALLA (gasteizberri): genera MP4 con texto/foto variables, importa piezas de vídeo, prepara siempre ocho vídeos con nombres fijos y sube por FTP sobreescribiendo. Incluye panel móvil de admin, logs y status.",
   "type": "commonjs",
   "main": "src/server.js",
@@ -14,7 +14,9 @@
     "demo": "node src/cli.js demo",
     "admin:add": "node src/cli.js admin:add",
     "admin:remove": "node src/cli.js admin:remove",
-    "admin:list": "node src/cli.js admin:list"
+    "admin:list": "node src/cli.js admin:list",
+    "qa:templates": "node scripts/qa-template-matrix.js",
+    "qa:templates:visual": "node scripts/qa-template-matrix.js --render"
   },
   "dependencies": {
     "basic-ftp": "^5.0.5",
