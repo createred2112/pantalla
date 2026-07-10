@@ -405,7 +405,13 @@ app.post('/api/cards/:id/render', async (req, res) => {
 });
 
 app.post('/api/reorder', (req, res) => {
-  res.json(store.reorder(req.body.ids || []));
+  const ids = Array.isArray(req.body && req.body.ids) ? req.body.ids : [];
+  store.reorder(ids);
+  const result = rundown.reorderFromCards(ids, { date: req.body && req.body.date });
+  log.info('rundown', result.persisted
+    ? `Orden de escaleta actualizado: ${result.slotIds.join(' → ')}`
+    : 'Orden de cartelas manuales actualizado');
+  res.json(result);
 });
 
 app.post('/api/upload', upload.single('photo'), (req, res) => {

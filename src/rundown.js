@@ -402,6 +402,36 @@ function save(rundown, options = {}) {
   return read(options);
 }
 
+function reorderSlots(slots, orderedSlotIds) {
+  const order = [...new Set((orderedSlotIds || []).map(String).filter(Boolean))];
+  const movable = new Set(order);
+  const byId = new Map((slots || []).map((slot) => [String(slot.id), slot]));
+  const valid = order.filter((id) => byId.has(id));
+  let cursor = 0;
+  return (slots || []).map((slot) => movable.has(String(slot.id)) && cursor < valid.length
+    ? byId.get(valid[cursor++])
+    : slot);
+}
+
+// Persiste el orden decidido en la pantalla principal sobre los bloques REALES
+// de la escaleta. Reordenar solo cards.json sería temporal: materialize() lo
+// sustituiría de nuevo en el siguiente ciclo del piloto.
+function reorderFromCards(cardIds, options = {}) {
+  ensureFiles();
+  const ids = Array.isArray(cardIds) ? cardIds.map(String) : [];
+  const cards = new Map(store.list().map((card) => [String(card.id), card]));
+  const slotIds = ids.map((id) => cards.get(id)).filter(Boolean)
+    .map((card) => card.rundownSlot).filter(Boolean).map(String);
+  if (!slotIds.length) return { ok: true, persisted: false, cards: store.list() };
+  const data = readJson(RUNDOWN_FILE, DEFAULT_RUNDOWN);
+  upgradeRundown(data);
+  data.slots = reorderSlots(data.slots || [], slotIds).map(normalizeSlot);
+  data.updatedAt = new Date().toISOString();
+  writeJson(RUNDOWN_FILE, data);
+  const materialized = materialize({ date: options.date || todayKey() });
+  return { ok: true, persisted: true, slotIds, cards: materialized.cards };
+}
+
 function saveLibrary(library, options = {}) {
   const next = normalizeLibrary(library);
   writeJson(LIBRARY_FILE, next);
@@ -864,4 +894,4 @@ function pick(date, slotId, itemIndex, options = {}) {
   return save(data, { date: day });
 }
 
-module.exports = { read, save, saveLibrary, saveDay, reset, materialize, pick, rememberCardEdit, rememberCardDelete, dayTheme, RUNDOWN_FILE, LIBRARY_FILE };
+module.exports = { read, save, saveLibrary, saveDay, reset, materialize, pick, reorderSlots, reorderFromCards, rememberCardEdit, rememberCardDelete, dayTheme, RUNDOWN_FILE, LIBRARY_FILE };

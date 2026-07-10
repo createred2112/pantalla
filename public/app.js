@@ -1053,8 +1053,15 @@ async function move(i, dir) {
   const j = i + dir;
   if (j < 0 || j >= cards.length) return;
   [cards[i], cards[j]] = [cards[j], cards[i]];
-  await api('/reorder', { method: 'POST', body: JSON.stringify({ ids: cards.map(c => c.id) }) });
-  load();
+  render();
+  try {
+    await api('/reorder', { method: 'POST', body: JSON.stringify({ ids: cards.map(c => c.id), date: localDatePart() }) });
+    toast('Orden guardado en la escaleta');
+    await load();
+  } catch (error) {
+    toast('No se pudo guardar el orden: ' + error.message);
+    await load();
+  }
 }
 
 // --- Editor ---
