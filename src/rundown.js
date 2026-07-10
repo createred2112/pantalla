@@ -428,8 +428,9 @@ function reorderFromCards(cardIds, options = {}) {
   data.slots = reorderSlots(data.slots || [], slotIds).map(normalizeSlot);
   data.updatedAt = new Date().toISOString();
   writeJson(RUNDOWN_FILE, data);
-  const materialized = materialize({ date: options.date || todayKey() });
-  return { ok: true, persisted: true, slotIds, cards: materialized.cards };
+  // Reordenar no debe recalcular que bloques forman la emision. El endpoint ya
+  // ha ordenado cards.json; aqui solo persistimos ese orden para futuros ciclos.
+  return { ok: true, persisted: true, slotIds, cards: store.list() };
 }
 
 function saveLibrary(library, options = {}) {
@@ -788,9 +789,27 @@ function rememberCardDelete(card, date) {
   return save(data, { date: day });
 }
 
+function isEmptyManualNewsSlot(slot) {
+  const s = normalizeSlot(slot);
+  if (s.source !== 'fixed' || s.type !== 'generated' || s.template !== 'noticia') return false;
+  const title = String(s.title || '').trim();
+  const label = String(s.label || '').trim();
+  const subtitle = String(s.subtitle || '').trim();
+  const placeholderTitle = !title
+    || title.toLocaleLowerCase('es') === label.toLocaleLowerCase('es')
+    || /^noticia propia(?:\s*[-·|]\s*manual)?(?:\s+gasteizberri(?:\.com)?)?$/i.test(title);
+  const genericSubtitle = !subtitle || /^gasteizberri(?:\.com)?$/i.test(subtitle);
+  return placeholderTitle
+    && genericSubtitle
+    && !String(s.body || '').trim()
+    && !String(s.date || '').trim()
+    && !String(s.photo || '').trim();
+}
+
 function shouldMaterialize(slot, library, date, pickMap = {}, autoPickMap = {}) {
   const s = normalizeSlot(slot);
   if (s.enabled === false) return false;
+  if (isEmptyManualNewsSlot(s)) return false;
   if (s.source === 'library' && s.libraryKey === 'agendaEventos') {
     const p = slotPayload(s, library, date, { pickIndex: pickMap[s.id], autoPick: autoPickMap[s.id] });
     return Boolean(!p.missing && (p.title || p.body));
@@ -809,7 +828,9 @@ function report(rundown, library, date) {
     const p = slotPayload(s, library, date, { pickIndex: pick[s.id], autoPick: autoPick[s.id] });
     const plan = libraryPlanForSlot(s, library, date, pick[s.id], autoPick[s.id]);
     const skippedToday = skip.has(s.id);
-    const autoSkipped = s.source === 'library' && s.libraryKey === 'agendaEventos' && (p.missing || (!p.title && !p.body));
+    const emptyManualNews = isEmptyManualNewsSlot(s);
+    const agendaSkipped = s.source === 'library' && s.libraryKey === 'agendaEventos' && (p.missing || (!p.title && !p.body));
+    const autoSkipped = emptyManualNews || agendaSkipped;
     const missing = s.enabled && !skippedToday && !autoSkipped && (p.missing || !p.title);
     const eligible = !skippedToday && shouldMaterialize(s, library, date, pick, autoPick);
     let inEmission = false;
@@ -836,7 +857,9 @@ function report(rundown, library, date) {
       missing: Boolean(missing),
       autoSkipped,
       skippedToday,
-      note: autoSkipped ? 'Sin agenda activa para este momento' : (missing ? (s.source === 'worker' ? `Pendiente worker: ${s.workerKey}` : (s.source === 'file' ? 'Falta seleccionar el archivo MP4' : 'Pendiente de contenido')) : ''),
+      note: emptyManualNews
+        ? 'Noticia vacia: anade contenido para incluirla'
+        : (agendaSkipped ? 'Sin agenda activa para este momento' : (missing ? (s.source === 'worker' ? `Pendiente worker: ${s.workerKey}` : (s.source === 'file' ? 'Falta seleccionar el archivo MP4' : 'Pendiente de contenido')) : '')),
       chosenIndex: plan ? plan.chosenIndex : null,
       manualPick: Object.prototype.hasOwnProperty.call(pick, s.id),
       autoPick: Object.prototype.hasOwnProperty.call(autoPick, s.id),
@@ -894,4 +917,4 @@ function pick(date, slotId, itemIndex, options = {}) {
   return save(data, { date: day });
 }
 
-module.exports = { read, save, saveLibrary, saveDay, reset, materialize, pick, reorderSlots, reorderFromCards, rememberCardEdit, rememberCardDelete, dayTheme, RUNDOWN_FILE, LIBRARY_FILE };
+module.exports = { read, save, saveLibrary, saveDay, reset, materialize, pick, reorderSlots, reorderFromCards, isEmptyManualNewsSlot, rememberCardEdit, rememberCardDelete, dayTheme, RUNDOWN_FILE, LIBRARY_FILE };
