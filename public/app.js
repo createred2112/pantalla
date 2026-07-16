@@ -248,6 +248,9 @@ async function openSettings() {
   $('#setLogoMode').value = b.logoMode === 'none' ? 'none' : 'image';
   $('#setLogoW').value = b.logoWidth || 12; $('#setLogoWVal').textContent = $('#setLogoW').value;
   $('#setScale').value = b.textScale || 1.15; $('#setScaleVal').textContent = (b.textScale || 1.15);
+  $('#setScaleDisplay').value = b.scaleDisplay || 1; $('#setScaleDisplayVal').textContent = (b.scaleDisplay || 1);
+  $('#setScaleText').value = b.scaleText || 1; $('#setScaleTextVal').textContent = (b.scaleText || 1);
+  $('#setAutopublish').checked = Boolean(SETTINGS.autopublish && SETTINGS.autopublish.enabled);
   $('#setDesignVersion').value = (SETTINGS.design && SETTINGS.design.version) === 'v2' ? 'v2' : 'v1';
   const ci = b.climaIcon || {};
   $('#setClimaScale').value = ci.scale || 100; $('#setClimaScaleVal').textContent = $('#setClimaScale').value;
@@ -363,6 +366,35 @@ function collectTemplateBumpers() {
 
 $('#setLogoW').addEventListener('input', (e) => $('#setLogoWVal').textContent = e.target.value);
 $('#setScale').addEventListener('input', (e) => $('#setScaleVal').textContent = e.target.value);
+$('#setScaleDisplay').addEventListener('input', (e) => $('#setScaleDisplayVal').textContent = e.target.value);
+$('#setScaleText').addEventListener('input', (e) => $('#setScaleTextVal').textContent = e.target.value);
+
+// --- Avisos push: alta del móvil + prueba ---
+function b64ToU8(base64) {
+  const pad = '='.repeat((4 - base64.length % 4) % 4);
+  const raw = atob((base64 + pad).replace(/-/g, '+').replace(/_/g, '/'));
+  return Uint8Array.from([...raw].map((c) => c.charCodeAt(0)));
+}
+$('#btnPushEnable').addEventListener('click', async () => {
+  try {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) { toast('Este navegador no soporta avisos push'); return; }
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') { toast('Permiso de avisos denegado'); return; }
+    const { key } = await api('/push/key');
+    if (!key) { toast('El servidor aún no tiene web-push instalado (npm install)'); return; }
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToU8(key) });
+    const r = await api('/push/subscribe', { method: 'POST', body: JSON.stringify(sub.toJSON()) });
+    $('#pushHint').textContent = `✓ Este móvil recibirá avisos (${r.count} dispositivo(s) dados de alta).`;
+    toast('Avisos activados en este móvil ✓');
+  } catch (e) { toast(e.message || 'No se pudieron activar los avisos'); }
+});
+$('#btnPushTest').addEventListener('click', async () => {
+  try {
+    const r = await api('/push/test', { method: 'POST', body: '{}' });
+    toast(r.sent ? `Aviso de prueba enviado a ${r.sent} dispositivo(s)` : 'Sin dispositivos dados de alta todavía');
+  } catch (e) { toast(e.message || 'No se pudo enviar'); }
+});
 $('#setClimaScale').addEventListener('input', (e) => $('#setClimaScaleVal').textContent = e.target.value);
 $('#setClimaDx').addEventListener('input', (e) => $('#setClimaDxVal').textContent = e.target.value);
 $('#setClimaDy').addEventListener('input', (e) => $('#setClimaDyVal').textContent = e.target.value);
@@ -402,6 +434,8 @@ function collectSettings() {
   b.logoMode = $('#setLogoMode').value;
   b.logoWidth = Number($('#setLogoW').value);
   b.textScale = Number($('#setScale').value);
+  b.scaleDisplay = Number($('#setScaleDisplay').value) || 1;
+  b.scaleText = Number($('#setScaleText').value) || 1;
   b.fontDisplay = $('#setFontDisplay').value;
   b.fontFamily = $('#setFontText').value;
   b.climaIcon = { scale: Number($('#setClimaScale').value) || 100, dx: Number($('#setClimaDx').value) || 0, dy: Number($('#setClimaDy').value) || 0 };
@@ -449,6 +483,7 @@ function collectSettings() {
     },
     templateBumpers: collectTemplateBumpers(),
     design: { version: $('#setDesignVersion').value === 'v2' ? 'v2' : 'v1' },
+    autopublish: { enabled: $('#setAutopublish').checked },
     ftp,
   };
 }
@@ -1070,6 +1105,44 @@ async function move(i, dir) {
 const editor = $('#editor');
 let ED_SLOT = null; // bloque del guion que produce la cartela abierta (si aplica)
 let ED_LIBRARY_INDEX = -1; // pieza concreta del carrusel que produce la cartela abierta
+let ED_PICK_INITIAL = -1;  // pieza que estaba elegida al abrir (para detectar cambio de ◉)
+
+// "PROPONME PIEZAS": bancos con sugerencias con un toque. Solo consulta al
+// servidor cuando pulsas el botón (cero carga de fondo); las efemérides
+// vienen de Wikipedia cacheadas una vez al día, el resto de un banco local.
+const SUGGEST_KEYS = ['efemerides', 'citasHistoricas', 'datosCuriosos', 'datosUtiles'];
+function wireSuggest(slot) {
+  const btn = $('#edSuggest');
+  if (!btn) return;
+  btn.addEventListener('click', async () => {
+    const list = $('#edSuggestList');
+    btn.disabled = true;
+    list.innerHTML = '<div class="hint" style="margin-top:6px">Buscando ideas…</div>';
+    try {
+      const r = await api('/banks/suggest?key=' + encodeURIComponent(slot.libraryKey));
+      if (!r.items || !r.items.length) { list.innerHTML = '<div class="hint" style="margin-top:6px">No hay sugerencias nuevas (ya tienes todas las de hoy).</div>'; return; }
+      list.dataset.items = JSON.stringify(r.items);
+      list.innerHTML = `<div class="hint" style="margin:6px 0 4px">Toca para añadir al carrusel (${esc(r.source || '')}); se guarda al pulsar Guardar:</div>` +
+        '<div style="display:flex;flex-direction:column;gap:6px;max-height:220px;overflow:auto">' +
+        r.items.map((it, i) => `<button type="button" class="ghost" data-suggest-add="${i}" style="text-align:left;padding:8px 10px">＋ ${esc(it.title)}${it.subtitle ? ` <span class="hint">· ${esc(it.subtitle)}</span>` : ''}</button>`).join('') +
+        '</div>';
+      list.querySelectorAll('[data-suggest-add]').forEach((b) => b.addEventListener('click', () => {
+        const items = JSON.parse(list.dataset.items || '[]');
+        const it = items[Number(b.dataset.suggestAdd)];
+        if (!it) return;
+        if (!RUNDOWN.library) RUNDOWN.library = {};
+        if (!Array.isArray(RUNDOWN.library[slot.libraryKey])) RUNDOWN.library[slot.libraryKey] = [];
+        const meta = (RUNDOWN.libraryKeys || []).find((k) => k.key === slot.libraryKey) || {};
+        RUNDOWN.library[slot.libraryKey].push({ ...blankLibraryItem(meta), title: it.title || '', subtitle: it.subtitle || '', body: it.body || '', date: it.date || '' });
+        b.disabled = true;
+        b.innerHTML = '✓ ' + b.innerHTML.slice(2);
+        toast('Pieza añadida: recuerda pulsar Guardar');
+      }));
+    } catch (e) {
+      list.innerHTML = `<div class="hint" style="margin-top:6px">⚠ ${esc(e.message || 'No se pudieron traer sugerencias')}</div>`;
+    } finally { btn.disabled = false; }
+  });
+}
 
 // Cartela producida por el guion: el lápiz enseña el mando REAL (cadencia,
 // piezas del carrusel) en vez de campos que el siguiente pase sobreescribiría.
@@ -1093,7 +1166,9 @@ async function loadEditorRundown(card) {
       const catLabel = (keys.find((k) => k.key === slot.libraryKey) || {}).label || slot.libraryKey;
       const items = (RUNDOWN.library && RUNDOWN.library[slot.libraryKey]) || [];
       const isAgendaLib = slot.libraryKey === 'agendaEventos';
-      const editablePiece = slot.libraryKey === 'datosCuriosos';
+      // F2: la pieza elegida de CUALQUIER carrusel se edita aquí mismo
+      // (antes solo datos curiosos). Agenda mantiene su editor propio.
+      const editablePiece = !isAgendaLib;
       const currentReport = ((RUNDOWN && RUNDOWN.report) || []).find((r) => r.id === slot.id) || {};
       const matchIndex = items.findIndex((it) =>
         String(it.title || '') === String(card.title || '') &&
@@ -1101,6 +1176,7 @@ async function loadEditorRundown(card) {
         String(it.body || '') === String(card.body || '')
       );
       ED_LIBRARY_INDEX = matchIndex >= 0 ? matchIndex : (Number.isInteger(currentReport.chosenIndex) ? currentReport.chosenIndex : -1);
+      ED_PICK_INITIAL = ED_LIBRARY_INDEX;
       const currentItem = ED_LIBRARY_INDEX >= 0 ? items[ED_LIBRARY_INDEX] : null;
       $('#edContentFields').style.display = editablePiece ? '' : 'none';
       if (editablePiece && currentItem) {
@@ -1108,8 +1184,8 @@ async function loadEditorRundown(card) {
         $('#edSubtitle').value = currentItem.subtitle || '';
         $('#edBody').value = currentItem.body || '';
         $('#edDate').value = currentItem.date || '';
-        $('#edSubtitleLabel').textContent = 'Texto superior';
-        $('#edSubtitle').placeholder = 'GasteizBerri, Dato curioso, Sabias que...';
+        $('#edSubtitleLabel').textContent = slot.libraryKey === 'datosCuriosos' ? 'Texto superior' : 'Subtítulo/etiqueta';
+        if (slot.libraryKey === 'datosCuriosos') $('#edSubtitle').placeholder = 'GasteizBerri, Dato curioso, Sabias que...';
       }
       if (![...$('#edTemplate').options].some((o) => o.value === '')) {
         $('#edTemplate').insertAdjacentHTML('afterbegin', '<option value="">Auto (cada pieza con la suya)</option>');
@@ -1124,11 +1200,28 @@ async function loadEditorRundown(card) {
           <option value="dia" ${slot.rotation !== 'hora' ? 'selected' : ''}>Cada día</option>
           <option value="hora" ${slot.rotation === 'hora' ? 'selected' : ''}>Cada hora</option>
         </select></label>`}
-        <label>Piezas del carrusel (marcadas = en emisión)</label>
+        <label>Piezas del carrusel (✓ = en emisión · ◉ = elegir cuál se ve hoy)</label>
         <div style="max-height:220px;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:6px 10px">
-          ${items.map((p, i) => `<label class="chk"><input type="checkbox" data-ed-lib="${i}" ${p.enabled !== false ? 'checked' : ''}>${esc(p.title || p.body || '(sin título)')} <span class="hint">${esc(scheduleSummary(p))}</span></label>`).join('') || '<div class="hint">Sin piezas. Añádalas en Escaleta → Carrusel.</div>'}
+          ${items.map((p, i) => `<label class="chk" style="gap:8px">
+            <input type="checkbox" data-ed-lib="${i}" ${p.enabled !== false ? 'checked' : ''} title="En emisión">
+            ${isAgendaLib ? '' : `<input type="radio" name="edPick" data-ed-pick="${i}" ${i === ED_LIBRARY_INDEX ? 'checked' : ''} title="Mostrar esta hoy">`}
+            ${esc(p.title || p.body || (p.photo ? '(foto)' : '(sin título)'))} <span class="hint">${esc(scheduleSummary(p))}</span></label>`).join('') || '<div class="hint">Sin piezas todavía: usa «Añadir pieza».</div>'}
         </div>
+        ${isAgendaLib ? '' : '<button type="button" class="ghost" id="edAddPiece" style="margin-top:8px;width:100%">＋ Añadir pieza nueva (escríbela en los campos de arriba)</button>'}
+        ${SUGGEST_KEYS.includes(slot.libraryKey) ? `<button type="button" class="ghost" id="edSuggest" style="margin-top:8px;width:100%">💡 Proponme piezas nuevas</button><div id="edSuggestList"></div>` : ''}
         <button type="button" class="ghost" id="edOpenRundown" style="margin-top:8px;width:100%">${isAgendaLib ? 'Editar Agenda viva' : 'Abrir carrusel en modo avanzado'}</button>`;
+      wireSuggest(slot);
+      const addBtn = $('#edAddPiece');
+      if (addBtn) addBtn.addEventListener('click', () => {
+        ED_LIBRARY_INDEX = items.length; // al guardar, se crea como pieza nueva
+        $('#edContentFields').style.display = '';
+        $('#edTitleField').value = '';
+        $('#edSubtitle').value = '';
+        $('#edBody').value = '';
+        $('#edDate').value = '';
+        $('#edTitleField').focus();
+        toast('Escribe la pieza nueva y pulsa Guardar');
+      });
     } else {
       $('#edTemplate').value = slot.template || card.template || $('#edTemplate').value;
       $('#edTheme').value = slot.theme || '';
@@ -1200,11 +1293,12 @@ function fillSourceSelector(card) {
   const hint = $('#edSourceHint');
   const isNew = !card || !card.id;
   const notGenerated = card && card.type && card.type !== 'generated';
-  sel.style.display = isNew || notGenerated ? 'none' : '';
+  // F3: también en cartelas NUEVAS — se crean ya como automáticas/carrusel.
+  sel.style.display = notGenerated ? 'none' : '';
   if (label) label.style.display = sel.style.display;
   hint.style.display = sel.style.display;
-  if (isNew || notGenerated) return;
-  const cur = cardSourceValue(card);
+  if (notGenerated) return;
+  const cur = isNew ? 'manual' : cardSourceValue(card);
   const opts = CARD_SOURCES.slice();
   if (!opts.some((o) => o.v === cur)) opts.push({ v: cur, label: 'Actual: ' + cur });
   sel.innerHTML = opts.map((o) => `<option value="${esc(o.v)}" ${o.v === cur ? 'selected' : ''}>${esc(o.label)}</option>`).join('');
@@ -1248,6 +1342,14 @@ function openEditor(card) {
   $('#edRundownBox').style.display = 'none';
   $('#edRundownBox').innerHTML = '';
   fillSourceSelector(card);
+  $('#btnDuplicate').style.display = card && card.id ? '' : 'none';
+  // ⏱ Horario de la cartela
+  const sched = (card && card.schedule) || {};
+  $('#edSchedStart').value = sched.startAt || '';
+  $('#edSchedEnd').value = sched.endAt || '';
+  $('#edSchedFrom').value = sched.dailyFrom || '';
+  $('#edSchedTo').value = sched.dailyTo || '';
+  $('#edScheduleBox').open = Boolean(sched.startAt || sched.endAt || sched.dailyFrom || sched.dailyTo);
   $('#genFields').style.display = '';
   $('#edContentFields').style.display = '';
   const autoOpt = [...$('#edTemplate').options].find((o) => o.value === '');
@@ -1383,6 +1485,10 @@ function collect() {
     video: $('#edVideo').checked,
     videoIntro: $('#edVideoIntro').value || null,
     videoOutro: $('#edVideoOutro').value || null,
+    // ⏱ Horario de la cartela (vacío = siempre).
+    schedule: ($('#edSchedStart').value || $('#edSchedEnd').value || $('#edSchedFrom').value || $('#edSchedTo').value)
+      ? { startAt: $('#edSchedStart').value, endAt: $('#edSchedEnd').value, dailyFrom: $('#edSchedFrom').value, dailyTo: $('#edSchedTo').value }
+      : null,
   };
 }
 
@@ -1502,18 +1608,32 @@ async function saveEditor({ renderAfter = false } = {}) {
         const it = arr && arr[Number(el.dataset.edLib)];
         if (it) it.enabled = el.checked;
       });
-      if (ED_SLOT.libraryKey === 'datosCuriosos' && ED_LIBRARY_INDEX >= 0) {
-        const arr = RUNDOWN.library && RUNDOWN.library[ED_SLOT.libraryKey];
-        const it = arr && arr[ED_LIBRARY_INDEX];
+      // F2: la pieza elegida de cualquier carrusel se edita/crea aquí mismo.
+      if (ED_SLOT.libraryKey !== 'agendaEventos' && ED_LIBRARY_INDEX >= 0) {
+        if (!RUNDOWN.library) RUNDOWN.library = {};
+        if (!Array.isArray(RUNDOWN.library[ED_SLOT.libraryKey])) RUNDOWN.library[ED_SLOT.libraryKey] = [];
+        const arr = RUNDOWN.library[ED_SLOT.libraryKey];
+        let it = arr[ED_LIBRARY_INDEX];
+        if (!it && ED_LIBRARY_INDEX === arr.length) {
+          const meta = (RUNDOWN.libraryKeys || []).find((k) => k.key === ED_SLOT.libraryKey) || {};
+          it = blankLibraryItem(meta);
+          arr.push(it); // pieza NUEVA creada desde el lápiz
+        }
         if (it) {
           it.title = data.title || '';
           it.subtitle = data.subtitle || '';
           it.body = data.body || '';
           it.date = data.date || '';
+          if (data.photo) it.photo = data.photo; // foto subida desde el editor
         }
       }
       await api('/rundown', { method: 'PUT', body: JSON.stringify(RUNDOWN.rundown) });
       await api('/rundown/library', { method: 'PUT', body: JSON.stringify(RUNDOWN.library) });
+      // ◉ "mostrar esta hoy": fija la pieza elegida para el día visible.
+      const pickRadio = document.querySelector('#edRundownBox [data-ed-pick]:checked');
+      if (pickRadio && Number(pickRadio.dataset.edPick) !== ED_PICK_INITIAL) {
+        await api('/rundown/pick', { method: 'POST', body: JSON.stringify({ slotId: ED_SLOT.id, itemIndex: Number(pickRadio.dataset.edPick), fixed: true }) });
+      }
       await api('/rundown/materialize', { method: 'POST', body: '{}' });
       await renderSavedCard(id);
       editor.close();
@@ -1558,6 +1678,15 @@ async function saveEditor({ renderAfter = false } = {}) {
     const saved = id
       ? await api('/cards/' + id, { method: 'PUT', body: JSON.stringify(data) })
       : await api('/cards', { method: 'POST', body: JSON.stringify(data) });
+    // F3: cartela NUEVA creada directamente como automática o carrusel.
+    const srcSel = $('#edSource');
+    const wantSource = !id && srcSel && srcSel.style.display !== 'none' ? srcSel.value : 'manual';
+    if (!id && saved && saved.id && wantSource && wantSource !== 'manual') {
+      const body = wantSource.startsWith('worker:')
+        ? { to: 'worker', workerKey: wantSource.slice(7) }
+        : { to: 'library', libraryKey: wantSource.slice(4) };
+      await api('/cards/' + saved.id + '/convert', { method: 'POST', body: JSON.stringify(body) });
+    }
     if ((saved && saved.type) === 'generated') await renderSavedCard(saved.id);
     editor.close();
     toast(renderAfter && saved && saved.type === 'generated' ? 'Guardado y archivo generado' : 'Guardado sin generar');
@@ -1568,6 +1697,28 @@ async function saveEditor({ renderAfter = false } = {}) {
 
 $('#btnSave').addEventListener('click', () => saveEditor({ renderAfter: false }));
 $('#btnSaveRender').addEventListener('click', () => saveEditor({ renderAfter: true }));
+
+// F3: duplicar la cartela abierta (la copia nace como cartela tuya, editable).
+$('#btnDuplicate').addEventListener('click', async () => {
+  const id = $('#edId').value;
+  const card = cards.find((c) => c.id === id);
+  if (!card) { toast('Guarda la cartela antes de duplicarla'); return; }
+  const copy = { ...card };
+  delete copy.id; delete copy.rendered; delete copy.staleRendered; delete copy.effectiveDuration;
+  copy.source = 'manual'; copy.rundownSlot = null; copy.rundownLibraryKey = null; copy.rundownWorkerKey = null; copy.slug = null;
+  copy.order = (Number(card.order) || 0) + 1;
+  try {
+    const saved = await api('/cards', { method: 'POST', body: JSON.stringify(copy) });
+    toast('Cartela duplicada ✓');
+    editor.close();
+    await load();
+    const fresh = cards.find((c) => c.id === saved.id);
+    if (fresh) openEditor(fresh);
+  } catch (e) { toast(e.message || 'No se pudo duplicar'); }
+});
+
+// F4: PWA instalable (el service worker no cachea la API: red siempre).
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
 
 // --- Delegación de eventos de la lista ---
 $('#list').addEventListener('click', async (e) => {
@@ -1993,10 +2144,31 @@ $('#btnImport').addEventListener('click', async () => {
 
 // --- 🚨 Última hora: URL o titular → alerta primera del bucle → revisar → publicar ---
 const breakingDlg = $('#breakingDlg');
-$('#btnBreaking').addEventListener('click', () => {
+$('#btnBreaking').addEventListener('click', async () => {
   $('#bkInput').value = '';
+  $('#tkOn').checked = false;
+  $('#tkOpts').style.display = 'none';
+  // ¿Hay un takeover en marcha? Enséñalo y ofrece terminarlo.
+  try {
+    const t = await api('/takeover');
+    $('#tkState').style.display = t.active ? '' : 'none';
+    $('#tkOff').style.display = t.active ? '' : 'none';
+    if (t.active) $('#tkState').innerHTML = `⚠ <b>Takeover ACTIVO</b>: «${esc(t.title)}» · quedan ~${t.minutesLeft} min · vuelve sola a la programación al acabar.`;
+  } catch {}
   breakingDlg.showModal();
   setTimeout(() => $('#bkInput').focus(), 60);
+});
+$('#tkOn').addEventListener('change', () => {
+  $('#tkOpts').style.display = $('#tkOn').checked ? '' : 'none';
+  $('#bkGo').textContent = $('#tkOn').checked ? '🚨 OCUPAR LA PANTALLA YA' : 'Crear y revisar →';
+});
+$('#tkOff').addEventListener('click', async () => {
+  if (!confirm('¿Terminar el takeover AHORA y volver a la programación normal?')) return;
+  try {
+    await api('/takeover/off', { method: 'POST', body: '{}' });
+    toast('Takeover terminado: restaurando la programación…');
+    breakingDlg.close();
+  } catch (e) { toast(e.message || 'No se pudo terminar'); }
 });
 $('#bkInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); $('#bkGo').click(); } });
 $('#bkGo').addEventListener('click', async () => {
@@ -2004,6 +2176,19 @@ $('#bkGo').addEventListener('click', async () => {
   if (!v) { toast('Pega una URL o escribe el titular'); return; }
   const b = $('#bkGo');
   b.disabled = true;
+  // MODO TAKEOVER: sin confirmación, la pantalla es de la alerta X minutos.
+  if ($('#tkOn').checked) {
+    if (/^https?:\/\//i.test(v)) { toast('Para el takeover escribe el TITULAR (no una URL)'); b.disabled = false; return; }
+    b.textContent = '🚨 Ocupando la pantalla…';
+    try {
+      const r = await api('/takeover', { method: 'POST', body: JSON.stringify({ title: v, minutes: Number($('#tkMinutes').value) || 60, mode: $('#tkMode').value }) });
+      breakingDlg.close();
+      toast(`TAKEOVER activo ${r.minutesLeft} min: la pantalla vuelve sola al acabar`);
+      await load();
+    } catch (e) { toast('Error: ' + e.message); }
+    finally { b.disabled = false; b.textContent = 'Crear y revisar →'; $('#tkOn').checked = false; $('#tkOpts').style.display = 'none'; }
+    return;
+  }
   b.textContent = '⏳ Creando la alerta…';
   try {
     const body = /^https?:\/\//i.test(v) ? { url: v } : { title: v };
@@ -2018,6 +2203,40 @@ $('#bkGo').addEventListener('click', async () => {
     b.disabled = false;
     b.textContent = 'Crear y revisar →';
   }
+});
+
+// ===== 🕰 EMISIONES ANTERIORES =====
+const emDlg = $('#emDlg');
+$('#btnEmisiones').addEventListener('click', async () => {
+  emDlg.showModal();
+  $('#emList').innerHTML = '<div class="hint">Cargando…</div>';
+  try {
+    const r = await api('/emisiones');
+    if (!r.items || !r.items.length) { $('#emList').innerHTML = '<div class="hint">Aún no hay emisiones archivadas: se guardan a partir de la próxima subida real.</div>'; return; }
+    $('#emList').innerHTML = r.items.map((em) => {
+      const when = em.publishedAt ? new Date(em.publishedAt).toLocaleString('es-ES', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : em.id;
+      const ok = em.items.every((it) => it.available);
+      return `<div style="border:1px solid var(--line);border-radius:12px;padding:10px;margin-bottom:10px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          <b style="flex:1">${esc(when)}</b>
+          <button type="button" class="ghost" data-em-restore="${esc(em.id)}" ${ok ? '' : 'disabled title="Faltan piezas en el almacén"'}>Restaurar y subir</button>
+        </div>
+        <div style="display:flex;gap:4px;overflow:auto">${em.items.map((it) => `<img src="${esc(it.poster)}" title="${esc(it.title || it.file)}" onerror="this.style.visibility='hidden'" style="width:72px;aspect-ratio:16/9;object-fit:cover;border-radius:5px;background:#0a1a30;flex-shrink:0">`).join('')}</div>
+      </div>`;
+    }).join('');
+  } catch (e) { $('#emList').innerHTML = `<div class="hint">⚠ ${esc(e.message || 'No se pudo cargar')}</div>`; }
+});
+$('#emList').addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-em-restore]');
+  if (!btn) return;
+  if (!confirm('¿Poner esta emisión en la pantalla tal cual era? La actual pasará a "tanda anterior".')) return;
+  btn.disabled = true;
+  btn.textContent = 'Restaurando y subiendo…';
+  try {
+    const r = await api('/emisiones/' + encodeURIComponent(btn.dataset.emRestore) + '/restore', { method: 'POST', body: '{}' });
+    toast(r.ok ? 'Emisión restaurada y en pantalla ✓' : 'Restauración con error');
+    emDlg.close();
+  } catch (err) { toast(err.message || 'No se pudo restaurar'); btn.disabled = false; btn.textContent = 'Restaurar y subir'; }
 });
 
 // --- Escaleta editorial ---
@@ -3655,7 +3874,105 @@ function applyAgendaQuick(i, kind) {
 }
 
 $('#btnRundown').addEventListener('click', openWizard);
-$('#btnAgenda').addEventListener('click', openAgenda);
+$('#btnAgenda').addEventListener('click', () => openAgendaQuick());
+
+// ===== AGENDA EXPRÉS: los eventos del día en texto plano, un paso =====
+const aqDlg = $('#aqDlg');
+let AQ_DATE = null;
+
+function aqParse(text) {
+  return String(text || '').split(/\n/).map((s) => s.trim()).filter(Boolean).map((l) => {
+    const m = l.match(/^(\d{1,2})[:.hH](\d{2})\s+(.*)$/);
+    const time = m ? `${String(m[1]).padStart(2, '0')}:${m[2]}` : '';
+    const rest = (m ? m[3] : l).split('|').map((x) => x.trim());
+    return { time, title: rest[0] || '', place: rest[1] || '' };
+  }).filter((e) => e.title);
+}
+function aqRefreshPreview() {
+  const evs = aqParse($('#aqText').value);
+  $('#aqPreview').innerHTML = evs.length
+    ? `Saldrán <b>${evs.length}</b> evento(s): ` + evs.slice(0, 6).map((e) => esc(`${e.time ? e.time + ' ' : ''}${e.title}`)).join(' · ') + (evs.length > 6 ? ' …' : '')
+    : 'Sin eventos: la cartela de agenda no se emitirá ese día.';
+}
+function aqMarkDate() {
+  $('#aqDate').value = AQ_DATE;
+  const today = localDatePart();
+  $('#aqToday').classList.toggle('primary', AQ_DATE === today);
+  $('#aqTomorrow').classList.toggle('primary', AQ_DATE === addDays(today, 1));
+}
+async function openAgendaQuick(date) {
+  AQ_DATE = date || localDatePart();
+  try {
+    const r = await api('/agenda/quick?date=' + encodeURIComponent(AQ_DATE));
+    $('#aqText').value = (r.lines || []).join('\n');
+    $('#aqHide').checked = r.hideExpired !== false;
+    const isTomorrow = AQ_DATE === addDays(localDatePart(), 1);
+    $('#aqPreviewRow').style.display = isTomorrow ? '' : 'none';
+    $('#aqPreview').checked = isTomorrow && r.previewToday === true;
+    $('#aqTheme').innerHTML = `<option value="">Auto</option>` +
+      Object.keys(PALETTE).map((k) => `<option value="${esc(k)}" ${k === (r.theme || '') ? 'selected' : ''}>${esc(k)}</option>`).join('');
+    aqMarkDate();
+    aqRefreshPreview();
+    if (!aqDlg.open) aqDlg.showModal();
+    aqLoadWeb(); // en segundo plano: sugerencias desde la web
+  } catch (e) { toast(e.message || 'No se pudo cargar la agenda'); }
+}
+
+// Sugerencias desde la web (fuente verificada): un toque = a la lista.
+async function aqLoadWeb() {
+  const list = $('#aqWebList');
+  const src = $('#aqWebSource');
+  list.innerHTML = 'Cargando sugerencias…';
+  src.textContent = '';
+  try {
+    const r = await api('/agenda/web?date=' + encodeURIComponent(AQ_DATE));
+    if (!r.items || !r.items.length) {
+      list.innerHTML = 'La web no ofrece eventos para este día. Escríbelos a mano arriba.';
+      return;
+    }
+    src.textContent = r.source ? 'fuente: ' + r.source : '';
+    list.innerHTML = '<div style="display:flex;flex-direction:column;gap:6px">' + r.items.map((ev, i) =>
+      `<button type="button" class="ghost" data-aq-add="${i}" style="text-align:left;padding:8px 10px">＋ ${esc(`${ev.time ? ev.time + ' ' : ''}${ev.title}${ev.place ? ' | ' + ev.place : ''}`)}</button>`
+    ).join('') + '</div>';
+    list.dataset.items = JSON.stringify(r.items);
+  } catch (e) {
+    list.innerHTML = '⚠ ' + esc(e.message || 'No se pudo leer la web');
+  }
+}
+$('#aqWebReload').addEventListener('click', aqLoadWeb);
+$('#aqWebList').addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-aq-add]');
+  if (!btn) return;
+  const items = JSON.parse($('#aqWebList').dataset.items || '[]');
+  const ev = items[Number(btn.dataset.aqAdd)];
+  if (!ev) return;
+  const line = `${ev.time ? ev.time + ' ' : ''}${ev.title}${ev.place ? ' | ' + ev.place : ''}`;
+  const ta = $('#aqText');
+  if (ta.value.split(/\n/).some((l) => l.trim() === line.trim())) { toast('Ese evento ya está en la lista'); return; }
+  ta.value = (ta.value.trim() ? ta.value.replace(/\s+$/, '') + '\n' : '') + line;
+  aqRefreshPreview();
+  btn.disabled = true;
+  btn.textContent = '✓ ' + btn.textContent.slice(2);
+});
+$('#aqToday').addEventListener('click', () => openAgendaQuick(localDatePart()));
+$('#aqTomorrow').addEventListener('click', () => openAgendaQuick(addDays(localDatePart(), 1)));
+$('#aqDate').addEventListener('change', () => { if ($('#aqDate').value) openAgendaQuick($('#aqDate').value); });
+$('#aqText').addEventListener('input', aqRefreshPreview);
+$('#aqAdvanced').addEventListener('click', () => { aqDlg.close(); openAgenda(); });
+$('#aqSave').addEventListener('click', async () => {
+  const btn = $('#aqSave');
+  btn.disabled = true;
+  const old = btn.textContent;
+  btn.textContent = 'Guardando…';
+  try {
+    const isTomorrow = AQ_DATE === addDays(localDatePart(), 1);
+    const r = await api('/agenda/quick', { method: 'POST', body: JSON.stringify({ date: AQ_DATE, text: $('#aqText').value, theme: $('#aqTheme').value, hideExpired: $('#aqHide').checked, previewToday: isTomorrow ? $('#aqPreview').checked : undefined }) });
+    toast(`Agenda del ${r.date}: ${r.count} evento(s) ✓`);
+    aqDlg.close();
+    load();
+  } catch (e) { toast(e.message || 'No se pudo guardar'); }
+  finally { btn.disabled = false; btn.textContent = old; }
+});
 $('#btnBanks').addEventListener('click', openBanks);
 $('#wzClose').addEventListener('click', () => wizardDlg.close());
 $('#wzAdvanced').addEventListener('click', () => { wizardDlg.close(); openRundown(); });
@@ -4391,10 +4708,33 @@ async function preparePublish() {
 
   const files = plannedFiles(r);
   const up = r.steps.upload || {};
+  // DIFF VISUAL: antes (última tanda publicada) → después, posición a posición.
+  const man = (r.steps.sequence && r.steps.sequence.manifest) || [];
+  const diff = (r.steps.sequence && r.steps.sequence.diff) || [];
+  const badge = (c) => c === 'igual'
+    ? '<span style="color:#9fb2d4">= igual</span>'
+    : (c === 'cambia' ? '<b style="color:#ffd98a">≠ CAMBIA</b>' : '<b style="color:#bff0d5">★ NUEVA</b>');
+  const v = Date.now();
+  const rows = man.map((m, i) => {
+    const d = diff[i] || {};
+    const oldThumb = `/media/last-tanda/${encodeURIComponent(m.file.replace(/\.[^.]+$/, ''))}.jpg?v=${v}`;
+    const newThumb = `/media/output/${encodeURIComponent(m.id)}.jpg?v=${v}`;
+    return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--line)">
+      <b style="width:24px;flex-shrink:0">${String(m.order).padStart(2, '0')}</b>
+      <img src="${oldThumb}" onerror="this.style.visibility='hidden'" alt="antes" style="width:86px;aspect-ratio:16/9;object-fit:cover;border-radius:6px;background:#0a1a30;flex-shrink:0">
+      <span style="color:#6f86ad">→</span>
+      <img src="${newThumb}" onerror="this.style.visibility='hidden'" alt="después" style="width:86px;aspect-ratio:16/9;object-fit:cover;border-radius:6px;background:#0a1a30;flex-shrink:0">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(m.title || m.file)}</div>
+        <div style="font-size:11px">${badge(d.change)}</div>
+      </div>
+    </div>`;
+  }).join('');
+  const changes = diff.filter((d) => d && d.change !== 'igual').length;
   $('#publishPlan').innerHTML =
-    `<p style="margin-top:0">La prueba está correcta. Se subirán <b>${files.length}</b> archivo(s) al FTP${up.remoteDir ? `, carpeta <b>${esc(up.remoteDir)}</b>` : ''}.</p>` +
-    `<div id="publishFiles" style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;background:#06101f;border:1px solid var(--line);border-radius:10px;padding:10px;max-height:34vh;overflow:auto;white-space:pre-wrap">${files.map(esc).join('\n')}</div>` +
-    `<p class="hint" style="margin-bottom:0">Al confirmar se regenerará la secuencia y se intentará subir al FTP real.</p>`;
+    `<p style="margin-top:0"><b>${files.length}</b> archivo(s)${up.remoteDir ? ` → carpeta <b>${esc(up.remoteDir)}</b>` : ''} · ${changes ? `<b style="color:#ffd98a">${changes} posición(es) cambian</b>` : '<b style="color:#bff0d5">sin cambios respecto a lo ya publicado</b>'}.</p>` +
+    (rows ? `<div style="max-height:42vh;overflow:auto">${rows}</div>` : `<div id="publishFiles" style="font-family:ui-monospace,monospace;font-size:12px">${files.map(esc).join('<br>')}</div>`) +
+    `<p class="hint" style="margin-bottom:0">Antes → después por posición. Al confirmar se sube al FTP real. <a href="/espejo.html" target="_blank" style="color:#2bb6ff">Ver espejo de pantalla</a></p>`;
   $('#btnPublishConfirm').hidden = false;
   $('#btnPublishCancel').textContent = 'Cancelar';
   publishDlg.showModal();
@@ -4428,6 +4768,21 @@ $('#btnPublishConfirm').addEventListener('click', async () => {
 const statusDlg = $('#statusDlg');
 $('#btnStatus').addEventListener('click', async () => { await loadStatus(true); statusDlg.showModal(); });
 
+// ROLLBACK: vuelve a la tanda anterior (guardada en cada publicación) y la sube.
+$('#btnRollback').addEventListener('click', async () => {
+  const btn = $('#btnRollback');
+  try {
+    const t = await api('/tanda');
+    if (!t.hasPrevious) { toast('No hay tanda anterior guardada todavía'); return; }
+    if (!confirm('¿Restaurar la TANDA ANTERIOR y subirla a la pantalla? La actual pasará a ser la "anterior" (puedes volver a alternar).')) return;
+    btn.disabled = true; btn.textContent = 'Restaurando y subiendo…';
+    const r = await api('/tanda/rollback', { method: 'POST', body: '{}' }, 180000);
+    toast(r.ok ? 'Tanda anterior en pantalla ✓' : 'Rollback con error: revisa el registro');
+    loadStatus(true);
+  } catch (e) { toast(e.message || 'No se pudo hacer el rollback'); }
+  finally { btn.disabled = false; btn.textContent = '↩ Volver a la tanda anterior'; }
+});
+
 async function loadStatus(full) {
   try {
     const s = await api('/status');
@@ -4459,5 +4814,10 @@ async function loadStatus(full) {
   } catch (e) { /* token? */ }
 }
 
-loadConfig().then(load);
+loadConfig().then(load).then(() => {
+  // Atajos de la PWA y accesos directos: /?accion=agenda | /?accion=publicar
+  const accion = new URLSearchParams(location.search).get('accion');
+  if (accion === 'agenda') openAgendaQuick();
+  else if (accion === 'publicar') preparePublish();
+});
 loadPilot();

@@ -153,6 +153,8 @@ function normalizeLibraryItem(item, defaults) {
     notes: String((item && item.notes) || ''),
     eventIds: Array.isArray(item && item.eventIds) ? item.eventIds.map(String).filter(Boolean) : [],
     showEventDates: !item || item.showEventDates !== false,
+    // Agenda: ocultar cada evento cuando pase su hora (45 min de gracia).
+    hideExpired: Boolean(item && item.hideExpired === true),
   };
 }
 
@@ -283,6 +285,13 @@ function dailyPack(library, date) {
   return clean;
 }
 
+// ¿Ha pasado ya la hora de este evento? (45 min de gracia tras el inicio)
+function agendaEventExpired(ev) {
+  if (!ev || !ev.date || !ev.time) return false;
+  const t = Date.parse(`${ev.date}T${ev.time}:00`);
+  return Number.isFinite(t) && Date.now() > t + 45 * 60000;
+}
+
 function resolveAgendaItem(item, library) {
   const ids = Array.isArray(item && item.eventIds) ? item.eventIds.map(String).filter(Boolean) : [];
   if (!ids.length) return item;
@@ -292,6 +301,7 @@ function resolveAgendaItem(item, library) {
   const lines = ids
     .map((id) => bank.get(id))
     .filter((ev) => ev && ev.enabled !== false)
+    .filter((ev) => !(item.hideExpired && agendaEventExpired(ev)))
     .map((ev) => {
       const dated = ev.date ? ev : { ...ev, date: fallbackDate };
       return agendaEventLine(showEventDates ? dated : { ...dated, date: '' });
@@ -748,6 +758,111 @@ function toCard(slot, library, order, date, pickMap = {}, dayThemeKey = '', auto
   });
 }
 
+// ===== AGENDA EXPRÉS =====
+// El flujo de cada mañana en un solo paso: texto plano, una línea por evento
+// ("19:30 Concierto de jazz | Teatro Principal"). El sistema crea/actualiza
+// los eventos del día en el banco y UN pase que los muestra, sin que el
+// usuario toque bancos, pases ni ventanas. El exprés es el DUEÑO de los
+// eventos de ese día: lo que escribas sustituye lo del día, nada más.
+const QUICK_NOTES = '__expres__';
+
+function parseQuickLine(line, day) {
+  const m = String(line || '').trim().match(/^(\d{1,2})[:.hH](\d{2})\s+(.*)$/);
+  const time = m ? `${String(m[1]).padStart(2, '0')}:${m[2]}` : '';
+  const rest = (m ? m[3] : String(line || '').trim()).split('|').map((x) => x.trim());
+  return normalizeAgendaEvent({ date: day, time, title: rest[0] || '', place: rest[1] || '', subtitle: rest[2] || '' });
+}
+
+function quickLineOf(ev) {
+  return `${ev.time ? ev.time + ' ' : ''}${ev.title}${ev.place ? ' | ' + ev.place : ''}${ev.subtitle ? ' | ' + ev.subtitle : ''}`;
+}
+
+function quickAgenda(date) {
+  ensureFiles();
+  const day = String(date || todayKey()).slice(0, 10);
+  const library = normalizeLibrary(readJson(LIBRARY_FILE, DEFAULT_LIBRARY));
+  const events = (library.agendaBanco || [])
+    .filter((ev) => ev.date === day)
+    .sort((a, b) => String(a.time || '99:99').localeCompare(String(b.time || '99:99')));
+  const data = readJson(RUNDOWN_FILE, DEFAULT_RUNDOWN);
+  const quickPass = (library.agendaEventos || []).find((it) => it.notes === QUICK_NOTES && (it.dates || []).includes(day));
+  const previewCard = store.list().find((c) => c.slug === 'agenda-manana');
+  return {
+    ok: true, date: day, lines: events.map(quickLineOf), count: events.length,
+    theme: dayTheme(day, data),
+    hideExpired: quickPass ? quickPass.hideExpired === true : true,
+    previewToday: Boolean(previewCard && previewCard.enabled !== false),
+  };
+}
+
+function quickAgendaSave(date, text, options = {}) {
+  ensureFiles();
+  const day = String(date || todayKey()).slice(0, 10);
+  const library = normalizeLibrary(readJson(LIBRARY_FILE, DEFAULT_LIBRARY));
+  // Los eventos del día se sustituyen por lo escrito (el exprés manda ese día).
+  library.agendaBanco = (library.agendaBanco || []).filter((ev) => ev.date !== day);
+  const events = String(text || '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
+    .map((l) => parseQuickLine(l, day)).filter((ev) => ev.title);
+  library.agendaBanco.push(...events);
+  // Un único pase exprés para ese día (los pases hechos a mano no se tocan y,
+  // si existen, ganan: empiezan más tarde que las 00:00 del exprés).
+  library.agendaEventos = (library.agendaEventos || []).filter((it) => !(it.notes === QUICK_NOTES && (it.dates || []).includes(day)));
+  if (events.length) {
+    const tomorrow = new Date(Date.parse(`${todayKey()}T12:00:00`) + 86400000).toISOString().slice(0, 10);
+    const label = day === todayKey() ? 'Hoy' : (day === tomorrow ? 'Mañana' : new Date(`${day}T12:00:00`).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric' }));
+    library.agendaEventos.push(normalizeLibraryItem({
+      title: 'Agenda',
+      subtitle: label.charAt(0).toUpperCase() + label.slice(1),
+      template: 'agenda',
+      theme: 'blanco',
+      dates: [day],
+      startAt: `${day}T00:00`,
+      endAt: `${day}T23:59`,
+      eventIds: events.map((ev) => ev.id),
+      notes: QUICK_NOTES,
+      showEventDates: false,
+      hideExpired: options.hideExpired !== false,
+    }, { key: 'agendaEventos', template: 'agenda', theme: 'blanco' }));
+  }
+  writeJson(LIBRARY_FILE, library);
+  // Color del día, si se ha tocado en el mismo formulario.
+  if (options.theme !== undefined) {
+    const data = readJson(RUNDOWN_FILE, DEFAULT_RUNDOWN);
+    upgradeRundown(data);
+    if (!data.days || typeof data.days !== 'object') data.days = {};
+    const rec = data.days[day] && typeof data.days[day] === 'object' ? data.days[day] : {};
+    if (options.theme) rec.theme = String(options.theme); else delete rec.theme;
+    data.days[day] = rec;
+    data.days = cleanDays(data.days);
+    data.updatedAt = new Date().toISOString();
+    writeJson(RUNDOWN_FILE, data);
+  }
+  // CARTELA «AGENDA DE MAÑANA» visible HOY: cartela manual con caducidad
+  // esta noche (23:59). Al expirar sale sola de la emisión (vigilante de
+  // franjas) y, si vuelves a guardar la agenda de mañana, se actualiza.
+  const tomorrowKey = new Date(Date.parse(`${todayKey()}T12:00:00Z`) + 86400000).toISOString().slice(0, 10);
+  if (day === tomorrowKey && options.previewToday !== undefined) {
+    const existing = store.list().find((c) => c.slug === 'agenda-manana');
+    if (options.previewToday && events.length) {
+      const lines = events
+        .map((ev) => [ev.time, ev.title, [ev.subtitle, ev.place].map((x) => String(x || '').trim()).filter(Boolean).join(' · ')].filter(Boolean).join(' | '))
+        .join('\n');
+      const patch = {
+        type: 'generated', template: 'agenda', theme: 'blanco',
+        title: 'AGENDA', subtitle: 'MAÑANA', body: lines,
+        enabled: true, source: 'manual', slug: 'agenda-manana', duration: 10,
+        schedule: { startAt: '', endAt: `${todayKey()}T23:59`, dailyFrom: '', dailyTo: '' },
+      };
+      if (existing) store.update(existing.id, patch);
+      else store.add({ ...patch, order: 900 });
+    } else if (existing) {
+      store.remove(existing.id);
+    }
+  }
+  refreshMaterializedLibraryCards(library, { date: day });
+  return { ok: true, date: day, count: events.length };
+}
+
 // ===== Conversión CARTELA-PRIMERO =====
 // El usuario piensa en cartelas, no en bloques: "esta posición ahora es el
 // tiempo", "esta ahora la escribo yo", "esta rota fotos cada hora". Esta
@@ -1020,4 +1135,4 @@ function pick(date, slotId, itemIndex, options = {}) {
   return save(data, { date: day });
 }
 
-module.exports = { read, save, saveLibrary, saveDay, reset, materialize, pick, reorderSlots, reorderFromCards, isEmptyManualNewsSlot, rememberCardEdit, rememberCardDelete, convertCard, dayTheme, RUNDOWN_FILE, LIBRARY_FILE };
+module.exports = { read, save, saveLibrary, saveDay, reset, materialize, pick, reorderSlots, reorderFromCards, isEmptyManualNewsSlot, rememberCardEdit, rememberCardDelete, convertCard, quickAgenda, quickAgendaSave, dayTheme, RUNDOWN_FILE, LIBRARY_FILE };

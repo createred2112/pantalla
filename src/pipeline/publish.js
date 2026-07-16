@@ -71,6 +71,15 @@ async function publishLocked({ dryRun, skipImport, uploadSource = 'manual', runI
     }
   }
   const ok = steps.generate.ok && steps.sequence.ok && steps.upload.ok;
+  // Subida REAL correcta → esta pasa a ser la "última tanda publicada"
+  // (referencia del diff visual y del espejo de pantalla).
+  if (ok && !dryRun && steps.upload.dryRun !== true) {
+    try { require('./sequence').rememberPublishedTanda(steps.sequence.manifest); } catch (e) { log.warn('publish', `No se guardó la última tanda: ${e.message}`); }
+    try { require('../util/emisiones').archive(steps.sequence.manifest); } catch (e) { log.warn('publish', `No se archivó la emisión: ${e.message}`); }
+  }
+  if (!ok && !dryRun) {
+    try { require('../util/notify').notify('⚠ Publicación con fallo', 'La pantalla puede NO estar actualizada. Entra en Estado para ver el detalle.', 'publish-fail'); } catch {}
+  }
   audit.event('publish.upload', ok
     ? `${dryRun ? 'Comprobacion' : 'Subida'} OK: ${(steps.upload.files || []).length} archivo(s)`
     : `${dryRun ? 'Comprobacion' : 'Subida'} con fallo`,

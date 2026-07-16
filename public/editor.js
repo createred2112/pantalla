@@ -124,7 +124,8 @@ async function load() {
 }
 
 function fit() {
-  const s = Math.min((stage.clientWidth - 40) / FRAME.W, (stage.clientHeight - 40) / FRAME.H);
+  const base = Math.min((stage.clientWidth - 40) / FRAME.W, (stage.clientHeight - 40) / FRAME.H);
+  const s = base * (typeof ZOOM === 'number' ? ZOOM : 1);
   SCALE = s;
   canvas.style.width = FRAME.W + 'px'; canvas.style.height = FRAME.H + 'px';
   canvas.style.transform = 'scale(' + s + ')';
@@ -176,7 +177,7 @@ function renderEl(el, i) {
   else if (el.type === 'image') d.style.background = '#1a2a44';
 
   if (d.style.pointerEvents !== 'none') {
-    d.addEventListener('mousedown', (e) => startDrag(e, i));
+    d.addEventListener('pointerdown', (e) => startDrag(e, i));
     d.addEventListener('dblclick', () => {
       select(i);
       const inp = $('#panel [data-k="text"]');
@@ -191,7 +192,7 @@ function addHandles(d, el) {
   for (const mode of ['se', 'e', 's']) {
     const h = document.createElement('div');
     h.className = 'handle ' + mode;
-    h.addEventListener('mousedown', (e) => startResize(e, +d.dataset.idx, mode));
+    h.addEventListener('pointerdown', (e) => startResize(e, +d.dataset.idx, mode));
     d.appendChild(h);
   }
 }
@@ -290,7 +291,25 @@ function select(i) {
   layers();
   panel();
 }
-canvas.addEventListener('mousedown', (e) => { if (e.target === canvas) select(-1); });
+canvas.addEventListener('pointerdown', (e) => { if (e.target === canvas) select(-1); });
+
+// ZOOM (esencial en móvil): botones − / ajustar / +. Con zoom, el lienzo se
+// desplaza con dos dedos o con la barra del escenario.
+let ZOOM = 1;
+function setZoom(z) {
+  ZOOM = Math.max(1, Math.min(4, z));
+  stage.style.overflow = ZOOM > 1 ? 'auto' : 'hidden';
+  stage.style.justifyContent = ZOOM > 1 ? 'flex-start' : 'center';
+  stage.style.alignItems = ZOOM > 1 ? 'flex-start' : 'center';
+  fit();
+  const zi = $('#zoomVal');
+  if (zi) zi.textContent = Math.round(ZOOM * 100) + '%';
+}
+if ($('#btnZoomIn')) {
+  $('#btnZoomIn').addEventListener('click', () => setZoom(ZOOM + 0.5));
+  $('#btnZoomOut').addEventListener('click', () => setZoom(ZOOM - 0.5));
+  $('#btnZoomFit').addEventListener('click', () => setZoom(1));
+}
 
 function elBox(el, i) {
   if (el.type === 'chip') {
@@ -330,15 +349,19 @@ function showGuide(kind, at) {
   canvas.appendChild(g);
 }
 
+// Arrastre TÁCTIL y de ratón (pointer events): funciona con el dedo en el
+// móvil, que es donde se edita de verdad.
 function startDrag(e, i) {
   e.preventDefault(); e.stopPropagation();
   if (SEL !== i) select(i);
   const el = ELS[i]; const sx = e.clientX, sy = e.clientY, ox = el.x, oy = el.y;
   const div = canvas.querySelector(`.el[data-idx="${i}"]`);
+  try { div.setPointerCapture(e.pointerId); } catch {}
   const box = elBox(el, i);
   const targets = snapTargets(i);
   let took = false;
   function mv(ev) {
+    ev.preventDefault();
     if (!took) { snapshot('drag' + i + ':' + sx + ',' + sy); took = true; }
     let nx = Math.round(ox + (ev.clientX - sx) / SCALE);
     let ny = Math.round(oy + (ev.clientY - sy) / SCALE);
@@ -354,15 +377,17 @@ function startDrag(e, i) {
     div.style.left = el.x + 'px'; div.style.top = el.y + 'px';
     syncXY();
   }
-  function up() { clearGuides(); document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up); }
-  document.addEventListener('mousemove', mv); document.addEventListener('mouseup', up);
+  function up() { clearGuides(); document.removeEventListener('pointermove', mv); document.removeEventListener('pointerup', up); document.removeEventListener('pointercancel', up); }
+  document.addEventListener('pointermove', mv); document.addEventListener('pointerup', up); document.addEventListener('pointercancel', up);
 }
 function startResize(e, i, mode) {
   e.preventDefault(); e.stopPropagation();
   const el = ELS[i]; const sx = e.clientX, sy = e.clientY, ow = el.w, oh = el.h;
   const div = canvas.querySelector(`.el[data-idx="${i}"]`);
+  try { e.target.setPointerCapture(e.pointerId); } catch {}
   let took = false;
   function mv(ev) {
+    ev.preventDefault();
     if (!took) { snapshot('resize' + i + ':' + sx + ',' + sy); took = true; }
     if (mode !== 's') el.w = Math.max(20, Math.round(ow + (ev.clientX - sx) / SCALE));
     if (mode !== 'e') el.h = Math.max(20, Math.round(oh + (ev.clientY - sy) / SCALE));
@@ -370,8 +395,8 @@ function startResize(e, i, mode) {
     const span = div.querySelector('.txt'); if (span && el.autofit) { el._px = fitSpan(span, div, el.autofit); syncSizeInfo(el); }
     syncWH();
   }
-  function up() { document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up); }
-  document.addEventListener('mousemove', mv); document.addEventListener('mouseup', up);
+  function up() { document.removeEventListener('pointermove', mv); document.removeEventListener('pointerup', up); document.removeEventListener('pointercancel', up); }
+  document.addEventListener('pointermove', mv); document.addEventListener('pointerup', up); document.addEventListener('pointercancel', up);
 }
 
 // Teclado: flechas mueven, Supr oculta, Ctrl+Z/Y historial.
@@ -734,6 +759,22 @@ $('#btnDefault').addEventListener('click', async () => {
     toast('Plantilla, cartela y MP4 actualizados');
   } catch (e) { toast(e.message || 'Error al guardar o generar'); }
 });
+// PLANTILLA PROPIA: esta composición pasa a ser una plantilla nueva con
+// nombre, disponible en la galería (★) para cualquier cartela futura.
+$('#btnSaveAsNew').addEventListener('click', async () => {
+  const name = prompt('Nombre de la nueva plantilla (p. ej. "Póster evento grande"):');
+  if (!name || !name.trim()) return;
+  try {
+    const base = String(FRAME.template || 'noticia').startsWith('u_') ? 'noticia' : FRAME.template;
+    const r = await requestJson('/api/templates/custom', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ label: name.trim(), baseTemplate: base, layout: layoutPayload(), theme: FRAME.theme && FRAME.theme.key }),
+    });
+    toast(`Plantilla «${name.trim()}» creada ✓ — ya está en la galería`);
+  } catch (e) { toast(e.message || 'No se pudo crear la plantilla'); }
+});
+
 $('#btnDefaultAll').addEventListener('click', async () => {
   if (!confirm('¿Aplicar esta composición como PLANTILLA BASE para todos los colores de "' + FRAME.template + '"? Se borran excepciones de color de esa plantilla y los colores vinculados seguirán cambiando con cada tema.')) return;
   const btn = $('#btnDefaultAll');

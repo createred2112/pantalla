@@ -104,6 +104,9 @@ app.use(express.static(PUBLIC));
 app.use('/media/uploads', express.static(paths.uploads));
 app.use('/media/inbox', express.static(paths.workerInbox));
 app.use('/media/output', express.static(paths.output));
+app.use('/media/publish', express.static(paths.publish));
+app.use('/media/last-tanda', express.static(require('./pipeline/sequence').LAST_TANDA_DIR));
+app.use('/media/emisiones', express.static(require('./util/emisiones').DIR));
 app.use('/fonts', express.static(path.join(__dirname, '..', 'assets', 'fonts')));
 app.get('/media/project-videos/:name', (req, res) => {
   const name = path.basename(req.params.name || '');
@@ -145,6 +148,88 @@ const upload = multer({
 
 // --- API ---
 const templates = require('./generator/templates');
+const autopublish = require('./autopublish');
+const notify = require('./util/notify');
+
+// PUBLICACIÓN AUTOMÁTICA AL GUARDAR: cualquier cambio que toca la emisión
+// reprograma una subida con colchón (90s). Se activa en Ajustes.
+const AUTOPUBLISH_ROUTES = /^\/api\/(cards|rundown|agenda\/quick|settings|templates)/;
+const AUTOPUBLISH_EXCLUDE = /\/(render|preview|ftp-test)/;
+app.use((req, res, next) => {
+  if (!/^(POST|PUT|DELETE)$/.test(req.method) || !AUTOPUBLISH_ROUTES.test(req.path) || AUTOPUBLISH_EXCLUDE.test(req.path)) return next();
+  res.on('finish', () => {
+    if (res.statusCode < 400) {
+      try { autopublish.schedule(`${req.method} ${req.path}`); } catch {}
+    }
+  });
+  next();
+});
+
+// Estado de la emisión: qué hay publicado, tanda anterior y espejo.
+app.get('/api/tanda', (req, res) => {
+  const seq = require('./pipeline/sequence');
+  const pub = fs.existsSync(paths.publish)
+    ? fs.readdirSync(paths.publish).filter((f) => f.toLowerCase().endsWith('.mp4')).sort()
+    : [];
+  let publishedAt = null;
+  try { publishedAt = JSON.parse(fs.readFileSync(path.join(seq.LAST_TANDA_DIR, 'manifest.json'), 'utf8')).publishedAt; } catch {}
+  res.json({
+    files: pub.map((f) => ({ file: f, url: '/media/publish/' + encodeURIComponent(f) })),
+    published: seq.lastTandaManifest(),
+    publishedAt,
+    hasPrevious: fs.existsSync(paths.publish + '-anterior'),
+    autopublish: autopublish.state(),
+  });
+});
+
+// ROLLBACK: vuelve a la tanda anterior y la sube a la pantalla.
+app.post('/api/tanda/rollback', async (req, res) => {
+  const prevDir = paths.publish + '-anterior';
+  if (!fs.existsSync(prevDir)) return res.status(400).json({ error: 'No hay tanda anterior guardada todavía' });
+  try {
+    const up = await pipelineLock.withLock('Rollback de emisión', async () => {
+      const tmp = paths.publish + '-tmp-rollback';
+      fs.rmSync(tmp, { recursive: true, force: true });
+      if (fs.existsSync(paths.publish)) fs.renameSync(paths.publish, tmp);
+      fs.renameSync(prevDir, paths.publish);
+      if (fs.existsSync(tmp)) fs.renameSync(tmp, prevDir); // la actual pasa a ser "anterior"
+      return require('./pipeline/upload').upload({ source: 'manual-rollback' });
+    });
+    log.info('publish', `Rollback a la tanda anterior ${up.ok ? 'subido a pantalla' : 'con error: ' + (up.error || '')}`);
+    res.json({ ok: up.ok !== false, upload: up });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// TAKEOVER urgente: la alerta ocupa la pantalla X minutos y vuelve sola.
+app.get('/api/takeover', (req, res) => res.json(require('./takeover').state()));
+app.post('/api/takeover', (req, res) => {
+  const b = req.body || {};
+  const r = require('./takeover').activate({ title: b.title, body: b.body, theme: b.theme, minutes: b.minutes, mode: b.mode });
+  if (!r.ok) return res.status(400).json(r);
+  res.json(r);
+});
+app.post('/api/takeover/off', (req, res) => res.json(require('./takeover').deactivate('manual')));
+
+// HISTORIAL DE EMISIONES: listar y restaurar cualquier día.
+app.get('/api/emisiones', (req, res) => res.json({ items: require('./util/emisiones').list() }));
+app.post('/api/emisiones/:id/restore', async (req, res) => {
+  try {
+    const out = await pipelineLock.withLock('Restauración de emisión', async () => {
+      const r = require('./util/emisiones').restore(req.params.id);
+      if (!r.ok) return r;
+      const up = await require('./pipeline/upload').upload({ source: 'manual-restore' });
+      return { ...r, upload: up, ok: up.ok !== false };
+    });
+    if (!out.ok) return res.status(400).json(out);
+    log.info('publish', `Emisión ${req.params.id} restaurada y subida`);
+    res.json(out);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Avisos push: clave pública, alta de dispositivo y prueba.
+app.get('/api/push/key', (req, res) => res.json({ key: notify.publicKey(), devices: notify.count() }));
+app.post('/api/push/subscribe', (req, res) => res.json(notify.subscribe(req.body || {})));
+app.post('/api/push/test', async (req, res) => res.json(await notify.notify('Prueba de avisos', 'Así llegarán los avisos de LA PANTALLA a este móvil.', 'test')));
 app.get('/api/config', (req, res) => {
   res.json({
     screen: cfg.screen,
@@ -251,6 +336,7 @@ app.get('/api/settings', (req, res) => {
     screenProfile: cfg.screenProfile || {},
     naming: cfg.naming || {},
     design: cfg.design || { version: 'v1' },
+    autopublish: cfg.autopublish || { enabled: false },
     templateBumpers: cfg.templateBumpers || {},
     ftp: { ...ftp, password: '', hasPassword: Boolean(ftp.password || process.env.FTP_PASSWORD), effective: effectiveFtp },
     fonts: fontFamilies(),
@@ -272,6 +358,8 @@ app.put('/api/settings', (req, res) => {
   if (body.design && (body.design.version === 'v1' || body.design.version === 'v2')) {
     partial.design = { version: body.design.version };
   }
+  // Publicación automática al guardar (modo confianza).
+  if (body.autopublish) partial.autopublish = { enabled: body.autopublish.enabled === true };
   if (body.templateBumpers) partial.templateBumpers = body.templateBumpers;
   if (body.ftp) {
     const nextFtp = { ...(cfg.ftp || {}), ...body.ftp };
@@ -377,6 +465,117 @@ app.post('/api/rundown/materialize', (req, res) => {
   res.json(result);
 });
 
+// "PROPONME PIEZAS": sugerencias para los bancos (frases, datos, efemérides).
+// Solo responde a demanda; sin sondeos ni carga de fondo (ver src/suggestions.js).
+app.get('/api/banks/suggest', async (req, res) => {
+  try {
+    const key = String(req.query.key || '');
+    const lib = rundown.read().library || {};
+    const existing = (Array.isArray(lib[key]) ? lib[key] : []).map((it) => it.title);
+    const r = await require('./suggestions').suggest(key, existing);
+    if (!r.ok) return res.status(400).json(r);
+    res.json(r);
+  } catch (e) {
+    res.status(502).json({ error: 'No se pudieron traer sugerencias: ' + e.message });
+  }
+});
+
+// Agenda exprés: el flujo de cada mañana en un paso.
+app.get('/api/agenda/quick', (req, res) => {
+  res.json(rundown.quickAgenda(req.query.date));
+});
+
+// Sugerencias de eventos desde la propia web (fuente verificada): prueba
+// The Events Calendar, luego tipos de contenido tipo agenda/evento del WP.
+function stripHtml(s) {
+  return String(s || '')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&#8211;|&ndash;/g, '–').replace(/&#8217;|&rsquo;/g, '’')
+    .replace(/&amp;/g, '&').replace(/&nbsp;/g, ' ').replace(/&quot;/g, '"')
+    .replace(/\s+/g, ' ').trim();
+}
+
+app.get('/api/agenda/web', async (req, res) => {
+  const day = String(req.query.date || '').slice(0, 10) || new Date().toISOString().slice(0, 10);
+  const base = wpBase();
+  const items = [];
+  let source = '';
+  const seen = new Set();
+  const push = (it) => {
+    const title = stripHtml(it.title);
+    if (!title || seen.has(title.toLowerCase())) return;
+    seen.add(title.toLowerCase());
+    // hora dentro del título ("19:30 Concierto...") si la fuente no la da
+    const m = !it.time && title.match(/\b(\d{1,2})[:.](\d{2})\b/);
+    items.push({
+      title: m ? title.replace(m[0], '').replace(/\s+/g, ' ').trim() : title,
+      time: it.time || (m ? `${String(m[1]).padStart(2, '0')}:${m[2]}` : ''),
+      place: stripHtml(it.place || ''),
+      url: it.url || '',
+    });
+  };
+  // 0) KULTURKLIK (Open Data Euskadi): agenda cultural de Vitoria-Gasteiz.
+  //    Una descarga al día por fecha, cacheada; el resto del día sale de disco.
+  try {
+    const kk = await require('./suggestions').kulturklik(day);
+    for (const ev of kk.items || []) push({ title: ev.title, time: ev.time, place: [ev.place, ev.type].filter(Boolean).join(' · ') });
+    if (items.length) source = 'Kulturklik / Euskadi.eus' + (kk.cached ? ' (caché de hoy)' : '');
+  } catch (e) {
+    log.warn('agenda', 'Kulturklik no disponible: ' + e.message);
+  }
+  // 1) The Events Calendar (plugin de eventos más común en WordPress)
+  try {
+    const u = new URL(base + '/wp-json/tribe/events/v1/events');
+    u.searchParams.set('start_date', `${day} 00:00:00`);
+    u.searchParams.set('end_date', `${day} 23:59:59`);
+    u.searchParams.set('per_page', '30');
+    const r = await fetch(u, { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(12000) });
+    if (r.ok) {
+      const j = await r.json();
+      for (const ev of j.events || []) {
+        push({ title: ev.title, time: String(ev.start_date || '').slice(11, 16), place: ev.venue && (ev.venue.venue || ev.venue.address), url: ev.url });
+      }
+      if (items.length && !source) source = 'calendario de eventos de la web';
+    }
+  } catch {}
+  // 2) Tipos de contenido personalizados que suenen a agenda/evento
+  if (!items.length) {
+    try {
+      const r = await fetch(base + '/wp-json/wp/v2/types', { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(12000) });
+      if (r.ok) {
+        const types = Object.values(await r.json()).filter((t) => t && t.rest_base && /agenda|evento|event/i.test(`${t.slug} ${t.name || ''}`) && !/media|attachment/i.test(t.slug));
+        for (const t of types) {
+          const rr = await fetch(base + `/wp-json/wp/v2/${t.rest_base}?per_page=20&orderby=date&order=desc`, { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(12000) });
+          if (!rr.ok) continue;
+          for (const p of await rr.json()) push({ title: p.title && p.title.rendered, url: p.link });
+          if (items.length) { source = `contenido "${t.slug}" de la web`; break; }
+        }
+      }
+    } catch {}
+  }
+  // 3) Últimas entradas que mencionen agenda (mejor que nada)
+  if (!items.length) {
+    try {
+      const r = await fetch(base + '/wp-json/wp/v2/posts?search=agenda&per_page=10&orderby=date&order=desc', { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(12000) });
+      if (r.ok) {
+        for (const p of await r.json()) push({ title: p.title && p.title.rendered, url: p.link });
+        if (items.length) source = 'entradas recientes con "agenda"';
+      }
+    } catch {}
+  }
+  res.json({ ok: true, date: day, base, source, items: items.slice(0, 30) });
+});
+
+app.post('/api/agenda/quick', (req, res) => {
+  try {
+    const b = req.body || {};
+    const r = rundown.quickAgendaSave(b.date, b.text, { theme: b.theme, hideExpired: b.hideExpired !== false, previewToday: b.previewToday === undefined ? undefined : b.previewToday === true });
+    try { rundown.materialize({ date: r.date }); } catch (e) { log.warn('agenda', 'Exprés guardado pero no se pudo materializar: ' + e.message); }
+    log.info('agenda', `Agenda exprés del ${r.date}: ${r.count} evento(s)`);
+    res.json(r);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.post('/api/rundown/pick', (req, res) => {
   const body = req.body || {};
   res.json(rundown.pick(body.date || req.query.date, body.slotId, body.itemIndex, { fixed: body.fixed }));
@@ -404,6 +603,22 @@ app.put('/api/cards/:id/layout', (req, res) => {
   try { rundown.rememberCardEdit(c, { layout: c.layout }); } catch (e) { log.warn('rundown', `No se pudo recordar layout de ${req.params.id}: ${e.message}`); }
   log.info('editor', `Layout guardado en ${req.params.id}`);
   res.json({ ok: true });
+});
+
+// PLANTILLAS PROPIAS: guardar la composición del editor como plantilla nueva.
+app.post('/api/templates/custom', (req, res) => {
+  const b = req.body || {};
+  const r = require('./userTemplates').create({ label: b.label, base: b.baseTemplate, layout: b.layout, theme: b.theme });
+  if (!r.ok) return res.status(400).json(r);
+  log.info('editor', `Plantilla propia creada: ${r.label} (${r.id})`);
+  res.json(r);
+});
+
+app.delete('/api/templates/custom/:id', (req, res) => {
+  const r = require('./userTemplates').remove(req.params.id);
+  if (!r.ok) return res.status(400).json(r);
+  log.info('editor', `Plantilla propia eliminada: ${req.params.id}`);
+  res.json(r);
 });
 
 // Guardar un layout como PREDETERMINADO de una plantilla (afecta a todas sus cartelas).
@@ -1043,4 +1258,8 @@ app.listen(env.port, () => {
   }
   autopilot.start();
   workers.start();
+  notify.start(); // recordatorios proactivos (agenda sin cargar, etc.)
+  require('./util/janitor').start(); // limpieza diaria de renders huérfanos
+  require('./takeover').start(); // vuelta automática del takeover al expirar
+  autopublish.startWindows(); // vigilante de franjas horarias por cartela
 });

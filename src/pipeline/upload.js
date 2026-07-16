@@ -95,7 +95,31 @@ async function upload({ dryRun, files: plannedFiles, source = 'manual' } = {}) {
     client.trackProgress();
     log.info('upload', `Subidos ${files.length} archivo(s) a ${ftpCfg.remoteDir}`);
 
-    const r = { ok: true, running: false, source, files, count: files.length, done: files.length, remoteDir: ftpCfg.remoteDir };
+    // VERIFICACIÓN POST-SUBIDA: lo remoto debe pesar lo mismo que lo local.
+    // Si algo no cuadra (subida a medias, disco lleno...), se avisa.
+    let verify = { ok: true, checked: 0, mismatches: [] };
+    try {
+      setProgress({ phase: 'verifying', done: files.length, current: null });
+      const remote = new Map((await client.list()).map((it) => [it.name, Number(it.size) || 0]));
+      for (const file of files) {
+        const localSize = fs.statSync(path.join(paths.publish, file)).size;
+        const remoteSize = remote.has(file) ? remote.get(file) : -1;
+        verify.checked++;
+        if (remoteSize !== localSize) verify.mismatches.push({ file, localSize, remoteSize: remoteSize < 0 ? null : remoteSize });
+      }
+      verify.ok = verify.mismatches.length === 0;
+      if (!verify.ok) {
+        log.error('upload', `Verificación FTP con diferencias: ${verify.mismatches.map((m) => m.file).join(', ')}`);
+        try { require('../util/notify').notify('⚠ Verificación de pantalla fallida', `Hay ${verify.mismatches.length} archivo(s) que no coinciden en el FTP. Revisa Estado y reintenta la subida.`, 'verify-fail'); } catch {}
+      } else {
+        log.info('upload', `Verificación FTP OK: ${verify.checked} archivo(s) coinciden`);
+      }
+    } catch (e) {
+      verify = { ok: null, error: e.message };
+      log.warn('upload', `No se pudo verificar la subida: ${e.message}`);
+    }
+
+    const r = { ok: true, running: false, source, files, count: files.length, done: files.length, remoteDir: ftpCfg.remoteDir, verify };
     status.set('upload', r);
     return r;
   } catch (e) {

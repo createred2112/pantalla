@@ -1,0 +1,12 @@
+[
+  { "title": "112", "subtitle": "Emergencias", "body": "Cualquier urgencia, 24 horas, gratuito" },
+  { "title": "010", "subtitle": "Atención ciudadana", "body": "Información municipal y trámites de Vitoria-Gasteiz" },
+  { "title": "016", "subtitle": "Violencia de género", "body": "Gratuito y confidencial; no deja rastro en la factura" },
+  { "title": "017", "subtitle": "Ciberseguridad (INCIBE)", "body": "Ayuda gratuita ante estafas y problemas en internet" },
+  { "title": "091", "subtitle": "Policía Nacional", "body": "Urgencias policiales" },
+  { "title": "092", "subtitle": "Policía Local", "body": "Incidencias en la ciudad" },
+  { "title": "024", "subtitle": "Línea de atención a la conducta suicida", "body": "Gratuita, confidencial, 24 horas" },
+  { "title": "Bebe agua aunque no tengas sed", "subtitle": "Consejo de salud", "body": "Especialmente mayores y niños en días de calor" },
+  { "title": "Revisa los detectores de humo una vez al año", "subtitle": "Consejo de seguridad", "body": "Un minuto que puede salvar una vida" },
+  { "title": "Guarda el 112 en marcación rápida", "subtitle": "Consejo útil", "body": "Funciona incluso sin cobertura de tu operador" }
+]

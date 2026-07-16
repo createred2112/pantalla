@@ -811,7 +811,11 @@ function resolveFrame(card, ctx, tpl) {
     const layout = reconcileSavedLayout(ownLayout, card, ctx, tpl);
     return repairFrameForCard(card, ctx, applyLayout(layout, card, ctx, tpl), { preserveLayout: true });
   }
-  const tl = require('../templateLayouts').get(card.template, ctx.theme && ctx.theme.key);
+  // Plantillas propias: su composición viaja dentro de la plantilla y actúa
+  // como el layout predeterminado (por debajo del layout de la cartela).
+  const tl = (tpl.userLayout && Array.isArray(tpl.userLayout.elements))
+    ? tpl.userLayout
+    : require('../templateLayouts').get(card.template, ctx.theme && ctx.theme.key);
   if (tl && Array.isArray(tl.elements)) {
     const layout = reconcileSavedLayout(tl, card, ctx, tpl);
     return repairFrameForCard(card, ctx, applyLayout(layout, card, ctx, tpl), { preserveLayout: true });

@@ -48,15 +48,43 @@ function activeModules() {
   return modules.map((m) => v2ById.get(m.id) || m);
 }
 
-function get(id) {
+function builtinGet(id) {
   const v2 = designVersion() === 'v2';
   const base = v1ById.get(id) || v1ById.get('noticia');
   return v2 ? (v2ById.get(base.id) || base) : base;
 }
 
+// Plantillas PROPIAS del usuario (guardadas desde el editor visual): se
+// comportan como la plantilla base pero con su composición congelada dentro.
+function userModule(rec) {
+  const base = builtinGet(rec.base);
+  return {
+    ...base,
+    id: rec.id,
+    label: '★ ' + rec.label,
+    defaultTheme: rec.theme || base.defaultTheme || null,
+    userLayout: rec.layout,
+    userBase: rec.base,
+  };
+}
+
+function userModules() {
+  try { return require('../../userTemplates').list().map(userModule); } catch { return []; }
+}
+
+function get(id) {
+  if (String(id || '').startsWith('u_')) {
+    try {
+      const rec = require('../../userTemplates').get(id);
+      if (rec) return userModule(rec);
+    } catch { /* cae a la de serie */ }
+  }
+  return builtinGet(id);
+}
+
 // Lista para el panel (id, etiqueta, pistas de campos).
 function list() {
-  return activeModules().map((m) => ({ id: m.id, label: m.label, hint: m.hint || {}, logo: m.logo !== false, defaultTheme: m.defaultTheme || null }));
+  return [...activeModules(), ...userModules()].map((m) => ({ id: m.id, label: m.label, hint: m.hint || {}, logo: m.logo !== false, defaultTheme: m.defaultTheme || null, user: String(m.id).startsWith('u_') || undefined }));
 }
 
 module.exports = { get, list, lib, designVersion };

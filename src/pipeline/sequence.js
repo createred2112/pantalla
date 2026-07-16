@@ -214,17 +214,53 @@ function copyForPublish(src, dest, file) {
 function swapPublishDir(stagingDir) {
   const parent = path.dirname(paths.publish);
   const backupDir = path.join(parent, `.publish-backup-${Date.now()}-${process.pid}`);
+  const prevDir = paths.publish + '-anterior';
 
   try {
     if (fs.existsSync(paths.publish)) fs.renameSync(paths.publish, backupDir);
     fs.renameSync(stagingDir, paths.publish);
-    if (fs.existsSync(backupDir)) fs.rmSync(backupDir, { recursive: true, force: true });
+    if (fs.existsSync(backupDir)) {
+      // TANDA DE SEGURIDAD: la emisión anterior se conserva en
+      // publish-anterior/ para poder volver atrás con un toque.
+      try {
+        fs.rmSync(prevDir, { recursive: true, force: true });
+        fs.renameSync(backupDir, prevDir);
+      } catch {
+        try { fs.rmSync(backupDir, { recursive: true, force: true }); } catch {}
+      }
+    }
   } catch (e) {
     try {
       if (!fs.existsSync(paths.publish) && fs.existsSync(backupDir)) fs.renameSync(backupDir, paths.publish);
     } catch {}
     throw e;
   }
+}
+
+// --- Última tanda publicada (para el diff visual antes de publicar) ---
+const LAST_TANDA_DIR = path.join(path.dirname(paths.data), 'last-tanda');
+
+function lastTandaManifest() {
+  try { return JSON.parse(fs.readFileSync(path.join(LAST_TANDA_DIR, 'manifest.json'), 'utf8')).items || []; } catch { return []; }
+}
+
+// Firma de contenido de una cartela para detectar "esta posición cambia".
+function cardSignature(card, src) {
+  if (card.type === 'generated') {
+    try { return renderMeta.renderHash(card); } catch { /* sigue abajo */ }
+  }
+  try { const st = fs.statSync(src); return `f:${path.basename(src)}:${st.size}:${Math.round(st.mtimeMs)}`; }
+  catch { return 'f:' + String(src || card.id); }
+}
+
+// Compara la secuencia nueva con la última tanda publicada, posición a posición.
+function diffAgainstLastTanda(manifest) {
+  const prev = lastTandaManifest();
+  return manifest.map((m) => {
+    const p = prev[m.order - 1] || null;
+    const change = !p ? 'nueva' : (p.id !== m.id || p.hash !== m.hash ? 'cambia' : 'igual');
+    return { order: m.order, file: m.file, id: m.id, change, prevId: p ? p.id : null };
+  });
 }
 
 function sequence({ dryRun } = {}) {
@@ -286,6 +322,8 @@ function sequence({ dryRun } = {}) {
       id: card.id,
       type: card.type,
       file: path.basename(dest),
+      title: card.title || '',
+      hash: cardSignature(card, src),
       duration: mediaDuration.roundedDuration(src) || card.duration,
     });
     copies.push({ src, file: path.basename(dest) });
@@ -315,7 +353,7 @@ function sequence({ dryRun } = {}) {
   }
 
   if (dryRun) {
-    const r = { ok: true, dryRun: true, count: manifest.length, requiredCount: countNeeded || undefined, manifest, files: filesForPublish(copies.map((c) => c.file)), omitted };
+    const r = { ok: true, dryRun: true, count: manifest.length, requiredCount: countNeeded || undefined, manifest, diff: diffAgainstLastTanda(manifest), files: filesForPublish(copies.map((c) => c.file)), omitted };
     status.set('sequence', r);
     log.info('sequence', `Prueba de secuencia OK: ${manifest.length} archivo(s); publish/ no se modifica`);
     return r;
@@ -335,10 +373,33 @@ function sequence({ dryRun } = {}) {
     return r;
   }
 
-  status.set('sequence', { ok: true, count: manifest.length, requiredCount: countNeeded || undefined, manifest, files: filesForPublish(copies.map((c) => c.file)), omitted });
+  const result = { ok: true, count: manifest.length, requiredCount: countNeeded || undefined, manifest, diff: diffAgainstLastTanda(manifest), files: filesForPublish(copies.map((c) => c.file)), omitted };
+  status.set('sequence', result);
   log.info('sequence', `Secuencia lista: ${manifest.length} archivo(s) en publish/`);
   if (omitted.length) log.warn('sequence', `${omitted.length} cartela(s) activa(s) quedan fuera porque la pantalla solo admite ${countNeeded}`);
-  return { ok: true, count: manifest.length, requiredCount: countNeeded || undefined, manifest, files: filesForPublish(copies.map((c) => c.file)), omitted };
+  return result;
 }
 
-module.exports = { sequence };
+// Guarda la "última tanda publicada": manifest + miniaturas por posición.
+// Se llama tras una subida REAL correcta. Es la referencia del diff y del
+// "antes" visual en el diálogo de publicar.
+function rememberPublishedTanda(manifest) {
+  try {
+    fs.mkdirSync(LAST_TANDA_DIR, { recursive: true });
+    for (const m of manifest || []) {
+      const poster = path.join(paths.output, `${m.id}.jpg`);
+      const dest = path.join(LAST_TANDA_DIR, `${path.basename(m.file, path.extname(m.file))}.jpg`);
+      try {
+        if (fs.existsSync(poster)) fs.copyFileSync(poster, dest);
+        else fs.rmSync(dest, { force: true });
+      } catch {}
+    }
+    fs.writeFileSync(path.join(LAST_TANDA_DIR, 'manifest.json'), JSON.stringify({ publishedAt: new Date().toISOString(), items: manifest || [] }, null, 2));
+    return { ok: true };
+  } catch (e) {
+    log.warn('sequence', `No se pudo guardar la última tanda: ${e.message}`);
+    return { ok: false, error: e.message };
+  }
+}
+
+module.exports = { sequence, rememberPublishedTanda, lastTandaManifest, LAST_TANDA_DIR };

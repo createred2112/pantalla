@@ -176,11 +176,20 @@ function logoUri(p) {
   } catch { return null; }
 }
 
+// Escala por ROL tipográfico: además del tamaño global (textScale), los
+// titulares (font display) y los textos (font text) tienen su propio mando
+// en Ajustes. Cambiar un número restila TODAS las cartelas.
+function roleScale(el) {
+  const base = Number(cfg.brand.textScale) || 1;
+  const extra = el && el.font === 'display' ? Number(cfg.brand.scaleDisplay) : Number(cfg.brand.scaleText);
+  return base * (extra > 0.3 && extra < 3 ? extra : 1);
+}
+
 // Convierte un elemento del esquema en HTML.
 async function elHtml(el, ctx) {
   if (el.hidden) return '';
   const { W, H } = ctx;
-  const scale = Number(cfg.brand.textScale) || 1;
+  const scale = roleScale(el);
   const attrs = `class="el el-${el.type || 'item'}" data-kind="${el.type || 'item'}"${el.anim ? ` data-anim="${el.anim}"` : ''}`;
   const box = `position:absolute;left:${el.x}px;top:${el.y}px;width:${el.w}px;height:${el.h}px;overflow:hidden;`;
 

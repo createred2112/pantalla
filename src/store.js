@@ -27,11 +27,34 @@ function list() {
   return load().cards;
 }
 
-// Cartelas activas, ordenadas por el campo "order".
+// HORARIO por cartela: ¿le toca estar en pantalla ahora?
+// schedule = { startAt, endAt (fecha+hora exactas), dailyFrom, dailyTo (franja
+// diaria repetida, admite cruzar medianoche: 22:00 → 07:00) }.
+function scheduleAllows(card, now = new Date()) {
+  const s = card && card.schedule;
+  if (!s) return true;
+  if (s.startAt) { const t = Date.parse(s.startAt); if (Number.isFinite(t) && now.getTime() < t) return false; }
+  if (s.endAt) { const t = Date.parse(s.endAt); if (Number.isFinite(t) && now.getTime() > t) return false; }
+  const parseHm = (x) => { const m = String(x || '').match(/^(\d{1,2}):(\d{2})$/); return m ? (+m[1]) * 60 + (+m[2]) : null; };
+  const a = parseHm(s.dailyFrom), b = parseHm(s.dailyTo);
+  if (a != null || b != null) {
+    const hm = now.getHours() * 60 + now.getMinutes();
+    if (a != null && b != null) {
+      const inside = a <= b ? (hm >= a && hm <= b) : (hm >= a || hm <= b);
+      if (!inside) return false;
+    } else if (a != null && hm < a) return false;
+    else if (b != null && hm > b) return false;
+  }
+  return true;
+}
+
+// Cartelas activas, ordenadas por el campo "order". Aplica horarios por
+// cartela y, si hay un TAKEOVER urgente en marcha, la emisión especial.
 function active() {
-  return list()
-    .filter((c) => c.enabled !== false)
+  const base = list()
+    .filter((c) => c.enabled !== false && scheduleAllows(c))
     .sort((a, b) => (a.order || 0) - (b.order || 0));
+  try { return require('./takeover').apply(base); } catch { return base; }
 }
 
 function normalize(card) {
@@ -60,6 +83,15 @@ function normalize(card) {
     file: card.file || null,     // ruta a archivo ya listo (image/video)
     duration: card.duration != null ? Number(card.duration) : cfg.defaults.duration,
     source: card.source || 'manual', // manual | worker | rundown
+    // Horario propio (cartelas manuales): fuera de ventana no entra en emisión.
+    schedule: card.schedule && typeof card.schedule === 'object'
+      ? {
+        startAt: String(card.schedule.startAt || ''),
+        endAt: String(card.schedule.endAt || ''),
+        dailyFrom: String(card.schedule.dailyFrom || ''),
+        dailyTo: String(card.schedule.dailyTo || ''),
+      }
+      : null,
     slug: card.slug || null,
     rundownSlot: card.rundownSlot || null,
     bumperKey: card.bumperKey || null,
@@ -109,4 +141,4 @@ function reorder(orderedIds) {
   return data.cards;
 }
 
-module.exports = { id, load, save, list, active, add, update, remove, reorder, normalize };
+module.exports = { id, load, save, list, active, add, update, remove, reorder, normalize, scheduleAllows };

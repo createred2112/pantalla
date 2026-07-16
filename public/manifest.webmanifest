@@ -1,0 +1,21 @@
+{
+  "name": "LA PANTALLA · Estudio GasteizBerri",
+  "short_name": "Pantalla",
+  "description": "Panel de la cartelería digital de GasteizBerri",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#06101f",
+  "theme_color": "#0b1f3a",
+  "lang": "es",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Publicar", "url": "/?accion=publicar", "description": "Preparar y subir la emisión" },
+    { "name": "Agenda viva", "url": "/?accion=agenda", "description": "Programar la agenda" }
+  ]
+}

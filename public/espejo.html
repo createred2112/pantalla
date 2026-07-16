@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Espejo de pantalla · GasteizBerri</title>
+<style>
+  :root{--muted:#9fb2d4;--line:#244170}
+  *{box-sizing:border-box}
+  body{margin:0;background:#000;color:#eaf0fb;font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif;height:100vh;display:flex;flex-direction:column;overflow:hidden}
+  header{display:flex;align-items:center;gap:10px;padding:10px 14px;background:#06101f;border-bottom:1px solid var(--line);flex-wrap:wrap}
+  header b{font-size:14px}
+  header span{font-size:12px;color:var(--muted)}
+  header .grow{flex:1}
+  a.btn,button{font:inherit;font-size:13px;border:1px solid var(--line);background:transparent;color:var(--muted);border-radius:9px;padding:8px 12px;cursor:pointer;text-decoration:none;min-height:44px}
+  .stage{flex:1;display:flex;align-items:center;justify-content:center;min-height:0;position:relative}
+  video{max-width:100%;max-height:100%;background:#000}
+  .pos{position:absolute;top:12px;left:12px;background:#000a;border:1px solid var(--line);border-radius:999px;padding:6px 14px;font-size:13px}
+  .msg{color:var(--muted);font-size:15px;text-align:center;padding:30px}
+</style>
+</head>
+<body>
+<header>
+  <b>ESPEJO · lo que hay en la pantalla</b>
+  <span id="info">cargando…</span>
+  <span class="grow"></span>
+  <button id="btnPause">⏸ Pausa</button>
+  <a class="btn" href="/">← Volver al panel</a>
+</header>
+<div class="stage" id="stage"><div class="msg">Cargando la tanda…</div></div>
+<script>
+// Reproduce en bucle, con sus tiempos reales, los MP4 de la última tanda
+// preparada (publish/): exactamente lo que ve la calle.
+const stage = document.getElementById('stage');
+const info = document.getElementById('info');
+let FILES = [], IDX = 0, PAUSED = false, VIDEO = null;
+
+async function load() {
+  try {
+    const r = await fetch('/api/tanda');
+    if (r.status === 401) { location.href = '/login'; return; }
+    const j = await r.json();
+    FILES = (j.files || []).map((f) => f.url);
+    const when = j.publishedAt ? new Date(j.publishedAt).toLocaleString('es-ES') : null;
+    info.textContent = FILES.length
+      ? `${FILES.length} piezas · ${when ? 'última subida real: ' + when : 'aún sin subida real registrada'}`
+      : '';
+    if (!FILES.length) {
+      stage.innerHTML = '<div class="msg">No hay tanda preparada todavía.<br>Prepara o publica desde el panel y vuelve aquí.</div>';
+      return;
+    }
+    play(0);
+  } catch (e) {
+    stage.innerHTML = '<div class="msg">No se pudo cargar la tanda: ' + (e.message || e) + '</div>';
+  }
+}
+
+function play(i) {
+  IDX = ((i % FILES.length) + FILES.length) % FILES.length;
+  stage.innerHTML = '<div class="pos" id="pos"></div>';
+  VIDEO = document.createElement('video');
+  VIDEO.src = FILES[IDX];
+  VIDEO.autoplay = true;
+  VIDEO.muted = true;
+  VIDEO.playsInline = true;
+  VIDEO.addEventListener('ended', () => { if (!PAUSED) play(IDX + 1); });
+  VIDEO.addEventListener('error', () => { setTimeout(() => { if (!PAUSED) play(IDX + 1); }, 800); });
+  VIDEO.addEventListener('click', () => play(IDX + 1)); // toque = siguiente
+  stage.appendChild(VIDEO);
+  document.getElementById('pos').textContent = 'Pieza ' + (IDX + 1) + ' de ' + FILES.length;
+}
+
+document.getElementById('btnPause').addEventListener('click', (e) => {
+  PAUSED = !PAUSED;
+  e.target.textContent = PAUSED ? '▶ Seguir' : '⏸ Pausa';
+  if (VIDEO) { if (PAUSED) VIDEO.pause(); else { VIDEO.play().catch(() => {}); if (VIDEO.ended) play(IDX + 1); } }
+});
+load();
+</script>
+</body>
+</html>
