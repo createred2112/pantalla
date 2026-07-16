@@ -422,6 +422,18 @@ app.delete('/api/templates/:id/layout', (req, res) => {
   res.json({ ok: true });
 });
 
+// Convertir una cartela en otro tipo de contenido (cartela-primero):
+// manual ↔ dato automático (worker) ↔ carrusel (banco). La Escaleta se
+// actualiza sola por debajo; el usuario no tiene que tocarla.
+app.post('/api/cards/:id/convert', (req, res) => {
+  try {
+    const r = rundown.convertCard(req.params.id, req.body || {});
+    if (!r.ok) return res.status(400).json(r);
+    log.info('cards', `Cartela ${req.params.id} convertida a ${r.mode}${r.slotId ? ` (bloque ${r.slotId})` : ''}`);
+    res.json(r);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.post('/api/cards', (req, res) => res.json(store.add(req.body)));
 
 app.put('/api/cards/:id', (req, res) => {

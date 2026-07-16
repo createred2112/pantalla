@@ -1161,11 +1161,93 @@ async function loadEditorRundown(card) {
   } catch { box.style.display = 'none'; }
 }
 
+// ===== CARTELA-PRIMERO: convertir cualquier cartela en lo que quieras =====
+// Manual ↔ automática (worker) ↔ carrusel (banco), sin abrir la Escaleta.
+const CARD_SOURCES = [
+  { v: 'manual', label: '✍️ Escrita a mano (tú pones el texto)' },
+  { v: 'worker:weather', label: '⚙️ Automática · Tiempo ahora' },
+  { v: 'worker:forecast', label: '⚙️ Automática · Previsión 3 días' },
+  { v: 'worker:powerPrice', label: '⚙️ Automática · Precio de la luz' },
+  { v: 'worker:fuel', label: '⚙️ Automática · Gasolina más barata' },
+  { v: 'worker:airQuality', label: '⚙️ Automática · Calidad del aire' },
+  { v: 'lib:fotosGasteizberri', label: '🔁 Carrusel · Fotos GasteizBerri' },
+  { v: 'lib:datosCuriosos', label: '🔁 Carrusel · Datos curiosos' },
+  { v: 'lib:datosUtiles', label: '🔁 Carrusel · Datos útiles' },
+  { v: 'lib:citasHistoricas', label: '🔁 Carrusel · Citas históricas' },
+  { v: 'lib:efemerides', label: '🔁 Carrusel · Efemérides' },
+  { v: 'lib:consejosInformaticos', label: '🔁 Carrusel · Consejos informáticos' },
+  { v: 'lib:comentariosSemana', label: '🔁 Carrusel · Comentarios de la semana' },
+  { v: 'lib:avisosMeteorologicos', label: '🔁 Carrusel · Avisos meteorológicos' },
+  { v: 'lib:consejosMeteorologicos', label: '🔁 Carrusel · Consejos meteorológicos' },
+  { v: 'lib:agendaEventos', label: '📅 Agenda viva (programada por franjas)' },
+];
+function cardSourceValue(card) {
+  if (!card || card.source !== 'rundown') return 'manual';
+  if (card.rundownWorkerKey) return 'worker:' + card.rundownWorkerKey;
+  if (card.rundownLibraryKey) return 'lib:' + card.rundownLibraryKey;
+  return 'manual';
+}
+function cardSourceHint(v) {
+  if (v === 'manual') return 'El contenido es tuyo: no cambia solo.';
+  if (v && v.startsWith('worker:')) return 'Se rellena sola con datos reales cada pase. La plantilla, el tema y el diseño los sigues mandando tú.';
+  if (v === 'lib:agendaEventos') return 'Muestra la agenda programada por franjas horarias.';
+  if (v && v.startsWith('lib:')) return 'Rota piezas de un banco (cada hora o cada día). Al convertirla, el lápiz te enseña las piezas para elegir y editar.';
+  return '';
+}
+function fillSourceSelector(card) {
+  const sel = $('#edSource');
+  const label = sel.previousElementSibling;
+  const hint = $('#edSourceHint');
+  const isNew = !card || !card.id;
+  const notGenerated = card && card.type && card.type !== 'generated';
+  sel.style.display = isNew || notGenerated ? 'none' : '';
+  if (label) label.style.display = sel.style.display;
+  hint.style.display = sel.style.display;
+  if (isNew || notGenerated) return;
+  const cur = cardSourceValue(card);
+  const opts = CARD_SOURCES.slice();
+  if (!opts.some((o) => o.v === cur)) opts.push({ v: cur, label: 'Actual: ' + cur });
+  sel.innerHTML = opts.map((o) => `<option value="${esc(o.v)}" ${o.v === cur ? 'selected' : ''}>${esc(o.label)}</option>`).join('');
+  sel.dataset.current = cur;
+  hint.textContent = cardSourceHint(cur);
+}
+$('#edSource').addEventListener('change', async () => {
+  const sel = $('#edSource');
+  const cardId = $('#edId').value;
+  const from = sel.dataset.current || 'manual';
+  const to = sel.value;
+  $('#edSourceHint').textContent = cardSourceHint(to);
+  if (!cardId || to === from) return;
+  const target = CARD_SOURCES.find((o) => o.v === to);
+  const msg = to === 'manual'
+    ? 'El contenido que se ve ahora quedará CONGELADO como cartela tuya y dejará de actualizarse solo. ¿Convertir?'
+    : `Esta cartela pasará a ser «${(target && target.label) || to}» y su contenido lo pondrá el sistema a partir de ahora (la posición, duración y diseño se conservan). ¿Convertir?`;
+  if (!confirm(msg)) { sel.value = from; $('#edSourceHint').textContent = cardSourceHint(from); return; }
+  sel.disabled = true;
+  try {
+    const body = to === 'manual' ? { to: 'manual' }
+      : (to.startsWith('worker:') ? { to: 'worker', workerKey: to.slice(7) } : { to: 'library', libraryKey: to.slice(4) });
+    await api('/cards/' + encodeURIComponent(cardId) + '/convert', { method: 'POST', body: JSON.stringify(body) });
+    toast('Cartela convertida ✓');
+    editor.close();
+    await load();
+    const fresh = cards.find((c) => c.id === cardId);
+    if (fresh) openEditor(fresh);
+  } catch (e) {
+    toast(e.message || 'No se pudo convertir');
+    sel.value = from;
+    $('#edSourceHint').textContent = cardSourceHint(from);
+  } finally {
+    sel.disabled = false;
+  }
+});
+
 function openEditor(card) {
   ED_SLOT = null;
   ED_LIBRARY_INDEX = -1;
   $('#edRundownBox').style.display = 'none';
   $('#edRundownBox').innerHTML = '';
+  fillSourceSelector(card);
   $('#genFields').style.display = '';
   $('#edContentFields').style.display = '';
   const autoOpt = [...$('#edTemplate').options].find((o) => o.value === '');

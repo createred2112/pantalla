@@ -748,6 +748,81 @@ function toCard(slot, library, order, date, pickMap = {}, dayThemeKey = '', auto
   });
 }
 
+// ===== Conversión CARTELA-PRIMERO =====
+// El usuario piensa en cartelas, no en bloques: "esta posición ahora es el
+// tiempo", "esta ahora la escribo yo", "esta rota fotos cada hora". Esta
+// función hace la fontanería del guion por debajo sin que el usuario tenga
+// que abrir la Escaleta.
+function convertCard(cardId, spec = {}) {
+  ensureFiles();
+  const card = store.list().find((c) => c.id === cardId);
+  if (!card) return { ok: false, error: 'La cartela no existe' };
+  const to = spec.to === 'worker' || spec.to === 'library' ? spec.to : 'manual';
+  if (to === 'worker' && !String(spec.workerKey || '').trim()) return { ok: false, error: 'Falta el dato automático (workerKey)' };
+  if (to === 'library' && !String(spec.libraryKey || '').trim()) return { ok: false, error: 'Falta el carrusel (libraryKey)' };
+  const data = readJson(RUNDOWN_FILE, DEFAULT_RUNDOWN);
+  upgradeRundown(data);
+  const day = todayKey();
+  const library = normalizeLibrary(readJson(LIBRARY_FILE, DEFAULT_LIBRARY));
+  const theme = dayTheme(day, data);
+
+  const refreshFromSlot = (s) => {
+    const next = toCard(s, library, card.order || 999, day, {}, theme, {});
+    store.update(card.id, { ...next, id: card.id, order: card.order || next.order });
+  };
+
+  // La cartela ya es del guion: se transforma SU bloque en el sitio.
+  if (card.source === 'rundown' && card.rundownSlot) {
+    const idx = (data.slots || []).findIndex((s) => String(s.id) === String(card.rundownSlot));
+    if (to === 'manual') {
+      // Congela el contenido visible como cartela manual; el bloque desaparece.
+      if (idx >= 0) data.slots.splice(idx, 1);
+      data.updatedAt = new Date().toISOString();
+      writeJson(RUNDOWN_FILE, data);
+      store.update(card.id, { source: 'manual', rundownSlot: null, rundownLibraryKey: null, rundownWorkerKey: null });
+      return { ok: true, mode: 'manual', cardId: card.id };
+    }
+    if (idx < 0) return { ok: false, error: 'El bloque de esta cartela ya no existe; conviértela primero a manual' };
+    const s = normalizeSlot(data.slots[idx]);
+    s.source = to;
+    s.workerKey = to === 'worker' ? String(spec.workerKey) : '';
+    s.libraryKey = to === 'library' ? String(spec.libraryKey) : '';
+    s.template = ''; // el contenido nuevo manda; el usuario puede fijarla después
+    if (spec.rotation === 'hora' || spec.rotation === 'dia') s.rotation = spec.rotation;
+    if (spec.label) s.label = String(spec.label);
+    data.slots[idx] = normalizeSlot(s);
+    data.updatedAt = new Date().toISOString();
+    writeJson(RUNDOWN_FILE, data);
+    refreshFromSlot(data.slots[idx]);
+    return { ok: true, mode: to, cardId: card.id, slotId: s.id };
+  }
+
+  // Cartela manual → automática/carrusel: nace un bloque en su posición.
+  if (to === 'manual') return { ok: true, mode: 'manual', cardId: card.id }; // ya lo es
+  const slotId = 'blk_' + String(card.id).replace(/[^a-z0-9]/gi, '').slice(-10);
+  if ((data.slots || []).some((s) => String(s.id) === slotId)) return { ok: false, error: 'Ya existe un bloque para esta cartela' };
+  const meta = to === 'library' ? LIBRARY_KEYS.find((k) => k.key === spec.libraryKey) : null;
+  const s = normalizeSlot({
+    id: slotId,
+    label: String(spec.label || (meta && meta.label) || card.title || 'Bloque'),
+    enabled: card.enabled !== false,
+    source: to,
+    workerKey: to === 'worker' ? String(spec.workerKey) : '',
+    libraryKey: to === 'library' ? String(spec.libraryKey) : '',
+    theme: card.theme || '',
+    duration: Number(card.duration) || 8,
+    video: card.video === true,
+    rotation: spec.rotation === 'dia' ? 'dia' : (spec.rotation === 'hora' ? 'hora' : undefined),
+  });
+  // Se inserta en el guion respetando la posición visible de la cartela.
+  const before = store.active().filter((c) => c.source === 'rundown' && (c.order || 0) < (card.order || 0)).length;
+  data.slots.splice(Math.min(before, data.slots.length), 0, s);
+  data.updatedAt = new Date().toISOString();
+  writeJson(RUNDOWN_FILE, data);
+  refreshFromSlot(s);
+  return { ok: true, mode: to, cardId: card.id, slotId };
+}
+
 function rememberCardEdit(card, patch = {}) {
   if (!card || card.source !== 'rundown' || !card.rundownSlot) return null;
   ensureFiles();
@@ -945,4 +1020,4 @@ function pick(date, slotId, itemIndex, options = {}) {
   return save(data, { date: day });
 }
 
-module.exports = { read, save, saveLibrary, saveDay, reset, materialize, pick, reorderSlots, reorderFromCards, isEmptyManualNewsSlot, rememberCardEdit, rememberCardDelete, dayTheme, RUNDOWN_FILE, LIBRARY_FILE };
+module.exports = { read, save, saveLibrary, saveDay, reset, materialize, pick, reorderSlots, reorderFromCards, isEmptyManualNewsSlot, rememberCardEdit, rememberCardDelete, convertCard, dayTheme, RUNDOWN_FILE, LIBRARY_FILE };
