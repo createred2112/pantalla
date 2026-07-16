@@ -29,6 +29,13 @@
   .el{position:absolute;overflow:hidden;outline:1px dashed transparent}
   .el:hover{outline-color:rgba(255,255,255,.4)}
   .el.sel{outline:2px solid #2bb6ff}
+  #canvas.boxes .el{outline-color:rgba(255,255,255,.45)}
+  .sizeinfo{margin-top:8px;padding:8px 10px;background:#0a1a30;border:1px solid var(--line);border-radius:8px;font-size:12px;color:var(--muted)}
+  .sizeinfo b{color:#2bb6ff;font-size:14px}
+  .hint2{font-size:10.5px;color:#6f86ad;margin-top:5px;line-height:1.35}
+  .wfull{width:100%}
+  .chk{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);cursor:pointer;white-space:nowrap}
+  .chk input{width:auto}
   .handle{position:absolute;width:22px;height:22px;background:#2bb6ff;border:2px solid #fff;border-radius:50%;right:-11px;bottom:-11px;cursor:nwse-resize}
   .panel{width:300px;background:#081729;border-left:1px solid var(--line);padding:14px;overflow:auto}
   .panel h2{font-size:13px;margin:0 0 10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px}
@@ -50,6 +57,7 @@
   <h1>Editor de cartela</h1>
   <span id="hint" style="font-size:12px;color:var(--muted)">cargando…</span>
   <span id="scope" class="scope">cargando…</span>
+  <label class="chk"><input type="checkbox" id="chkBoxes"> Ver cajas</label>
   <button class="ghost" id="btnReset">Volver al diseño de plantilla</button>
   <button class="ghost" onclick="location.href='/'">← Volver</button>
   <button class="ghost" id="btnResetDefault" hidden>Reset plantilla + color</button>
