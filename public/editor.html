@@ -15,40 +15,70 @@
   @font-face{font-family:'Archivo';font-weight:700;src:url('/fonts/Archivo-700.ttf') format('truetype')}
   @font-face{font-family:'Archivo';font-weight:800;src:url('/fonts/Archivo-800.ttf') format('truetype')}
   @font-face{font-family:'Archivo';font-weight:900;src:url('/fonts/Archivo-900.ttf') format('truetype')}
-  :root{--bg:#0b1f3a;--card:#13294b;--line:#244170;--accent:#e2231a;--txt:#eaf0fb;--muted:#9fb2d4}
+  :root{--bg:#0b1f3a;--card:#13294b;--line:#244170;--accent:#e2231a;--sel:#2bb6ff;--txt:#eaf0fb;--muted:#9fb2d4}
   *{box-sizing:border-box}
   body{margin:0;height:100vh;display:flex;flex-direction:column;font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif;background:#06101f;color:var(--txt);overflow:hidden}
-  header{background:#081729;border-bottom:1px solid var(--line);padding:10px 14px;display:flex;align-items:center;gap:10px}
-  header h1{font-size:15px;margin:0;flex:1}
-  button{font:inherit;border:0;border-radius:9px;padding:9px 13px;color:#fff;background:var(--line);cursor:pointer;font-size:13px}
+  header{background:#081729;border-bottom:1px solid var(--line);padding:8px 12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  header h1{font-size:14px;margin:0}
+  header .grow{flex:1}
+  button{font:inherit;border:0;border-radius:9px;padding:8px 12px;color:#fff;background:var(--line);cursor:pointer;font-size:13px}
   button.primary{background:var(--accent)} button.ghost{background:transparent;border:1px solid var(--line);color:var(--muted)}
+  button:disabled{opacity:.4;cursor:default}
+  .scope{font-size:12px;color:var(--muted);border:1px solid var(--line);border-radius:9px;padding:6px 9px;background:#0a1a30}
+  .scope b{color:var(--txt)}
+  .chk{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);cursor:pointer;white-space:nowrap}
+  .chk input{width:auto}
+  details.menu{position:relative}
+  details.menu summary{list-style:none;font:inherit;font-size:13px;border:1px solid var(--line);color:var(--muted);border-radius:9px;padding:8px 12px;cursor:pointer;user-select:none}
+  details.menu summary::-webkit-details-marker{display:none}
+  details.menu[open] summary{background:var(--line);color:#fff}
+  details.menu .dd{position:absolute;right:0;top:calc(100% + 6px);background:#0a1a30;border:1px solid var(--line);border-radius:10px;padding:8px;z-index:50;min-width:280px;box-shadow:0 10px 30px rgba(0,0,0,.5)}
+  details.menu .dd button{display:block;width:100%;text-align:left;margin:4px 0;background:transparent;border:1px solid transparent;color:var(--txt)}
+  details.menu .dd button:hover{border-color:var(--line);background:#0e2240}
+  details.menu .dd .ddhint{font-size:10.5px;color:#6f86ad;margin:0 4px 6px;line-height:1.35}
   .wrap{flex:1;display:flex;min-height:0}
   .stage{flex:1;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#06101f;background-image:linear-gradient(45deg,#0c1a30 25%,transparent 25%,transparent 75%,#0c1a30 75%),linear-gradient(45deg,#0c1a30 25%,transparent 25%,transparent 75%,#0c1a30 75%);background-size:32px 32px;background-position:0 0,16px 16px}
   #canvasWrap{position:relative;box-shadow:0 8px 40px rgba(0,0,0,.5)}
   #canvas{position:absolute;top:0;left:0;overflow:hidden;transform-origin:top left}
   .el{position:absolute;overflow:hidden;outline:1px dashed transparent}
   .el:hover{outline-color:rgba(255,255,255,.4)}
-  .el.sel{outline:2px solid #2bb6ff}
+  .el.sel{outline:2px solid var(--sel)}
   #canvas.boxes .el{outline-color:rgba(255,255,255,.45)}
-  .sizeinfo{margin-top:8px;padding:8px 10px;background:#0a1a30;border:1px solid var(--line);border-radius:8px;font-size:12px;color:var(--muted)}
-  .sizeinfo b{color:#2bb6ff;font-size:14px}
-  .hint2{font-size:10.5px;color:#6f86ad;margin-top:5px;line-height:1.35}
-  .wfull{width:100%}
-  .chk{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);cursor:pointer;white-space:nowrap}
-  .chk input{width:auto}
-  .handle{position:absolute;width:22px;height:22px;background:#2bb6ff;border:2px solid #fff;border-radius:50%;right:-11px;bottom:-11px;cursor:nwse-resize}
-  .panel{width:300px;background:#081729;border-left:1px solid var(--line);padding:14px;overflow:auto}
-  .panel h2{font-size:13px;margin:0 0 10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px}
-  .scope{font-size:12px;color:var(--muted);border:1px solid var(--line);border-radius:9px;padding:7px 9px;background:#0a1a30}
-  .scope b{color:var(--txt)}
-  label{display:block;font-size:11px;color:var(--muted);margin:10px 0 3px}
-  input,select{width:100%;background:#0a1a30;border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:8px;font:inherit;font-size:13px}
+  .handle{position:absolute;background:var(--sel);border:2px solid #fff;z-index:20}
+  .handle.se{width:22px;height:22px;border-radius:50%;right:-11px;bottom:-11px;cursor:nwse-resize}
+  .handle.e{width:12px;height:34px;border-radius:7px;right:-7px;top:calc(50% - 17px);cursor:ew-resize}
+  .handle.s{width:34px;height:12px;border-radius:7px;bottom:-7px;left:calc(50% - 17px);cursor:ns-resize}
+  .guide{position:absolute;background:#ff34c0;z-index:40;pointer-events:none}
+  .guide.gv{width:2px;top:0;bottom:0}
+  .guide.gh{height:2px;left:0;right:0}
+  .side{width:330px;background:#081729;border-left:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+  #layers{border-bottom:1px solid var(--line);padding:10px 12px;max-height:32vh;overflow:auto;flex-shrink:0}
+  #layers h2{font-size:11px;margin:0 0 6px;color:var(--muted);text-transform:uppercase;letter-spacing:1px}
+  .lyr{display:flex;align-items:center;gap:7px;padding:6px 8px;border-radius:8px;cursor:pointer;border:1px solid transparent;font-size:12.5px}
+  .lyr:hover{background:#0a1a30}
+  .lyr.on{border-color:var(--sel);background:#0a1a30}
+  .lyr .k{font-size:10px;color:#6f86ad;background:#0e2240;border-radius:5px;padding:2px 6px;text-transform:uppercase;letter-spacing:.5px;flex-shrink:0;min-width:44px;text-align:center}
+  .lyr .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--txt)}
+  .lyr.off .nm{opacity:.4;text-decoration:line-through}
+  .lyr .eye{background:transparent;border:0;padding:2px 4px;font-size:14px;opacity:.7;cursor:pointer}
+  .panel{flex:1;padding:12px 14px;overflow:auto}
+  .panel h2{font-size:11px;margin:16px 0 8px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;border-top:1px solid var(--line);padding-top:12px}
+  .panel h2:first-child{margin-top:0;border-top:0;padding-top:0}
+  label{display:block;font-size:11px;color:var(--muted);margin:8px 0 3px}
+  input,select{width:100%;background:#0a1a30;border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:7px 8px;font:inherit;font-size:13px}
+  input[type=color]{padding:2px;height:34px}
   .row{display:flex;gap:6px}.row>div{flex:1}
   .toolgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px}
-  .toolgrid button{padding:8px 6px}
+  .toolgrid button{padding:7px 4px;font-size:12px}
   .role-select{margin-top:5px}
-  .empty{color:var(--muted);font-size:13px;text-align:center;margin-top:30px}
-  .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#000c;border:1px solid var(--line);padding:9px 16px;border-radius:999px;opacity:0;transition:.2s}
+  .empty{color:var(--muted);font-size:13px;text-align:center;margin-top:24px}
+  .sizeinfo{margin-top:8px;padding:8px 10px;background:#0a1a30;border:1px solid var(--line);border-radius:8px;font-size:12px;color:var(--muted)}
+  .sizeinfo b{color:var(--sel);font-size:15px}
+  .hint2{font-size:10.5px;color:#6f86ad;margin-top:5px;line-height:1.35}
+  .wfull{width:100%}
+  .kbd{font-size:10.5px;color:#6f86ad;border-top:1px solid var(--line);padding:10px 14px;line-height:1.6}
+  .kbd b{color:var(--muted);background:#0e2240;border-radius:4px;padding:1px 5px;font-weight:600}
+  .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#000c;border:1px solid var(--line);padding:9px 16px;border-radius:999px;opacity:0;transition:.2s;z-index:99}
   .toast.show{opacity:1}
 </style>
 </head>
@@ -57,19 +87,32 @@
   <h1>Editor de cartela</h1>
   <span id="hint" style="font-size:12px;color:var(--muted)">cargando…</span>
   <span id="scope" class="scope">cargando…</span>
+  <span class="grow"></span>
   <label class="chk"><input type="checkbox" id="chkBoxes"> Ver cajas</label>
-  <button class="ghost" id="btnReset">Volver al diseño de plantilla</button>
+  <button class="ghost" id="btnUndo" title="Deshacer (Ctrl+Z)" disabled>↩ Deshacer</button>
+  <button class="ghost" id="btnRedo" title="Rehacer (Ctrl+Y)" disabled>↪</button>
+  <details class="menu" id="tplMenu">
+    <summary>Plantilla ▾</summary>
+    <div class="dd">
+      <div class="ddhint">Estas acciones afectan a la plantilla o a esta cartela. Nada se aplica sin confirmación.</div>
+      <button id="btnReset">Volver al diseño de plantilla (esta cartela)</button>
+      <button id="btnDefaultAll" title="Hace que todas las cartelas de este tipo usen esta composición, conservando sus colores">Usar como plantilla (todos los colores)</button>
+      <button id="btnDefault" hidden>Guardar plantilla + color</button>
+      <button id="btnResetDefault" hidden>Reset plantilla + color</button>
+    </div>
+  </details>
   <button class="ghost" onclick="location.href='/'">← Volver</button>
-  <button class="ghost" id="btnResetDefault" hidden>Reset plantilla + color</button>
-  <button class="ghost" id="btnDefaultAll" title="Hace que todas las cartelas de este tipo usen esta composición, conservando sus colores">Usar como plantilla</button>
-  <button class="ghost" id="btnDefault" hidden>Guardar plantilla + color</button>
   <button class="primary" id="btnSave">Guardar y actualizar MP4</button>
 </header>
 <div class="wrap">
   <div class="stage" id="stage">
     <div id="canvasWrap"><div id="canvas"></div></div>
   </div>
-  <div class="panel" id="panel"><div class="empty">Haz clic en un elemento de la cartela para editarlo.</div></div>
+  <div class="side">
+    <div id="layers"></div>
+    <div class="panel" id="panel"><div class="empty">Cargando…</div></div>
+    <div class="kbd"><b>↑↓←→</b> mover 1px · <b>Shift</b>+flechas 10px · <b>Ctrl+Z</b> deshacer · <b>Supr</b> ocultar · doble clic en un texto = editarlo</div>
+  </div>
 </div>
 <div class="toast" id="toast"></div>
 <script src="editor.js"></script>
