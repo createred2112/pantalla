@@ -192,4 +192,4 @@ async function extract(url) {
   };
 }
 
-module.exports = { extract };
+module.exports = { extract, downloadImage };

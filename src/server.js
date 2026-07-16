@@ -283,6 +283,64 @@ app.put('/api/settings', (req, res) => {
   res.json({ ok: true, brand: cfg.brand, palette: cfg.palette, screen: cfg.screen, screenProfile: cfg.screenProfile, naming: cfg.naming, templateBumpers: cfg.templateBumpers, ftp: { ...cfg.ftp, password: '' } });
 });
 
+// --- Fotos de la web (WordPress) para el banco "Fotos GasteizBerri" ---
+// Lee la mediateca pública vía REST (wp-json/wp/v2/media). La base sale de
+// brand.website; se puede forzar con config.wordpress.base.
+function wpBase() {
+  const forced = cfg.wordpress && cfg.wordpress.base;
+  if (forced) return String(forced).replace(/\/+$/, '');
+  const host = String(cfg.brand.website || 'gasteizberri.com').replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+  return 'https://' + host;
+}
+
+app.get('/api/wp-media', async (req, res) => {
+  try {
+    const base = wpBase();
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const search = String(req.query.search || '').trim();
+    const u = new URL(base + '/wp-json/wp/v2/media');
+    u.searchParams.set('per_page', '24');
+    u.searchParams.set('page', String(page));
+    u.searchParams.set('media_type', 'image');
+    if (search) u.searchParams.set('search', search);
+    const r = await fetch(u, { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(15000) });
+    if (!r.ok) throw new Error('WordPress respondió ' + r.status);
+    const totalPages = Math.max(1, Number(r.headers.get('x-wp-totalpages')) || 1);
+    const items = (await r.json()).map((m) => {
+      const sizes = (m.media_details && m.media_details.sizes) || {};
+      const pick = (k) => sizes[k] && sizes[k].source_url;
+      return {
+        id: m.id,
+        title: (m.title && m.title.rendered) || '',
+        date: String(m.date || '').slice(0, 10),
+        thumb: pick('medium_large') || pick('medium') || pick('thumbnail') || m.source_url,
+        full: pick('large') || pick('full') || m.source_url,
+      };
+    }).filter((m) => m.thumb && m.full);
+    res.json({ ok: true, base, page, totalPages, items });
+  } catch (e) {
+    res.status(502).json({ error: 'No se pudo leer la galería de la web: ' + e.message });
+  }
+});
+
+// Descarga una foto de la web a data/uploads y devuelve su ruta local.
+// Solo se aceptan URLs del propio WordPress (nada de hosts arbitrarios).
+app.post('/api/wp-media/import', async (req, res) => {
+  try {
+    const url = String((req.body && req.body.url) || '').trim();
+    const allowedHost = new URL(wpBase()).hostname;
+    const target = new URL(url);
+    const okHost = target.hostname === allowedHost || target.hostname.endsWith('.' + allowedHost);
+    if (!okHost) return res.status(400).json({ error: 'La foto debe venir de ' + allowedHost });
+    const photo = await require('./extract').downloadImage(url);
+    if (!photo) return res.status(502).json({ error: 'No se pudo descargar la foto' });
+    log.info('wp-media', `Foto importada de la web: ${url} → ${photo}`);
+    res.json({ ok: true, photo });
+  } catch (e) {
+    res.status(400).json({ error: 'URL no válida: ' + e.message });
+  }
+});
+
 app.get('/api/cards', (req, res) => {
   res.json(store.list().map((card) => {
     const rendered = renderedInfo(card);

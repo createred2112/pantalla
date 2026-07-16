@@ -682,6 +682,22 @@
 </dialog>
 
 <!-- Ajustes de diseño -->
+<dialog id="wpDlg" style="max-width:780px;width:96vw">
+  <div class="dlg-h"><h2>Fotos subidas a la web</h2><button class="ghost" onclick="wpDlg.close()">✕</button></div>
+  <div style="display:flex;gap:8px;margin-bottom:10px">
+    <input id="wpSearch" placeholder="Buscar por nombre de la foto…" style="flex:1">
+    <button class="ghost" id="wpSearchBtn" type="button">Buscar</button>
+  </div>
+  <div id="wpGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;max-height:56vh;overflow:auto"></div>
+  <div style="display:flex;align-items:center;gap:10px;margin-top:12px">
+    <button class="ghost" id="wpPrev" type="button">← Anteriores</button>
+    <span id="wpPageInfo" style="font-size:12px;color:var(--muted)"></span>
+    <span style="flex:1"></span>
+    <button class="ghost" id="wpNext" type="button">Siguientes →</button>
+  </div>
+  <div class="hint" style="margin-top:8px">Toca una foto para traerla al banco. La imagen se descarga al servidor de la pantalla: si luego la borras de la web, la cartela sigue funcionando.</div>
+</dialog>
+
 <dialog id="settingsDlg">
   <div class="dlg-h"><h2>Ajustes de diseño</h2><button class="ghost" onclick="settingsDlg.close()">✕</button></div>
   <div class="dlg-b">

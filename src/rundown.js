@@ -38,6 +38,7 @@ const DEFAULT_LIBRARY = {
   agendaEventos: [
     { title: 'Agenda', subtitle: 'Hoy', body: '19:30 | Actividad pendiente | Lugar\n20:00 | Añade eventos | Vitoria-Gasteiz', template: 'agenda', theme: 'blanco' },
   ],
+  fotosGasteizberri: [],
   avisosMeteorologicos: [],
   consejosMeteorologicos: [
     { title: 'Cuida la hidratación', subtitle: 'Consejo por calor', body: 'Bebe agua aunque no tengas sed y evita el sol en las horas centrales.', template: 'meteoaviso', theme: 'naranja', enabled: false },
@@ -54,9 +55,10 @@ const LIBRARY_KEYS = [
   { key: 'agendaEventos', label: 'Agenda viva', template: 'agenda', theme: 'blanco' },
   { key: 'avisosMeteorologicos', label: 'Avisos meteorológicos', template: 'meteoaviso', theme: 'naranja' },
   { key: 'consejosMeteorologicos', label: 'Consejos meteorológicos', template: 'meteoaviso', theme: 'naranja' },
+  { key: 'fotosGasteizberri', label: 'Fotos GasteizBerri', template: 'foto', theme: 'carbon' },
 ];
 
-const DEFAULT_HOURLY_LIBRARY_KEYS = new Set(['avisosMeteorologicos', 'consejosMeteorologicos']);
+const DEFAULT_HOURLY_LIBRARY_KEYS = new Set(['avisosMeteorologicos', 'consejosMeteorologicos', 'fotosGasteizberri']);
 
 const DEFAULT_RUNDOWN = {
   title: 'Protoescaleta diaria',
@@ -78,6 +80,7 @@ const DEFAULT_RUNDOWN = {
       'Fast2Computer', 'Esta pantalla es posible gracias a',
       'Tu tienda de informática en Vitoria-Gasteiz · fast2computer.com', 6, false),
     library('comentario_semana', 'Comentario de la semana', 'comentariosSemana'),
+    library('foto_gasteizberri', 'Foto GasteizBerri', 'fotosGasteizberri'),
     fixed('cierre', 'Cierre', 'mensaje', 'carbon', 'Seguimos en GasteizBerri', 'gasteizberri.com', '', 5, true),
   ],
 };
@@ -138,6 +141,7 @@ function normalizeLibraryItem(item, defaults) {
     body: String((item && item.body) || ''),
     template,
     theme: String((item && item.theme) || defaults.theme || ''),
+    photo: String((item && item.photo) || ''),
     date: String((item && item.date) || ''),
     enabled: !item || item.enabled !== false,
     start: String((item && (item.start || item.from)) || ''),
@@ -247,7 +251,7 @@ function normalizeLibrary(library) {
       : (meta.key === 'agendaEventos' ? [] : DEFAULT_LIBRARY[meta.key]);
     next[meta.key] = (base || [])
       .map((item) => normalizeLibraryItem(item, meta))
-      .filter((item) => item.title || item.body || (item.eventIds && item.eventIds.length));
+      .filter((item) => item.title || item.body || item.photo || (item.eventIds && item.eventIds.length));
   }
   if (!next.agendaBanco.length && Array.isArray(next.agendaEventos)) {
     const byKey = new Map();
@@ -264,7 +268,7 @@ function normalizeLibrary(library) {
     for (const meta of LIBRARY_KEYS) {
       clean[meta.key] = (Array.isArray(pack && pack[meta.key]) ? pack[meta.key] : [])
         .map((item) => normalizeLibraryItem(item, meta))
-        .filter((item) => item.title || item.body || (item.eventIds && item.eventIds.length));
+        .filter((item) => item.title || item.body || item.photo || (item.eventIds && item.eventIds.length));
     }
     next.days[date] = clean;
   }
@@ -321,6 +325,14 @@ function read(options = {}) {
 function upgradeRundown(rundown) {
   if (!rundown || !Array.isArray(rundown.slots)) return rundown;
   rundown.slots = rundown.slots.filter((slot) => !(slot && slot.id === 'gasolina_hoy'));
+  // Bloque "Foto GasteizBerri" (carrusel horario de fotos elegidas de la web).
+  // Se añade APAGADO en escaletas existentes: no cambia la emisión hasta que
+  // el usuario lo active y llene el banco de fotos.
+  if (!rundown.slots.some((slot) => slot && slot.libraryKey === 'fotosGasteizberri')) {
+    const s = { ...library('foto_gasteizberri', 'Foto GasteizBerri', 'fotosGasteizberri'), enabled: false };
+    const idx = rundown.slots.findIndex((slot) => slot && slot.id === 'cierre');
+    if (idx >= 0) rundown.slots.splice(idx, 0, s); else rundown.slots.push(s);
+  }
   for (const slot of rundown.slots) {
     if (slot && slot.id === 'agenda' && slot.source !== 'library') {
       slot.source = 'library';
@@ -821,6 +833,12 @@ function shouldMaterialize(slot, library, date, pickMap = {}, autoPickMap = {}) 
     const p = slotPayload(s, library, date, { pickIndex: pickMap[s.id], autoPick: autoPickMap[s.id] });
     return Boolean(!p.missing && (p.title || p.body));
   }
+  // Foto GasteizBerri: sin foto elegida no hay nada que emitir (nada de
+  // cartelas "pendiente" en pantalla).
+  if (s.source === 'library' && s.libraryKey === 'fotosGasteizberri') {
+    const p = slotPayload(s, library, date, { pickIndex: pickMap[s.id], autoPick: autoPickMap[s.id] });
+    return Boolean(!p.missing && p.photo);
+  }
   return true;
 }
 
@@ -837,7 +855,8 @@ function report(rundown, library, date) {
     const skippedToday = skip.has(s.id);
     const emptyManualNews = isEmptyManualNewsSlot(s);
     const agendaSkipped = s.source === 'library' && s.libraryKey === 'agendaEventos' && (p.missing || (!p.title && !p.body));
-    const autoSkipped = emptyManualNews || agendaSkipped;
+    const fotoSkipped = s.source === 'library' && s.libraryKey === 'fotosGasteizberri' && (p.missing || !p.photo);
+    const autoSkipped = emptyManualNews || agendaSkipped || fotoSkipped;
     const missing = s.enabled && !skippedToday && !autoSkipped && (p.missing || !p.title);
     const eligible = !skippedToday && shouldMaterialize(s, library, date, pick, autoPick);
     let inEmission = false;
@@ -866,7 +885,9 @@ function report(rundown, library, date) {
       skippedToday,
       note: emptyManualNews
         ? 'Noticia vacia: anade contenido para incluirla'
-        : (agendaSkipped ? 'Sin agenda activa para este momento' : (missing ? (s.source === 'worker' ? `Pendiente worker: ${s.workerKey}` : (s.source === 'file' ? 'Falta seleccionar el archivo MP4' : 'Pendiente de contenido')) : '')),
+        : (agendaSkipped ? 'Sin agenda activa para este momento'
+        : (fotoSkipped ? 'Sin fotos en el banco: elige fotos de la web'
+        : (missing ? (s.source === 'worker' ? `Pendiente worker: ${s.workerKey}` : (s.source === 'file' ? 'Falta seleccionar el archivo MP4' : 'Pendiente de contenido')) : ''))),
       chosenIndex: plan ? plan.chosenIndex : null,
       manualPick: Object.prototype.hasOwnProperty.call(pick, s.id),
       autoPick: Object.prototype.hasOwnProperty.call(autoPick, s.id),

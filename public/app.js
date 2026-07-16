@@ -1954,6 +1954,7 @@ const PLAN_TYPES = [
   { id: 'meteoaviso', label: 'Aviso meteorológico · programable', slot: { source: 'library', libraryKey: 'avisosMeteorologicos', label: 'Aviso meteorológico', template: 'meteoaviso', theme: 'naranja', rotation: 'hora' } },
   { id: 'meteoconsejo', label: 'Consejo meteorológico · programable', slot: { source: 'library', libraryKey: 'consejosMeteorologicos', label: 'Consejo meteorológico', template: 'meteoaviso', theme: 'naranja', rotation: 'hora' } },
   { id: 'curioso', label: 'Dato curioso · carrusel', def: true, slot: { source: 'library', libraryKey: 'datosCuriosos', label: 'Dato curioso' } },
+  { id: 'fotogb', label: 'Foto GasteizBerri · cambia cada hora', slot: { source: 'library', libraryKey: 'fotosGasteizberri', label: 'Foto GasteizBerri', rotation: 'hora' } },
   { id: 'utiles', label: 'Aviso útil · carrusel', def: true, slot: { source: 'library', libraryKey: 'datosUtiles', label: 'Aviso útil' } },
   { id: 'consejo', label: 'Consejo informático (Fast2Computer) · carrusel', slot: { source: 'library', libraryKey: 'consejosInformaticos', label: 'Consejo informático' } },
   { id: 'luz', label: 'Precio de la luz · automático', slot: { source: 'worker', workerKey: 'powerPrice', label: 'Precio de la luz' } },
@@ -2263,7 +2264,7 @@ function currentLibraryMeta() {
 }
 
 function blankLibraryItem(meta) {
-  return { title: '', subtitle: '', body: '', template: meta.template || 'noticia', theme: meta.theme || '', enabled: true, start: '', end: '', startAt: '', endAt: '', dates: [], weekdays: [] };
+  return { title: '', subtitle: '', body: '', photo: '', template: meta.template || 'noticia', theme: meta.theme || '', enabled: true, start: '', end: '', startAt: '', endAt: '', dates: [], weekdays: [] };
 }
 
 function blankAgendaLibraryItem(afterItem = null) {
@@ -2792,15 +2793,20 @@ function agendaSelectedEventsHtml(item) {
   return `<div class="agenda-selected">${selected.map((ev) => `<span>${esc(agendaBankLabel(ev))}</span>`).join('')}</div>`;
 }
 
+function libPhotoUrl(p) {
+  return p ? '/media/' + String(p).replace('data/uploads/', 'uploads/').replace('data/worker-inbox/', 'inbox/') : '';
+}
+
 function libraryItemHtml(meta, item, i) {
   const isAgenda = meta.key === 'agendaEventos';
   const isCurious = meta.key === 'datosCuriosos';
   const isMeteo = meta.key === 'avisosMeteorologicos' || meta.key === 'consejosMeteorologicos';
-  const subtitleLabel = isAgenda ? 'Etiqueta' : (isCurious ? 'Cabecera superior' : (isMeteo ? 'Etiqueta superior' : 'Firma/sección'));
+  const isFoto = meta.key === 'fotosGasteizberri';
+  const subtitleLabel = isAgenda ? 'Etiqueta' : (isCurious ? 'Cabecera superior' : (isMeteo ? 'Etiqueta superior' : (isFoto ? 'Etiqueta (chip sobre la foto)' : 'Firma/sección')));
   const agendaBody = isAgenda ? agendaResolvedBody(item) : '';
   const head = `<button type="button" class="lib-row" data-lib-open="${i}">
       <span class="lib-dot ${item.enabled !== false ? 'on' : ''}"></span>
-      <span class="lib-title">${esc(item.title || agendaBody || item.body || (isAgenda ? '(momento de agenda sin eventos)' : '(sin título)'))}</span>
+      <span class="lib-title">${esc(item.title || agendaBody || item.body || (isFoto && item.photo ? '(foto sin pie)' : (isAgenda ? '(momento de agenda sin eventos)' : '(sin título)')))}</span>
       <span class="lib-when">${esc(scheduleSummary(item))}</span>
     </button>`;
   if (i !== LIB_OPEN) {
@@ -2811,9 +2817,19 @@ function libraryItemHtml(meta, item, i) {
     ${head}
     <div class="lib-edit">
       <div class="mini">
-        <label>${isAgenda ? 'Cabecera' : 'Título'}<input data-lib-field="title" value="${esc(item.title || '')}" placeholder="${isAgenda ? 'Agenda, Ahora en..., Mañana...' : (isMeteo ? 'El coche al sol puede superar los 60 grados' : '')}"></label>
-        <label>${subtitleLabel}<input data-lib-field="subtitle" value="${esc(item.subtitle || '')}" placeholder="${isAgenda ? 'Hoy, Mañana, Festival...' : (isCurious ? 'Lo que quieras que aparezca arriba' : '')}"></label>
+        <label>${isAgenda ? 'Cabecera' : (isFoto ? 'Pie de foto (opcional)' : 'Título')}<input data-lib-field="title" value="${esc(item.title || '')}" placeholder="${isAgenda ? 'Agenda, Ahora en..., Mañana...' : (isMeteo ? 'El coche al sol puede superar los 60 grados' : (isFoto ? 'Atardecer en la Plaza Nueva' : ''))}"></label>
+        <label>${subtitleLabel}<input data-lib-field="subtitle" value="${esc(item.subtitle || '')}" placeholder="${isAgenda ? 'Hoy, Mañana, Festival...' : (isCurious ? 'Lo que quieras que aparezca arriba' : (isFoto ? 'La foto · GasteizBerri' : ''))}"></label>
       </div>
+      ${isFoto ? `<div style="margin:8px 0;padding:10px;border:1px dashed var(--line);border-radius:10px;background:#0a1a30">
+        <input type="hidden" data-lib-field="photo" value="${esc(item.photo || '')}">
+        ${item.photo
+          ? `<img src="${esc(libPhotoUrl(item.photo))}" style="width:100%;max-height:190px;object-fit:cover;border-radius:8px;display:block;margin-bottom:8px" alt="">`
+          : '<div class="hint" style="margin:0 0 8px">Sin foto elegida todavía: esta pieza no saldrá en pantalla.</div>'}
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <button type="button" class="ghost" data-wp-pick="${i}">🖼 Elegir de la web</button>
+          <label style="border:1px solid var(--line);border-radius:9px;padding:8px 12px;cursor:pointer;font-size:13px;color:var(--muted);margin:0">Subir del móvil<input type="file" data-lib-photo-file="${i}" accept="image/*" style="display:none"></label>
+        </div>
+      </div>` : ''}
       ${isAgenda ? `<div class="agenda-block-chooser">
         <b>Eventos elegidos</b>
         ${agendaSelectedEventsHtml(item)}
@@ -4112,6 +4128,78 @@ $('#libraryList').addEventListener('click', (e) => {
     LIB_OPEN = idx === LIB_OPEN ? -1 : idx;
     renderLibraryPanel();
   }
+});
+
+// ===== Selector de fotos de la web (WordPress) para "Fotos GasteizBerri" =====
+const wpDlg = $('#wpDlg');
+let WP_STATE = { page: 1, totalPages: 1, search: '', target: -1 };
+
+async function openWpPicker(itemIndex) {
+  collectLibraryCategory();
+  WP_STATE = { page: 1, totalPages: 1, search: '', target: itemIndex };
+  if ($('#wpSearch')) $('#wpSearch').value = '';
+  wpDlg.showModal();
+  loadWpPage();
+}
+async function loadWpPage() {
+  $('#wpGrid').innerHTML = '<div class="hint">Cargando fotos de la web…</div>';
+  $('#wpPageInfo').textContent = '';
+  try {
+    const r = await api(`/wp-media?page=${WP_STATE.page}&search=${encodeURIComponent(WP_STATE.search)}`);
+    WP_STATE.totalPages = r.totalPages || 1;
+    $('#wpPageInfo').textContent = `Página ${WP_STATE.page} de ${WP_STATE.totalPages}`;
+    $('#wpPrev').disabled = WP_STATE.page <= 1;
+    $('#wpNext').disabled = WP_STATE.page >= WP_STATE.totalPages;
+    $('#wpGrid').innerHTML = (r.items || []).map((m) => `
+      <button type="button" data-wp-full="${esc(m.full)}" title="${esc(m.title || '')}"
+        style="background:#0a1a30;border:1px solid var(--line);border-radius:10px;padding:0;overflow:hidden;cursor:pointer;text-align:left">
+        <img src="${esc(m.thumb)}" loading="lazy" alt="" style="width:100%;aspect-ratio:4/3;object-fit:cover;display:block">
+        <span style="display:block;font-size:11px;color:var(--muted);padding:6px 8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc((m.title || m.date || '').slice(0, 48))}</span>
+      </button>`).join('') || '<div class="hint">No hay más fotos.</div>';
+  } catch (e) {
+    $('#wpGrid').innerHTML = `<div class="hint">⚠ ${esc(e.message || 'No se pudo leer la galería')}</div>`;
+  }
+}
+if (wpDlg) {
+  $('#wpPrev').addEventListener('click', () => { WP_STATE.page = Math.max(1, WP_STATE.page - 1); loadWpPage(); });
+  $('#wpNext').addEventListener('click', () => { WP_STATE.page++; loadWpPage(); });
+  $('#wpSearchBtn').addEventListener('click', () => { WP_STATE.search = $('#wpSearch').value.trim(); WP_STATE.page = 1; loadWpPage(); });
+  $('#wpSearch').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); $('#wpSearchBtn').click(); } });
+  $('#wpGrid').addEventListener('click', async (e) => {
+    const cell = e.target.closest('[data-wp-full]');
+    if (!cell) return;
+    cell.disabled = true;
+    toast('Trayendo la foto…');
+    try {
+      const r = await api('/wp-media/import', { method: 'POST', body: JSON.stringify({ url: cell.dataset.wpFull }) });
+      const meta = currentLibraryMeta();
+      const it = RUNDOWN.library && RUNDOWN.library[meta.key] && RUNDOWN.library[meta.key][WP_STATE.target];
+      if (it) { it.photo = r.photo; rdSetDirty(true); renderLibraryPanel(); }
+      wpDlg.close();
+      toast('Foto añadida ✓ (recuerda Guardar)');
+    } catch (err) {
+      toast(err.message || 'No se pudo traer la foto');
+      cell.disabled = false;
+    }
+  });
+}
+
+// Botones de foto dentro de las piezas del banco.
+$('#libraryList').addEventListener('click', (e) => {
+  const pick = e.target.closest('[data-wp-pick]');
+  if (pick) { e.preventDefault(); openWpPicker(Number(pick.dataset.wpPick)); }
+});
+$('#libraryList').addEventListener('change', async (e) => {
+  const file = e.target.closest('[data-lib-photo-file]');
+  if (!file || !file.files[0]) return;
+  collectLibraryCategory();
+  toast('Subiendo foto…');
+  try {
+    const p = await uploadFile(file);
+    const meta = currentLibraryMeta();
+    const it = RUNDOWN.library && RUNDOWN.library[meta.key] && RUNDOWN.library[meta.key][Number(file.dataset.libPhotoFile)];
+    if (it) { it.photo = p; rdSetDirty(true); renderLibraryPanel(); toast('Foto lista ✓ (recuerda Guardar)'); }
+  } catch (err) { toast(err.message || 'No se pudo subir la foto'); }
 });
 
 const publishDlg = $('#publishDlg');
