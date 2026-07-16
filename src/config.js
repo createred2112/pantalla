@@ -58,6 +58,11 @@ function migrateProductionContract(c) {
     requiredCount: FIXED_SCREEN_FILES.length,
   };
   c.templateBumpers = c.templateBumpers && typeof c.templateBumpers === 'object' ? c.templateBumpers : {};
+  // Versión de diseño de las cartelas: 'v1' (clásico) o 'v2' (letras gigantes).
+  // Conmutable en caliente y con rollback total: cada versión guarda sus
+  // layouts predeterminados en archivos separados.
+  c.design = c.design && typeof c.design === 'object' ? c.design : {};
+  if (c.design.version !== 'v2') c.design.version = 'v1';
   return c;
 }
 

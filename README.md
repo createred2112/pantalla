@@ -52,6 +52,11 @@ MP4 por tipo de cartela (`clima`, `luz`, `agenda`, etc.). El resultado final de
 cada posición sigue siendo un único `berri-N.mp4`, con intro + cartela + outro
 unidos en el mismo archivo.
 
+En los **bancos de contenido** de la Escaleta (datos útiles, citas, datos
+curiosos, efemérides…), la plantilla elegida EN CADA PIEZA manda: el banco solo
+decide la plantilla cuando la pieza no trae una propia. (Antes el banco la
+machacaba en silencio y ninguna pieza salía con la plantilla elegida.)
+
 La **Agenda viva** permite programar piezas por momento: una pieza puede salir
 desde ahora, desaparecer a una hora concreta o quedar preparada para mañana a
 una hora exacta. Así un concierto de las 21:00 deja de verse a las 22:00 y se
@@ -138,13 +143,19 @@ según la plantilla (el panel muestra una pista por campo). El color lo pone el 
 | `noticia`  | Informativa con foto | Titular | Sección (chip) | Entradilla | Fecha |
 | `titular`  | Foto a sangre + frase ENORME | La frase | Sección (chip) | — | Fecha |
 | `dato`     | Cifra gigante (aforos, %, ºC) | La cifra | Qué mide | Contexto | Actualizado |
+| `datocurioso` | Frase breve/mediana con banda superior | El dato | Texto superior | Detalle | Fuente |
 | `alerta`   | Avisos (tráfico, meteo) máx. contraste | El aviso | Tipo (AVISO…) | Detalle | Cuándo |
+| `meteoaviso` | Aviso meteorológico / consejo | El mensaje | Etiqueta superior | Detalle/consejo | Vigencia |
 | `evento`   | Evento con fecha protagonista | Nombre | Tipo (chip) | Lugar | Fecha/hora |
-| `cita`     | Frase entrecomillada editorial | La frase | Autor | — | — |
+| `cita`     | Frase entrecomillada editorial | La frase | Autor | — | Fecha |
 | `clima`    | Tiempo ahora + icono | Temperatura actual | Condición actual (define el icono) | Nota secundaria | Momento: AHORA |
+| `prevision` | Tiempo 3 días (worker `forecast`) | (worker) | Etiqueta (chip) | — | Fuente |
+| `aire`     | Calidad del aire (worker `airQuality`) | Estado (BUENA…) | Etiqueta | Peor indicador | Fuente |
+| `luz`      | Precio de la luz (worker `powerPrice`) | Precio ahora | Etiqueta | Consejo | Fuente |
+| `gasolina` | Estaciones más baratas (worker `fuel`) | (worker) | Etiqueta | — | Fuente |
 | `foto`     | Foto a sangre, casi sin texto | Pie (opcional) | Etiqueta (chip) | — | Hora |
-| `agenda`   | Lista del día con bandas (hasta 3) | Etiqueta banda | — | `HORA \| Nombre \| Lugar` por línea | — |
-| `mensaje`  | Lema/impacto a pantalla | El mensaje | Etiqueta (chip) | — | — |
+| `agenda`   | Lista del día con bandas (hasta 3) | Etiqueta banda | Periodo | `FECHA \| HORA \| Nombre \| Lugar` por línea | — |
+| `mensaje`  | Lema/impacto a pantalla | El mensaje | Etiqueta | — | — |
 
 > `clima` deduce el icono (sol, nube, lluvia, nieve, tormenta, niebla, viento)
 > de la palabra escrita en el subtítulo: "Soleado", "Lluvia", "Nieve"…
@@ -153,6 +164,39 @@ Añadir una plantilla nueva: crear `src/generator/templates/mi-plantilla.js`
 (exporta `{ id, label, hint, frame(card, ctx) }`) y listarla en
 `src/generator/templates/index.js`. Las plantillas pueden usar foto a sangre o
 fondo sólido/degradado, y colocar el logo en cualquier esquina (`logoPos`).
+
+## Versiones de diseño (v1 clásico ↔ v2 GIGANTE)
+
+Existen DOS sets de diseño para las mismas 16 plantillas:
+
+- **v1 (clásico)**: el diseño BOLD de siempre.
+- **v2 (GIGANTE)**: pensado para pantallas de poca resolución. Ningún texto por
+  debajo de ~5.5% del alto (≈59px a 1080p), chips convertidos en bandas a
+  sangre, titulares al límite del lienzo. Vive en `src/generator/templates/v2/`
+  (una plantilla sin versión v2 usa automáticamente la v1).
+
+Cambiar de versión (en caliente, sin reiniciar los renders en curso):
+
+```bash
+npm run design:v2      # activar el diseño GIGANTE
+npm run design:v1      # rollback al clásico
+npm run design:status  # ver la versión activa
+```
+
+O desde el panel: **Ajustes → Versión del diseño**.
+
+El cambio es 100% reversible porque cada versión guarda lo suyo por separado:
+
+- Layouts predeterminados: `data/template-layouts.json` (v1) y
+  `data/template-layouts.v2.json` (v2).
+- Layouts por cartela: se etiquetan con `design: v1|v2` al guardarlos y solo se
+  aplican cuando su versión está activa (no se borra nada al conmutar).
+- Caché de MP4: la firma incluye la versión, así al volver a v1 se reutilizan
+  los vídeos ya generados con v1 sin re-renderizar.
+
+`npm run qa:templates` audita SIEMPRE las dos versiones (16 plantillas × todas
+las paletas × v1 y v2); con `--render` genera matrices visuales separadas en
+`output/qa-template-matrix-v1/` y `output/qa-template-matrix-v2/`.
 
 ## Configuración
 

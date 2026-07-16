@@ -248,6 +248,7 @@ async function openSettings() {
   $('#setLogoMode').value = b.logoMode === 'none' ? 'none' : 'image';
   $('#setLogoW').value = b.logoWidth || 12; $('#setLogoWVal').textContent = $('#setLogoW').value;
   $('#setScale').value = b.textScale || 1.15; $('#setScaleVal').textContent = (b.textScale || 1.15);
+  $('#setDesignVersion').value = (SETTINGS.design && SETTINGS.design.version) === 'v2' ? 'v2' : 'v1';
   const ci = b.climaIcon || {};
   $('#setClimaScale').value = ci.scale || 100; $('#setClimaScaleVal').textContent = $('#setClimaScale').value;
   $('#setClimaDx').value = ci.dx || 0; $('#setClimaDxVal').textContent = $('#setClimaDx').value;
@@ -447,6 +448,7 @@ function collectSettings() {
       prefixWithOrder: true,
     },
     templateBumpers: collectTemplateBumpers(),
+    design: { version: $('#setDesignVersion').value === 'v2' ? 'v2' : 'v1' },
     ftp,
   };
 }

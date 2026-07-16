@@ -46,6 +46,9 @@
     "notes": ""
   },
   "templateBumpers": {},
+  "design": {
+    "version": "v1"
+  },
   "defaults": {
     "duration": 10,
     "template": "titular",

@@ -120,11 +120,18 @@ function normalizeLibraryItem(item, defaults) {
   const weekdays = Array.isArray(item && item.weekdays)
     ? item.weekdays
     : String((item && item.weekdays) || '').split(',');
-  let template = String((item && item.template) || defaults.template || 'noticia');
+  // La plantilla elegida EN LA PIEZA manda. Antes el banco la machacaba en
+  // silencio (todo "datos curiosos" acababa en datocurioso aunque eligieras
+  // otra) y era imposible entender por qué la cartela no salía como pedías.
+  // El banco solo decide cuando la pieza no trae plantilla propia.
+  const explicit = String((item && item.template) || '').trim();
+  let template = explicit || String(defaults.template || 'noticia');
   const title = String((item && item.title) || '');
   const shortFigure = title.replace(/\s+/g, '').length <= 9;
-  if (defaults.key === 'datosCuriosos') template = 'datocurioso';
-  if (defaults.key === 'datosUtiles' && shortFigure) template = 'dato';
+  if (!explicit) {
+    if (defaults.key === 'datosCuriosos') template = 'datocurioso';
+    if (defaults.key === 'datosUtiles' && shortFigure) template = 'dato';
+  }
   return {
     title,
     subtitle: String((item && item.subtitle) || ''),

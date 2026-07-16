@@ -47,6 +47,12 @@ function brandCtx() {
 
 const FALLBACK_THEME = { bg: '#0E0E0E', bg2: '#0E0E0E', text: '#FFFFFF', textMuted: 'rgba(255,255,255,0.8)', accent: '#D6FF00', accentText: '#0E0E0E', logoAccent: '#D6FF00' };
 
+// Versión de diseño activa ('v1' clásico | 'v2' letras gigantes).
+function designVersion() {
+  return typeof templates.designVersion === 'function' ? templates.designVersion() : 'v1';
+}
+function isV2() { return designVersion() === 'v2'; }
+
 // Resuelve el tema de color: el de la cartela, si no el de la plantilla, si no el por defecto.
 function resolveTheme(card, tpl) {
   const palette = cfg.palette || {};
@@ -515,7 +521,10 @@ function airBodyElement(card, ctx, band, base = null) {
     align: 'center',
     valign: 'center',
     lineHeight: 1,
-    autofit: { min: Math.round(H * 0.032), max: Math.round(H * 0.055), lines: 1 },
+    // v2 (letras gigantes): el detalle también sube de cuerpo.
+    autofit: isV2()
+      ? { min: Math.round(H * 0.055), max: Math.round(H * 0.075), lines: 1 }
+      : { min: Math.round(H * 0.032), max: Math.round(H * 0.055), lines: 1 },
   };
   const next = {
     ...fallback,
@@ -542,22 +551,23 @@ function repairAirFrame(card, ctx, frame, opts = {}) {
     (el.type === 'text' || el.type === 'chip') &&
     (el.bind === 'body' || sameText(el.text, bodyText))
   );
+  const v2 = isV2();
   const detailBox = {
     x: Math.round(W * 0.05),
-    y: Math.round(H * 0.615),
+    y: Math.round(H * (v2 ? 0.65 : 0.615)),
     w: Math.round(W * 0.9),
-    h: Math.round(H * 0.075),
+    h: Math.round(H * (v2 ? 0.12 : 0.075)),
   };
   const rule = {
     id: 'el_air_detail_rule',
     type: 'rect',
     x: Math.round(W * 0.36),
-    y: Math.round(H * 0.585),
+    y: Math.round(H * (v2 ? 0.615 : 0.585)),
     w: Math.round(W * 0.28),
-    h: Math.max(6, Math.round(H * 0.011)),
+    h: Math.max(v2 ? 8 : 6, Math.round(H * (v2 ? 0.014 : 0.011))),
     color: theme.accent,
     colorTheme: 'accent',
-    radius: 3,
+    radius: v2 ? 4 : 3,
   };
 
   if (opts.preserveLayout && idx >= 0) {
@@ -582,9 +592,9 @@ function weatherIconElement(card, ctx) {
   const { W, H, theme } = ctx;
   const clima = require('./templates/clima');
   const pad = Math.round(W * 0.05);
-  const zoneY = Math.round(H * 0.145);
-  const zoneH = Math.round(H * 0.51);
-  const icoS = Math.round(Math.min(zoneH, W * 0.36));
+  const zoneY = Math.round(H * (isV2() ? 0.16 : 0.145));
+  const zoneH = Math.round(H * (isV2() ? 0.46 : 0.51));
+  const icoS = Math.round(Math.min(zoneH, W * (isV2() ? 0.32 : 0.36)));
   return {
     id: 'el_weather_icon_guard',
     type: 'svg',
@@ -617,7 +627,9 @@ function weatherBandTextElement(card, ctx, band, base = null) {
     valign: 'center',
     lineHeight: 1,
     letterSpacingEm: 0,
-    autofit: { min: Math.round(H * 0.045), max: Math.round(H * 0.08), lines: 1 },
+    autofit: isV2()
+      ? { min: Math.round(H * 0.06), max: Math.round(H * 0.105), lines: 1 }
+      : { min: Math.round(H * 0.045), max: Math.round(H * 0.08), lines: 1 },
   };
   const next = {
     ...fallback,
@@ -677,9 +689,9 @@ function repairWeatherFrame(card, ctx, frame, opts = {}) {
         id: 'el_weather_band_guard',
         type: 'rect',
         x: 0,
-        y: Math.round(H * 0.67),
+        y: Math.round(H * (isV2() ? 0.66 : 0.67)),
         w: W,
-        h: Math.round(H * 0.16),
+        h: Math.round(H * (isV2() ? 0.19 : 0.16)),
         color: theme.accent,
         colorTheme: 'accent',
       };
@@ -687,7 +699,7 @@ function repairWeatherFrame(card, ctx, frame, opts = {}) {
     } else if (!opts.preserveLayout) {
       band.x = 0;
       band.w = W;
-      band.h = Math.max(Number(band.h) || 0, Math.round(H * 0.14));
+      band.h = Math.max(Number(band.h) || 0, Math.round(H * (isV2() ? 0.17 : 0.14)));
       band.color = theme.accent;
       band.colorTheme = 'accent';
       delete band.colorFixed;
@@ -734,14 +746,14 @@ function forecastIconElement(day, i, count, ctx) {
   const pad = Math.round(W * 0.05);
   const colW = Math.round((W - pad * 2) / Math.max(1, count));
   const x = pad + i * colW;
-  const icoS = Math.round(H * 0.25);
+  const icoS = Math.round(H * (isV2() ? 0.27 : 0.25));
   const key = clima.keyOf(day && day.cond);
   return {
     id: `el_forecast_icon_guard_${i}`,
     type: 'svg',
     anim: clima.animFor(key),
     x: Math.round(x + (colW - icoS) / 2),
-    y: Math.round(H * 0.285),
+    y: Math.round(H * (isV2() ? 0.29 : 0.285)),
     w: icoS,
     h: icoS,
     svg: clima.iconSvg(key, clima.iconColor(theme)),
@@ -784,9 +796,19 @@ function repairFrameForCard(card, ctx, frame, opts = {}) {
 
 // Frame resuelto, por prioridad: layout propio de la cartela > layout por defecto
 // de la plantilla > el que genera la plantilla en código.
+// Los layouts por cartela llevan etiqueta de versión de diseño (design: v1/v2):
+// un layout dibujado sobre el diseño clásico no tapa el diseño v2 ni al revés.
+// No se borra nada: al volver a la otra versión, su layout reaparece.
+function cardLayoutFor(card) {
+  if (!card.layout || !Array.isArray(card.layout.elements)) return null;
+  const saved = card.layout.design === 'v2' ? 'v2' : 'v1';
+  return saved === designVersion() ? card.layout : null;
+}
+
 function resolveFrame(card, ctx, tpl) {
-  if (card.layout && Array.isArray(card.layout.elements)) {
-    const layout = reconcileSavedLayout(card.layout, card, ctx, tpl);
+  const ownLayout = cardLayoutFor(card);
+  if (ownLayout) {
+    const layout = reconcileSavedLayout(ownLayout, card, ctx, tpl);
     return repairFrameForCard(card, ctx, applyLayout(layout, card, ctx, tpl), { preserveLayout: true });
   }
   const tl = require('../templateLayouts').get(card.template, ctx.theme && ctx.theme.key);
@@ -804,7 +826,7 @@ function resolveForEditor(card) {
   if (typeof tpl.build !== 'function') return null;
   const ctx = buildCtx(card, tpl);
   const frame = resolveFrame(card, ctx, tpl);
-  return { W: ctx.W, H: ctx.H, template: tpl.id, photo: card.photo || null, fontDisplay: ctx.fontDisplay, fontText: ctx.font, theme: ctx.theme, hasOwnLayout: Boolean(card.layout && Array.isArray(card.layout.elements)), background: frame.background || { type: 'solid', color: ctx.theme.bg }, elements: frame.elements };
+  return { W: ctx.W, H: ctx.H, template: tpl.id, photo: card.photo || null, fontDisplay: ctx.fontDisplay, fontText: ctx.font, theme: ctx.theme, designVersion: designVersion(), hasOwnLayout: Boolean(cardLayoutFor(card)), background: frame.background || { type: 'solid', color: ctx.theme.bg }, elements: frame.elements };
 }
 
 async function renderToBuffer(card) {

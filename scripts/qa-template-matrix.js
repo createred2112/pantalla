@@ -135,7 +135,9 @@ function staticAudit() {
     body: 'Max 33o - Min 20o',
   };
   const weatherBase = renderer.resolveForEditor(weatherCard);
-  const weatherLayout = JSON.parse(JSON.stringify({ background: weatherBase.background, elements: weatherBase.elements }));
+  // El servidor etiqueta los layouts editados con la versión de diseño activa;
+  // aquí se simula ese mismo guardado.
+  const weatherLayout = JSON.parse(JSON.stringify({ background: weatherBase.background, elements: weatherBase.elements, design: weatherBase.designVersion }));
   const weatherText = weatherLayout.elements.find((el) => el.type === 'text' && el.bind === 'weatherSummary');
   const weatherBand = weatherLayout.elements.find((el) =>
     (el.type === 'rect' || el.type === 'band') && Number(el.y || 0) > weatherBase.H * 0.5 && Number(el.y || 0) < weatherBase.H * 0.85
@@ -161,8 +163,8 @@ function labelSvg(label, width, height) {
   return Buffer.from(`<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg"><rect width="100%" height="100%" fill="#07162a"/><text x="10" y="17" fill="#ffffff" font-family="Arial" font-size="14" font-weight="700">${safe}</text></svg>`);
 }
 
-async function renderMatrix() {
-  const out = path.join(paths.output, 'qa-template-matrix');
+async function renderMatrix(version = '') {
+  const out = path.join(paths.output, version ? `qa-template-matrix-${version}` : 'qa-template-matrix');
   fs.mkdirSync(out, { recursive: true });
   const cellW = 320, imageH = 180, labelH = 22, cellH = imageH + labelH, cols = 4;
   for (const theme of Object.keys(cfg.palette || {})) {
@@ -184,9 +186,21 @@ async function renderMatrix() {
 }
 
 (async () => {
-  const result = staticAudit();
-  console.log(`OK: ${result.templates} plantillas x ${result.themes} paletas = ${result.combinations} combinaciones`);
-  if (process.argv.includes('--render')) console.log(`Matriz visual: ${await renderMatrix()}`);
+  // Audita las DOS versiones de diseño (v1 clásico y v2 gigante) en la misma
+  // pasada. cfg es el objeto vivo: cambiar design.version aquí conmuta en
+  // caliente igual que hace el panel.
+  cfg.design = cfg.design || {};
+  const original = cfg.design.version || 'v1';
+  try {
+    for (const version of ['v1', 'v2']) {
+      cfg.design.version = version;
+      const result = staticAudit();
+      console.log(`OK [diseño ${version}]: ${result.templates} plantillas x ${result.themes} paletas = ${result.combinations} combinaciones`);
+      if (process.argv.includes('--render')) console.log(`Matriz visual [${version}]: ${await renderMatrix(version)}`);
+    }
+  } finally {
+    cfg.design.version = original;
+  }
 })().catch((error) => {
   console.error(error.stack || error.message || error);
   process.exitCode = 1;

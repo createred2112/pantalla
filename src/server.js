@@ -152,6 +152,7 @@ app.get('/api/config', (req, res) => {
     naming: cfg.naming || {},
     brand: cfg.brand,
     defaults: cfg.defaults,
+    design: cfg.design || { version: 'v1' },
     templates: templates.list(),
     palette: cfg.palette || {},
     templateBumpers: cfg.templateBumpers || {},
@@ -249,6 +250,7 @@ app.get('/api/settings', (req, res) => {
     screen: cfg.screen,
     screenProfile: cfg.screenProfile || {},
     naming: cfg.naming || {},
+    design: cfg.design || { version: 'v1' },
     templateBumpers: cfg.templateBumpers || {},
     ftp: { ...ftp, password: '', hasPassword: Boolean(ftp.password || process.env.FTP_PASSWORD), effective: effectiveFtp },
     fonts: fontFamilies(),
@@ -265,6 +267,11 @@ app.put('/api/settings', (req, res) => {
   if (body.screen) partial.screen = body.screen;
   if (body.screenProfile) partial.screenProfile = body.screenProfile;
   if (body.naming) partial.naming = body.naming;
+  // Versión de diseño de las cartelas (v1 clásico / v2 letras gigantes).
+  // Cambio en caliente y reversible: no toca layouts ni cachés de la otra versión.
+  if (body.design && (body.design.version === 'v1' || body.design.version === 'v2')) {
+    partial.design = { version: body.design.version };
+  }
   if (body.templateBumpers) partial.templateBumpers = body.templateBumpers;
   if (body.ftp) {
     const nextFtp = { ...(cfg.ftp || {}), ...body.ftp };
@@ -330,8 +337,11 @@ app.get('/api/frame/:id', (req, res) => {
 });
 
 // Guardar el diseño editado (layout) de una cartela. null = volver al de la plantilla.
+// El layout queda etiquetado con la versión de diseño activa: así un diseño
+// dibujado sobre v1 no tapa el v2 (ni al revés) y el rollback es limpio.
 app.put('/api/cards/:id/layout', (req, res) => {
-  const c = store.update(req.params.id, { layout: req.body && req.body.layout ? req.body.layout : null });
+  const layout = req.body && req.body.layout ? { ...req.body.layout, design: templates.designVersion() } : null;
+  const c = store.update(req.params.id, { layout });
   if (!c) return res.status(404).json({ error: 'no existe' });
   try { rundown.rememberCardEdit(c, { layout: c.layout }); } catch (e) { log.warn('rundown', `No se pudo recordar layout de ${req.params.id}: ${e.message}`); }
   log.info('editor', `Layout guardado en ${req.params.id}`);

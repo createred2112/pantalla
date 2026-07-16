@@ -1,15 +1,22 @@
 'use strict';
 // Diseños por defecto a nivel de PLANTILLA + TEMA (afectan a las cartelas de esa
 // plantilla y ese esquema de color que no tengan su propio layout).
-// Guardados en data/template-layouts.json.
+//
+// VERSIONADO: cada versión de diseño (v1/v2) guarda sus predeterminados en un
+// archivo propio. Así, al probar el diseño v2 no se pisan los layouts de v1 y
+// el rollback es total: data/template-layouts.json (v1) queda intacto.
 const fs = require('fs');
 const path = require('path');
-const { paths } = require('./config');
+const { paths, cfg } = require('./config');
 
-const FILE = path.join(path.dirname(paths.data), 'template-layouts.json');
+function file() {
+  const dir = path.dirname(paths.data);
+  const v2 = cfg.design && cfg.design.version === 'v2';
+  return path.join(dir, v2 ? 'template-layouts.v2.json' : 'template-layouts.json');
+}
 
 function load() {
-  try { return JSON.parse(fs.readFileSync(FILE, 'utf8')); } catch { return {}; }
+  try { return JSON.parse(fs.readFileSync(file(), 'utf8')); } catch { return {}; }
 }
 function entryFor(d, id) {
   const rec = d[id] || null;
@@ -41,7 +48,7 @@ function set(id, theme, layout, options = {}) {
   }
   if (entry.default || Object.keys(entry.themes).length) d[id] = entry;
   else delete d[id];
-  require('./util/atomicWrite').writeJsonAtomic(FILE, d);
+  require('./util/atomicWrite').writeJsonAtomic(file(), d);
   return d;
 }
 module.exports = { load, get, set };

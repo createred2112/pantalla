@@ -1,6 +1,11 @@
 'use strict';
 // Registro de plantillas. Añadir una nueva = crear su archivo y listarlo aquí.
+//
+// VERSIONES DE DISEÑO: existe un set alternativo en ./v2 (letras GIGANTES).
+// Se activa con config.design.version = 'v2' (Ajustes o `npm run design:v2`)
+// y se puede volver a 'v1' en cualquier momento sin perder nada (rollback).
 const lib = require('./_lib');
+const { cfg } = require('../../config');
 
 const modules = [
   require('./noticia'),
@@ -21,15 +26,37 @@ const modules = [
   require('./mensaje'),
 ];
 
-const byId = new Map(modules.map((m) => [m.id, m]));
+// Overrides v2: mismo id, distinto diseño. Si una plantilla no tiene versión
+// v2, se usa la v1 (nunca desaparece una plantilla al cambiar de versión).
+const v2ById = new Map();
+for (const m of modules) {
+  try {
+    const alt = require(`./v2/${m.id}`);
+    if (alt && alt.id === m.id && typeof alt.build === 'function') v2ById.set(m.id, alt);
+  } catch { /* sin versión v2: se usa la v1 */ }
+}
+
+const v1ById = new Map(modules.map((m) => [m.id, m]));
+
+// Versión de diseño activa (leída en caliente: cambiarla no requiere reinicio).
+function designVersion() {
+  return cfg.design && cfg.design.version === 'v2' ? 'v2' : 'v1';
+}
+
+function activeModules() {
+  if (designVersion() !== 'v2') return modules;
+  return modules.map((m) => v2ById.get(m.id) || m);
+}
 
 function get(id) {
-  return byId.get(id) || byId.get('noticia');
+  const v2 = designVersion() === 'v2';
+  const base = v1ById.get(id) || v1ById.get('noticia');
+  return v2 ? (v2ById.get(base.id) || base) : base;
 }
 
 // Lista para el panel (id, etiqueta, pistas de campos).
 function list() {
-  return modules.map((m) => ({ id: m.id, label: m.label, hint: m.hint || {}, logo: m.logo !== false, defaultTheme: m.defaultTheme || null }));
+  return activeModules().map((m) => ({ id: m.id, label: m.label, hint: m.hint || {}, logo: m.logo !== false, defaultTheme: m.defaultTheme || null }));
 }
 
-module.exports = { get, list, lib };
+module.exports = { get, list, lib, designVersion };

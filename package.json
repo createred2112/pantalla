@@ -15,6 +15,9 @@
     "admin:add": "node src/cli.js admin:add",
     "admin:remove": "node src/cli.js admin:remove",
     "admin:list": "node src/cli.js admin:list",
+    "design:status": "node scripts/design-version.js",
+    "design:v1": "node scripts/design-version.js v1",
+    "design:v2": "node scripts/design-version.js v2",
     "qa:templates": "node scripts/qa-template-matrix.js",
     "qa:templates:visual": "node scripts/qa-template-matrix.js --render",
     "qa:rundown-order": "node scripts/qa-rundown-order.js"
