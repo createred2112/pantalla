@@ -4825,6 +4825,12 @@ async function loadStatus(full) {
   } catch (e) { /* token? */ }
 }
 
+// El panel puede volver del editor restaurado de caché (PWA/iOS) sin recargar
+// el JS: se refresca la config (plantillas ★ nuevas, paleta...) y la lista
+// cada vez que vuelve a estar a la vista. Coste: una llamada ligera.
+window.addEventListener('pageshow', (e) => { if (e.persisted) { loadConfig(); load(); } });
+document.addEventListener('visibilitychange', () => { if (!document.hidden) { loadConfig(); } });
+
 loadConfig().then(load).then(() => {
   // Atajos de la PWA y accesos directos: /?accion=agenda | /?accion=publicar
   const accion = new URLSearchParams(location.search).get('accion');
