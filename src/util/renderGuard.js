@@ -4,6 +4,26 @@ const fs = require('fs');
 const os = require('os');
 const { cfg } = require('../config');
 
+// En Windows, os.freemem() INFRAVALORA mucho: no cuenta la memoria "en
+// espera" (standby) que el sistema libera al instante. El contador correcto
+// es AvailableMBytes (WMI, sin problemas de idioma). Se consulta como mucho
+// cada 10 s y, si falla, se cae al valor conservador de siempre.
+let _winMem = { at: 0, value: null };
+function windowsAvailableMb() {
+  if (Date.now() - _winMem.at < 10000) return _winMem.value;
+  let value = null;
+  try {
+    const out = require('child_process').execSync(
+      'powershell -NoProfile -Command "(Get-CimInstance Win32_PerfFormattedData_PerfOS_Memory).AvailableMBytes"',
+      { encoding: 'utf8', timeout: 8000, windowsHide: true },
+    );
+    const v = Math.round(Number(String(out).trim()));
+    if (Number.isFinite(v) && v > 0) value = v;
+  } catch { /* sin PowerShell o sin permisos: fallback conservador */ }
+  _winMem = { at: Date.now(), value };
+  return value;
+}
+
 function memInfo() {
   try {
     const txt = fs.readFileSync('/proc/meminfo', 'utf8');
@@ -13,9 +33,10 @@ function memInfo() {
     };
     return { totalMb: get('MemTotal'), availableMb: get('MemAvailable') || get('MemFree') };
   } catch {
+    const winAvail = process.platform === 'win32' ? windowsAvailableMb() : null;
     return {
       totalMb: Math.round(os.totalmem() / 1024 / 1024),
-      availableMb: Math.round(os.freemem() / 1024 / 1024),
+      availableMb: winAvail != null ? winAvail : Math.round(os.freemem() / 1024 / 1024),
     };
   }
 }
