@@ -165,38 +165,24 @@ Añadir una plantilla nueva: crear `src/generator/templates/mi-plantilla.js`
 `src/generator/templates/index.js`. Las plantillas pueden usar foto a sangre o
 fondo sólido/degradado, y colocar el logo en cualquier esquina (`logoPos`).
 
-## Versiones de diseño (v1 clásico ↔ v2 GIGANTE)
+## Diseño de cartelas
 
-Existen DOS sets de diseño para las mismas 16 plantillas:
+El diseño **GIGANTE** es el único diseño del producto. Está pensado para
+pantallas de poca resolución: ningún texto por debajo de ~5,5% del alto
+(≈59 px a 1080p), etiquetas convertidas en bandas a sangre y titulares al
+límite del lienzo. Sus implementaciones viven en
+`src/generator/templates/v2/`; los módulos del directorio superior son bases
+internas y respaldos, no una versión seleccionable.
 
-- **v1 (clásico)**: el diseño BOLD de siempre.
-- **v2 (GIGANTE)**: pensado para pantallas de poca resolución. Ningún texto por
-  debajo de ~5.5% del alto (≈59px a 1080p), chips convertidos en bandas a
-  sangre, titulares al límite del lienzo. Vive en `src/generator/templates/v2/`
-  (una plantilla sin versión v2 usa automáticamente la v1).
+- Diseños predeterminados: `data/template-layouts.v2.json`.
+- Diseños propios: `data/user-templates.json`.
+- Diseños por cartela: se guardan con `design: "v2"`.
+- `data/template-layouts.json` y los diseños de cartela antiguos se conservan
+  en disco como datos históricos, pero ya no se aplican.
 
-Cambiar de versión (en caliente, sin reiniciar los renders en curso):
-
-```bash
-npm run design:v2      # activar el diseño GIGANTE
-npm run design:v1      # rollback al clásico
-npm run design:status  # ver la versión activa
-```
-
-O desde el panel: **Ajustes → Versión del diseño**.
-
-El cambio es 100% reversible porque cada versión guarda lo suyo por separado:
-
-- Layouts predeterminados: `data/template-layouts.json` (v1) y
-  `data/template-layouts.v2.json` (v2).
-- Layouts por cartela: se etiquetan con `design: v1|v2` al guardarlos y solo se
-  aplican cuando su versión está activa (no se borra nada al conmutar).
-- Caché de MP4: la firma incluye la versión, así al volver a v1 se reutilizan
-  los vídeos ya generados con v1 sin re-renderizar.
-
-`npm run qa:templates` audita SIEMPRE las dos versiones (16 plantillas × todas
-las paletas × v1 y v2); con `--render` genera matrices visuales separadas en
-`output/qa-template-matrix-v1/` y `output/qa-template-matrix-v2/`.
+`npm run qa:templates` audita todas las plantillas disponibles × todas las
+paletas del diseño vivo; con `--render` genera su matriz en
+`output/qa-template-matrix-v2/`.
 
 ## Configuración
 

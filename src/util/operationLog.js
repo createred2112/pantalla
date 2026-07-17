@@ -74,9 +74,9 @@ function summarizeGroup(events) {
   if (workers) {
     const c = countResults(workers.results);
     const forced = Array.isArray(workers.forceKeys) && workers.forceKeys.length
-      ? ` · forzado: ${workers.forceKeys.join(', ')}`
+      ? ' · actualización forzada'
       : '';
-    entry.steps.push(step('Datos', `${c.updated} actualizado(s), ${c.cached} en caché${forced}`, c.failed === 0));
+    entry.steps.push(step('Datos', `${c.updated} actualizado(s), ${c.cached} ya vigente(s)${forced}`, c.failed === 0));
   }
   if (generate) {
     entry.steps.push(step('MP4', `${generate.count || 0} preparado(s), ${generate.reused || 0} reutilizado(s)`, generate.ok !== false));

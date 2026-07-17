@@ -251,7 +251,6 @@ async function openSettings() {
   $('#setScaleDisplay').value = b.scaleDisplay || 1; $('#setScaleDisplayVal').textContent = (b.scaleDisplay || 1);
   $('#setScaleText').value = b.scaleText || 1; $('#setScaleTextVal').textContent = (b.scaleText || 1);
   $('#setAutopublish').checked = Boolean(SETTINGS.autopublish && SETTINGS.autopublish.enabled);
-  $('#setDesignVersion').value = (SETTINGS.design && SETTINGS.design.version) === 'v2' ? 'v2' : 'v1';
   const ci = b.climaIcon || {};
   $('#setClimaScale').value = ci.scale || 100; $('#setClimaScaleVal').textContent = $('#setClimaScale').value;
   $('#setClimaDx').value = ci.dx || 0; $('#setClimaDxVal').textContent = $('#setClimaDx').value;
@@ -488,7 +487,6 @@ function collectSettings() {
       prefixWithOrder: true,
     },
     templateBumpers: collectTemplateBumpers(),
-    design: { version: $('#setDesignVersion').value === 'v2' ? 'v2' : 'v1' },
     autopublish: { enabled: $('#setAutopublish').checked },
     ftp,
   };
@@ -813,7 +811,7 @@ function render() {
         ${c.type === 'generated' && !rendered && !staleRendered ? '<span class="tag warn">sin generar</span>' : ''}
         ${c.type !== 'generated' ? `<span class="tag">${c.type === 'video' ? 'vídeo' : 'imagen'}</span>` : ''}
         ${c.type === 'generated' && c.video ? '<span class="tag worker">animada</span>' : ''}
-        ${c.source === 'worker' ? '<span class="tag worker">worker</span>' : ''}
+        ${c.source === 'worker' ? '<span class="tag worker">automática</span>' : ''}
         ${c.source === 'rundown' ? '<span class="tag rundown">escaleta</span>' : ''}
         ${c.enabled === false ? '<span class="tag off">oculta</span>' : ''}
         <span class="tag">${durationLabel(cardDuration(c))} final</span>
@@ -1595,7 +1593,7 @@ async function saveEditor({ renderAfter = false } = {}) {
     setBusy('Generando archivo...');
     toast('Preparando archivo; se reutiliza si ya existe');
     const r = await api('/cards/' + cardId + '/render', { method: 'POST', body: JSON.stringify({ force: false }) });
-    if (r && r.reused) toast('Archivo reutilizado desde caché');
+    if (r && r.reused) toast('El archivo ya estaba listo; no hizo falta crearlo de nuevo');
   };
   setBusy(renderAfter ? 'Guardando...' : 'Guardando...');
   // Cartela de carrusel: se guarda el BLOQUE (cadencia, piezas, duración) y se
@@ -2009,7 +2007,7 @@ function renderPilot() {
   const checks = [
     pilotTag(countText, countOk),
     pilotTag(PILOT.mode === 'publish' ? (p.ftpConfigured ? 'FTP listo' : 'FTP sin configurar') : 'revisión manual', PILOT.mode !== 'publish' || p.ftpConfigured),
-    pilotTag(rendered >= Math.min(required, selected) ? 'MP4 cacheados' : `${rendered}/${Math.min(required, selected)} MP4 cacheados`, rendered >= Math.min(required, selected)),
+    pilotTag(rendered >= Math.min(required, selected) ? 'MP4 listos' : `${rendered}/${Math.min(required, selected)} MP4 listos`, rendered >= Math.min(required, selected)),
   ];
   const lastWatch = newestByTs([sync, PILOT.hourly || null]);
   if (lastWatch && lastWatch.ts) checks.push(pilotTag(`última vigilancia ${fmtClock(lastWatch.ts)}`, lastWatch.ok !== false));
@@ -2153,7 +2151,7 @@ $('#btnAdd').addEventListener('click', () => openEditor(null));
 $('#btnRefresh').addEventListener('click', load);
 $('#btnImport').addEventListener('click', async () => {
   const r = await api('/import', { method: 'POST' });
-  toast(`Worker: ${r.added.length} nuevo(s) de ${r.scanned}`); load();
+  toast(`Datos actualizados: ${r.added.length} nuevos de ${r.scanned}`); load();
 });
 
 // --- 🚨 Última hora: URL o titular → alerta primera del bucle → revisar → publicar ---
@@ -2162,12 +2160,12 @@ $('#btnBreaking').addEventListener('click', async () => {
   $('#bkInput').value = '';
   $('#tkOn').checked = false;
   $('#tkOpts').style.display = 'none';
-  // ¿Hay un takeover en marcha? Enséñalo y ofrece terminarlo.
+  // ¿Hay una alerta exclusiva en marcha? Enséñala y ofrece terminarla.
   try {
     const t = await api('/takeover');
     $('#tkState').style.display = t.active ? '' : 'none';
     $('#tkOff').style.display = t.active ? '' : 'none';
-    if (t.active) $('#tkState').innerHTML = `⚠ <b>Takeover ACTIVO</b>: «${esc(t.title)}» · quedan ~${t.minutesLeft} min · vuelve sola a la programación al acabar.`;
+    if (t.active) $('#tkState').innerHTML = `⚠ <b>Alerta exclusiva activa</b>: «${esc(t.title)}» · quedan ~${t.minutesLeft} min · vuelve sola a la programación al acabar.`;
   } catch {}
   breakingDlg.showModal();
   setTimeout(() => $('#bkInput').focus(), 60);
@@ -2177,10 +2175,10 @@ $('#tkOn').addEventListener('change', () => {
   $('#bkGo').textContent = $('#tkOn').checked ? '🚨 OCUPAR LA PANTALLA YA' : 'Crear y revisar →';
 });
 $('#tkOff').addEventListener('click', async () => {
-  if (!confirm('¿Terminar el takeover AHORA y volver a la programación normal?')) return;
+  if (!confirm('¿Terminar la alerta exclusiva AHORA y volver a la programación normal?')) return;
   try {
     await api('/takeover/off', { method: 'POST', body: '{}' });
-    toast('Takeover terminado: restaurando la programación…');
+    toast('Alerta exclusiva terminada: restaurando la programación…');
     breakingDlg.close();
   } catch (e) { toast(e.message || 'No se pudo terminar'); }
 });
@@ -2190,14 +2188,14 @@ $('#bkGo').addEventListener('click', async () => {
   if (!v) { toast('Pega una URL o escribe el titular'); return; }
   const b = $('#bkGo');
   b.disabled = true;
-  // MODO TAKEOVER: sin confirmación, la pantalla es de la alerta X minutos.
+  // ALERTA EN EXCLUSIVA: sin confirmación, ocupa la pantalla X minutos.
   if ($('#tkOn').checked) {
-    if (/^https?:\/\//i.test(v)) { toast('Para el takeover escribe el TITULAR (no una URL)'); b.disabled = false; return; }
+    if (/^https?:\/\//i.test(v)) { toast('Para la alerta exclusiva escribe el TITULAR (no una URL)'); b.disabled = false; return; }
     b.textContent = '🚨 Ocupando la pantalla…';
     try {
       const r = await api('/takeover', { method: 'POST', body: JSON.stringify({ title: v, minutes: Number($('#tkMinutes').value) || 60, mode: $('#tkMode').value }) });
       breakingDlg.close();
-      toast(`TAKEOVER activo ${r.minutesLeft} min: la pantalla vuelve sola al acabar`);
+      toast(`Alerta exclusiva activa durante ${r.minutesLeft} min: la pantalla vuelve sola al acabar`);
       await load();
     } catch (e) { toast('Error: ' + e.message); }
     finally { b.disabled = false; b.textContent = 'Crear y revisar →'; $('#tkOn').checked = false; $('#tkOpts').style.display = 'none'; }
@@ -2439,7 +2437,7 @@ function sbCardHtml(s, i) {
   const libLabel = (k) => (keys.find((x) => x.key === k) || {}).label || k;
   const srcIco = s.source === 'library' ? '🔁' : (s.source === 'worker' ? '⚙️' : (s.source === 'file' ? '▶' : '✍️'));
   const srcTitle = s.source === 'library' ? `Carrusel de «${libLabel(s.libraryKey)}»: cambia cada ${s.rotation === 'hora' ? 'hora' : 'día'}`
-    : (s.source === 'worker' ? 'Automático: se rellena solo con datos reales' : (s.source === 'file' ? 'Archivo listo: se reutiliza sin renderizar' : 'Escrito por ti'));
+    : (s.source === 'worker' ? 'Automático: se rellena solo con datos reales' : (s.source === 'file' ? 'Archivo listo: se usa tal cual' : 'Escrito por ti'));
   const say = rep.skippedToday ? 'no se emite este día'
     : (rep.autoSkipped ? 'sin agenda activa ahora'
     : (rep.missing ? (rep.note || 'sin contenido todavía') : (rep.title || s.title || '—')));
@@ -2547,7 +2545,7 @@ function slotEditHtml(s, i) {
             <label class="slot-wide">Archivo<input type="file" data-rd-file-upload accept="image/*,video/mp4,video/*">
               <select data-rd-video-pick class="video-pick">${videoOptions(s.file || '', 'Elegir vídeo guardado...')}</select>
               <input data-rd-current="file" value="${esc(s.file || '')}" placeholder="data/uploads/promo.mp4"></label>
-            <div class="slot-wide hint">El archivo listo se reutiliza: no pasa por el render de cartelas. Si la pantalla exige MP4, usa vídeo MP4.</div>`
+            <div class="slot-wide hint">El archivo listo se usa tal cual, sin volver a generarlo. Para esta pantalla, usa vídeo MP4.</div>`
           : (isWorker
           ? `<div class="slot-wide hint" style="align-self:center">${['weather', 'airQuality'].includes(s.workerKey) ? 'Contenido automático: se refresca cada hora y antes de publicar si toca.' : 'Contenido automático: se refresca cuando caduca el dato y antes de publicar.'}</div>`
           : `<label>Título<input data-rd-current="title" value="${esc(s.title || '')}"></label>
@@ -3720,7 +3718,7 @@ function renderWizard() {
       }
       if (t.slot.source === 'file') {
         const cur = WZ.manual[t.id] || {};
-        return head + `<div class="status">MP4 listo: se copiará como su berri-N.mp4 sin renderizar cartela.</div>
+        return head + `<div class="status">MP4 listo: se copiará directamente como su berri-N.mp4.</div>
           <label>Título interno</label><input data-wz-manual="${t.id}:title" value="${esc(cur.title || t.slot.title || '')}" placeholder="Vídeo promo">
           <label>Archivo MP4</label><input type="file" data-wz-upload="${t.id}" accept="video/mp4,video/*">
           <select data-wz-video-pick="${t.id}" class="video-pick">${videoOptions(cur.file || '', 'Elegir vídeo promo guardado...')}</select>
@@ -3893,6 +3891,8 @@ $('#btnAgenda').addEventListener('click', () => openAgendaQuick());
 // ===== AGENDA EXPRÉS: los eventos del día en texto plano, un paso =====
 const aqDlg = $('#aqDlg');
 let AQ_DATE = null;
+let AQ_LOAD_SEQ = 0;
+let AQ_EDIT_SEQ = 0;
 
 function aqParse(text) {
   return String(text || '').split(/\n/).map((s) => s.trim()).filter(Boolean).map((l) => {
@@ -3915,10 +3915,18 @@ function aqMarkDate() {
   $('#aqTomorrow').classList.toggle('primary', AQ_DATE === addDays(today, 1));
 }
 async function openAgendaQuick(date) {
+  const seq = ++AQ_LOAD_SEQ;
+  const editSeq = AQ_EDIT_SEQ;
+  const openOnSuccess = !aqDlg.open;
   AQ_DATE = date || localDatePart();
   try {
     const r = await api('/agenda/quick?date=' + encodeURIComponent(AQ_DATE));
-    $('#aqText').value = (r.lines || []).join('\n');
+    // Si se tocó Hoy/Mañana otra vez mientras llegaba la respuesta, esta ya
+    // no manda. Evita que una carga atrasada reabra el diálogo tras guardar.
+    if (seq !== AQ_LOAD_SEQ) return;
+    // Si el operador empezó a escribir mientras llegaba la respuesta,
+    // la red no debe pisar esa edición en curso.
+    if (editSeq === AQ_EDIT_SEQ) $('#aqText').value = (r.lines || []).join('\n');
     $('#aqHide').checked = r.hideExpired !== false;
     const isTomorrow = AQ_DATE === addDays(localDatePart(), 1);
     $('#aqPreviewRow').style.display = isTomorrow ? '' : 'none';
@@ -3927,19 +3935,20 @@ async function openAgendaQuick(date) {
       Object.keys(PALETTE).map((k) => `<option value="${esc(k)}" ${k === (r.theme || '') ? 'selected' : ''}>${esc(k)}</option>`).join('');
     aqMarkDate();
     aqRefreshPreview();
-    if (!aqDlg.open) aqDlg.showModal();
-    aqLoadWeb(); // en segundo plano: sugerencias desde la web
-  } catch (e) { toast(e.message || 'No se pudo cargar la agenda'); }
+    if (openOnSuccess && !aqDlg.open) aqDlg.showModal();
+    aqLoadWeb(AQ_DATE, seq); // en segundo plano: sugerencias desde la web
+  } catch (e) { if (seq === AQ_LOAD_SEQ) toast(e.message || 'No se pudo cargar la agenda'); }
 }
 
 // Sugerencias desde la web (fuente verificada): un toque = a la lista.
-async function aqLoadWeb() {
+async function aqLoadWeb(date = AQ_DATE, seq = AQ_LOAD_SEQ) {
   const list = $('#aqWebList');
   const src = $('#aqWebSource');
   list.innerHTML = 'Cargando sugerencias…';
   src.textContent = '';
   try {
-    const r = await api('/agenda/web?date=' + encodeURIComponent(AQ_DATE));
+    const r = await api('/agenda/web?date=' + encodeURIComponent(date));
+    if (seq !== AQ_LOAD_SEQ) return;
     if (!r.items || !r.items.length) {
       list.innerHTML = 'La web no ofrece eventos para este día. Escríbelos a mano arriba.';
       return;
@@ -3950,10 +3959,11 @@ async function aqLoadWeb() {
     ).join('') + '</div>';
     list.dataset.items = JSON.stringify(r.items);
   } catch (e) {
+    if (seq !== AQ_LOAD_SEQ) return;
     list.innerHTML = '⚠ ' + esc(e.message || 'No se pudo leer la web');
   }
 }
-$('#aqWebReload').addEventListener('click', aqLoadWeb);
+$('#aqWebReload').addEventListener('click', () => aqLoadWeb(AQ_DATE, AQ_LOAD_SEQ));
 $('#aqWebList').addEventListener('click', (e) => {
   const btn = e.target.closest('[data-aq-add]');
   if (!btn) return;
@@ -3964,6 +3974,7 @@ $('#aqWebList').addEventListener('click', (e) => {
   const ta = $('#aqText');
   if (ta.value.split(/\n/).some((l) => l.trim() === line.trim())) { toast('Ese evento ya está en la lista'); return; }
   ta.value = (ta.value.trim() ? ta.value.replace(/\s+$/, '') + '\n' : '') + line;
+  AQ_EDIT_SEQ++;
   aqRefreshPreview();
   btn.disabled = true;
   btn.textContent = '✓ ' + btn.textContent.slice(2);
@@ -3971,7 +3982,10 @@ $('#aqWebList').addEventListener('click', (e) => {
 $('#aqToday').addEventListener('click', () => openAgendaQuick(localDatePart()));
 $('#aqTomorrow').addEventListener('click', () => openAgendaQuick(addDays(localDatePart(), 1)));
 $('#aqDate').addEventListener('change', () => { if ($('#aqDate').value) openAgendaQuick($('#aqDate').value); });
-$('#aqText').addEventListener('input', aqRefreshPreview);
+$('#aqText').addEventListener('input', () => {
+  AQ_EDIT_SEQ++;
+  aqRefreshPreview();
+});
 $('#aqAdvanced').addEventListener('click', () => { aqDlg.close(); openAgenda(); });
 $('#aqSave').addEventListener('click', async () => {
   const btn = $('#aqSave');
@@ -3982,6 +3996,7 @@ $('#aqSave').addEventListener('click', async () => {
     const isTomorrow = AQ_DATE === addDays(localDatePart(), 1);
     const r = await api('/agenda/quick', { method: 'POST', body: JSON.stringify({ date: AQ_DATE, text: $('#aqText').value, theme: $('#aqTheme').value, hideExpired: $('#aqHide').checked, previewToday: isTomorrow ? $('#aqPreview').checked : undefined }) });
     toast(`Agenda del ${r.date}: ${r.count} evento(s) ✓`);
+    AQ_LOAD_SEQ++; // invalida cualquier carga Hoy/Mañana que aún esté llegando
     aqDlg.close();
     load();
   } catch (e) { toast(e.message || 'No se pudo guardar'); }
@@ -4791,9 +4806,9 @@ $('#btnRollback').addEventListener('click', async () => {
     if (!confirm('¿Restaurar la TANDA ANTERIOR y subirla a la pantalla? La actual pasará a ser la "anterior" (puedes volver a alternar).')) return;
     btn.disabled = true; btn.textContent = 'Restaurando y subiendo…';
     const r = await api('/tanda/rollback', { method: 'POST', body: '{}' }, 180000);
-    toast(r.ok ? 'Tanda anterior en pantalla ✓' : 'Rollback con error: revisa el registro');
+    toast(r.ok ? 'Tanda anterior en pantalla ✓' : 'No se pudo volver a la tanda anterior: revisa el registro');
     loadStatus(true);
-  } catch (e) { toast(e.message || 'No se pudo hacer el rollback'); }
+  } catch (e) { toast(e.message || 'No se pudo volver a la tanda anterior'); }
   finally { btn.disabled = false; btn.textContent = '↩ Volver a la tanda anterior'; }
 });
 

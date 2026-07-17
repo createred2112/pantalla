@@ -6,12 +6,11 @@ const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
 const ffmpeg = require('ffmpeg-static');
-const { cfg, paths, env, ensureDirs, ROOT, abs } = require('./config');
+const { cfg, paths, env, ensureDirs, ROOT, abs, QA_MODE } = require('./config');
 const sharp = require('sharp');
 const store = require('./store');
 const log = require('./util/logger');
 const status = require('./util/status');
-const auditLog = require('./util/auditLog');
 const operationLog = require('./util/operationLog');
 const pipelineLock = require('./util/pipelineLock');
 const { renderToBuffer } = require('./generator/renderCard');
@@ -46,7 +45,6 @@ const clientIp = (req) => req.ip || req.socket.remoteAddress || 'unknown';
 // --- Rutas públicas (sin sesión): login y sus recursos ---
 app.get('/login', (req, res) => res.sendFile(path.join(PUBLIC, 'login.html')));
 app.get('/login.html', (req, res) => res.sendFile(path.join(PUBLIC, 'login.html')));
-app.get('/app.css', (req, res) => res.sendFile(path.join(PUBLIC, 'app.css')));
 
 app.post('/api/login', (req, res) => {
   const ip = clientIp(req);
@@ -82,6 +80,7 @@ app.get('/api/whoami', (req, res) => {
     simpleMode: Boolean(u && u.simpleMode),
     hasAdmins: auth.hasAdmins(),
     version: PKG.version,
+    qaMode: QA_MODE,
     // Huella actual de la interfaz: si difiere de la que tiene la página
     // abierta, el panel enseña el banner "Actualizar" (ver public/app.js).
     assets: typeof assetsFingerprint === 'function' ? assetsFingerprint() : null,
@@ -264,7 +263,7 @@ app.post('/api/tanda/rollback', async (req, res) => {
       if (fs.existsSync(tmp)) fs.renameSync(tmp, prevDir); // la actual pasa a ser "anterior"
       return require('./pipeline/upload').upload({ source: 'manual-rollback' });
     });
-    log.info('publish', `Rollback a la tanda anterior ${up.ok ? 'subido a pantalla' : 'con error: ' + (up.error || '')}`);
+    log.info('publish', `Vuelta a la tanda anterior ${up.ok ? 'subida a pantalla' : 'con error: ' + (up.error || '')}`);
     res.json({ ok: up.ok !== false, upload: up });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -306,7 +305,6 @@ app.get('/api/config', (req, res) => {
     naming: cfg.naming || {},
     brand: cfg.brand,
     defaults: cfg.defaults,
-    design: cfg.design || { version: 'v1' },
     templates: templates.list(),
     palette: cfg.palette || {},
     templateBumpers: cfg.templateBumpers || {},
@@ -404,7 +402,6 @@ app.get('/api/settings', (req, res) => {
     screen: cfg.screen,
     screenProfile: cfg.screenProfile || {},
     naming: cfg.naming || {},
-    design: cfg.design || { version: 'v1' },
     autopublish: cfg.autopublish || { enabled: false },
     templateBumpers: cfg.templateBumpers || {},
     ftp: { ...ftp, password: '', hasPassword: Boolean(ftp.password || process.env.FTP_PASSWORD), effective: effectiveFtp },
@@ -422,11 +419,6 @@ app.put('/api/settings', (req, res) => {
   if (body.screen) partial.screen = body.screen;
   if (body.screenProfile) partial.screenProfile = body.screenProfile;
   if (body.naming) partial.naming = body.naming;
-  // Versión de diseño de las cartelas (v1 clásico / v2 letras gigantes).
-  // Cambio en caliente y reversible: no toca layouts ni cachés de la otra versión.
-  if (body.design && (body.design.version === 'v1' || body.design.version === 'v2')) {
-    partial.design = { version: body.design.version };
-  }
   // Publicación automática al guardar (modo confianza).
   if (body.autopublish) partial.autopublish = { enabled: body.autopublish.enabled === true };
   if (body.templateBumpers) partial.templateBumpers = body.templateBumpers;
@@ -520,10 +512,6 @@ app.put('/api/rundown/library', (req, res) => {
   res.json(rundown.saveLibrary(req.body || {}, { date: req.query.date }));
 });
 
-app.put('/api/rundown/day/:date', (req, res) => {
-  res.json(rundown.saveDay(req.params.date, req.body || {}));
-});
-
 app.post('/api/rundown/reset', (req, res) => {
   res.json(rundown.reset());
 });
@@ -588,7 +576,7 @@ app.get('/api/agenda/web', async (req, res) => {
   try {
     const kk = await require('./suggestions').kulturklik(day);
     for (const ev of kk.items || []) push({ title: ev.title, time: ev.time, place: [ev.place, ev.type].filter(Boolean).join(' · ') });
-    if (items.length) source = 'Kulturklik / Euskadi.eus' + (kk.cached ? ' (caché de hoy)' : '');
+    if (items.length) source = 'Kulturklik / Euskadi.eus' + (kk.cached ? ' (actualizado hoy)' : '');
   } catch (e) {
     log.warn('agenda', 'Kulturklik no disponible: ' + e.message);
   }
@@ -662,15 +650,14 @@ app.get('/api/frame/:id', (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// Guardar el diseño editado (layout) de una cartela. null = volver al de la plantilla.
-// El layout queda etiquetado con la versión de diseño activa: así un diseño
-// dibujado sobre v1 no tapa el v2 (ni al revés) y el rollback es limpio.
+// Guardar el diseño editado de una cartela. null = volver al de la plantilla.
+// La etiqueta de diseño mantiene compatibles los datos históricos.
 app.put('/api/cards/:id/layout', (req, res) => {
   const layout = req.body && req.body.layout ? { ...req.body.layout, design: templates.designVersion() } : null;
   const c = store.update(req.params.id, { layout });
   if (!c) return res.status(404).json({ error: 'no existe' });
   try { rundown.rememberCardEdit(c, { layout: c.layout }); } catch (e) { log.warn('rundown', `No se pudo recordar layout de ${req.params.id}: ${e.message}`); }
-  log.info('editor', `Layout guardado en ${req.params.id}`);
+  log.info('editor', `Diseño guardado en ${req.params.id}`);
   res.json({ ok: true });
 });
 
@@ -756,14 +743,14 @@ app.post('/api/cards/:id/render', async (req, res) => {
       const r = await require('./pipeline/generate').renderOne(card, { force });
       try { await require('./generator/htmlRender').close(); } catch {}
       status.set('generate', { ok: true, running: false, count: 1, done: 1, current: null, manual: true, results: [{ id: card.id, file: r.file, ok: true, reused: r.reused, durationSeconds: r.durationSeconds || null }] });
-      log.info('generate', `${r.reused ? 'Render manual reutilizado' : 'Render manual'} ${card.id} -> ${r.file}`);
+      log.info('generate', `${r.reused ? 'Archivo manual reutilizado' : 'Archivo creado manualmente'} ${card.id} -> ${r.file}`);
       return { ok: true, file: r.file, reused: r.reused === true, rendered: renderedInfo(card) };
     }, { staleMs: 10 * 60 * 1000 });
     res.json(out);
   } catch (e) {
     try { await require('./generator/htmlRender').close(); } catch {}
     status.set('generate', { ok: false, running: false, count: 1, done: 0, current: null, manual: true, error: e.message, results: [{ id: card.id, ok: false, error: e.message }] });
-    log.error('generate', `FALLO render manual ${card.id}: ${e.message}`);
+    log.error('generate', `FALLO al crear manualmente ${card.id}: ${e.message}`);
     res.status(500).json({ error: e.message });
   }
 });
@@ -889,7 +876,7 @@ const SAMPLES_META = path.join(SAMPLES_DIR, 'meta.json');
 function samplesHash(matrix = false) {
   const crypto = require('crypto');
   return crypto.createHash('sha1').update(JSON.stringify({
-    v: 13, // subir al cambiar el diseño de las plantillas en código
+    v: 14, // subir al cambiar el diseño de las plantillas en código (14: fix autofit/marquesina)
     matrix,
     brand: cfg.brand, palette: cfg.palette, screen: cfg.screen,
     tpls: templates.list().map((t) => t.id), data: SAMPLE_DATA,
@@ -1050,7 +1037,7 @@ app.post('/api/breaking', async (req, res) => {
     // A primera posición del bucle.
     const rest = store.list().filter((c) => c.id !== card.id).sort((a, b) => (a.order || 0) - (b.order || 0)).map((c) => c.id);
     store.reorder([card.id, ...rest]);
-    try { await require('./pipeline/generate').renderOne(card, { force: true }); } catch (e) { log.warn('breaking', 'render: ' + e.message); }
+    try { await require('./pipeline/generate').renderOne(card, { force: true }); } catch (e) { log.warn('breaking', 'generación: ' + e.message); }
     try { await require('./generator/htmlRender').close(); } catch {}
     log.info('breaking', `🚨 ÚLTIMA HORA en primera posición: ${data.title}`);
     res.json({ ok: true, card });
@@ -1281,8 +1268,6 @@ app.post('/api/autopilot/run', async (req, res) => {
   }
 });
 
-app.get('/api/workers', (req, res) => res.json({ workers: workers.state() }));
-
 app.post('/api/workers/refresh', async (req, res) => {
   // El botón del panel es una orden explícita: trae TODO, ignorando TTLs.
   const r = await workers.refreshAll({ force: true });
@@ -1312,24 +1297,27 @@ app.get('/api/log', (req, res) => {
   res.json(log.tail(Number(req.query.n) || 150));
 });
 
-app.get('/api/audit', (req, res) => {
-  res.json(auditLog.tail(Number(req.query.n) || 200));
-});
-
 app.get('/api/operations', (req, res) => {
   res.json(operationLog.list(Number(req.query.n) || 20));
 });
 
 app.listen(env.port, () => {
   log.info('server', `Panel en http://localhost:${env.port}`);
+  pipelineLock.cleanup(); // un reinicio tras caída no deja la emisión bloqueada
   if (!auth.hasAdmins()) {
     log.warn('server', 'No hay administradores. Crea uno con:  npm run admin:add -- <usuario> <contraseña>');
   }
-  autopilot.start();
-  workers.start();
-  notify.start(); // recordatorios proactivos (agenda sin cargar, etc.)
-  require('./util/janitor').start(); // limpieza diaria de renders huérfanos
-  require('./util/backup').start(); // backup diario de data/ + config/ (14 días)
-  require('./takeover').start(); // vuelta automática del takeover al expirar
-  autopublish.startWindows(); // vigilante de franjas horarias por cartela
+  if (QA_MODE) {
+    // Playwright arranca el servidor antes de ejecutar global-setup: no se
+    // inicia ningún trabajo de fondo con la config real durante esa ventana.
+    log.info('server', 'Modo QA: tareas de fondo y credenciales FTP anuladas');
+  } else {
+    autopilot.start();
+    workers.start();
+    notify.start(); // recordatorios proactivos (agenda sin cargar, etc.)
+    require('./util/janitor').start(); // limpieza diaria de renders huérfanos
+    require('./util/backup').start(); // backup diario de data/ + config/ (14 días)
+    require('./takeover').start(); // vuelta automática de la alerta al expirar
+    autopublish.startWindows(); // vigilante de franjas horarias por cartela
+  }
 });

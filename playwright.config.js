@@ -1,10 +1,10 @@
 'use strict';
 // HUMO E2E (F1): configuración de Playwright.
-// - Arranca el servidor REAL en un puerto de pruebas (3900) con la config viva.
+// - Arranca el servidor REAL en un puerto de pruebas (3900) en modo QA.
 // - Usa el MISMO Chrome que ya usa el motor de render (puppeteer): cero
 //   descargas extra y mismo motor en local y en el VPS.
-// - El global-setup hace copia de data/ y config/ y ANULA el FTP: es imposible
-//   que el humo toque la pantalla real. El global-teardown lo restaura todo.
+// - El modo QA anula FTP y tareas de fondo desde el primer instante; además,
+//   global-setup copia data/ y config/ y global-teardown lo restaura todo.
 const { defineConfig } = require('@playwright/test');
 const path = require('path');
 

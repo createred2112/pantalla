@@ -7,6 +7,7 @@ require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 const ROOT = path.resolve(__dirname, '..');
 const CONFIG_PATH = path.join(ROOT, 'config', 'pantalla.config.json');
 const CONFIG_DEFAULT = path.join(ROOT, 'config', 'pantalla.config.default.json');
+const QA_MODE = process.env.PANTALLA_QA === '1';
 
 // La config es "viva" (editable desde el panel) y NO está en git. Si no existe
 // (clon nuevo), se crea a partir de la plantilla por defecto.
@@ -58,11 +59,9 @@ function migrateProductionContract(c) {
     requiredCount: FIXED_SCREEN_FILES.length,
   };
   c.templateBumpers = c.templateBumpers && typeof c.templateBumpers === 'object' ? c.templateBumpers : {};
-  // Versión de diseño de las cartelas: 'v1' (clásico) o 'v2' (letras gigantes).
-  // Conmutable en caliente y con rollback total: cada versión guarda sus
-  // layouts predeterminados en archivos separados.
-  c.design = c.design && typeof c.design === 'object' ? c.design : {};
-  if (c.design.version !== 'v2') c.design.version = 'v1';
+  // F3: el diseño GIGANTE es el único diseño del producto. Se conserva esta
+  // propiedad para que los datos y firmas creados con v2 sigan siendo válidos.
+  c.design = { version: 'v2' };
   return c;
 }
 
@@ -125,6 +124,15 @@ const env = {
 };
 
 function ftpConfig() {
+  // Defensa final del humo e2e: aunque el servidor ya hubiera cargado la
+  // config real antes del snapshot, en modo QA nunca devuelve credenciales.
+  if (QA_MODE) {
+    return {
+      host: '', port: 21, user: '', password: '', secure: false,
+      remoteDir: '/', clearRemoteFirst: false, allowInvalidCert: false,
+      source: { host: 'qa', user: 'qa', password: 'qa' },
+    };
+  }
   const f = cfg.ftp || {};
   const usesConfig = Boolean(f.host || f.user || f.password);
   return {
@@ -166,4 +174,4 @@ function saveConfig(partial) {
   return cfg;
 }
 
-module.exports = { ROOT, cfg, paths, abs, ensureDirs, env, ftpConfig, reload: load, saveConfig };
+module.exports = { ROOT, cfg, paths, abs, ensureDirs, env, ftpConfig, QA_MODE, reload: load, saveConfig };

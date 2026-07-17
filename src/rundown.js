@@ -505,19 +505,6 @@ function refreshMaterializedLibraryCards(library, options = {}) {
   return { updated };
 }
 
-function saveDay(date, pack) {
-  const day = String(date || todayKey()).slice(0, 10);
-  const library = normalizeLibrary(readJson(LIBRARY_FILE, DEFAULT_LIBRARY));
-  library.days[day] = {};
-  for (const meta of LIBRARY_KEYS) {
-    library.days[day][meta.key] = (Array.isArray(pack && pack[meta.key]) ? pack[meta.key] : [])
-      .map((item) => normalizeLibraryItem(item, meta))
-      .filter((item) => item.title || item.body);
-  }
-  writeJson(LIBRARY_FILE, library);
-  return read({ date: day });
-}
-
 function reset() {
   writeJson(RUNDOWN_FILE, DEFAULT_RUNDOWN);
   if (!fs.existsSync(LIBRARY_FILE)) writeJson(LIBRARY_FILE, DEFAULT_LIBRARY);
@@ -1144,4 +1131,4 @@ function pick(date, slotId, itemIndex, options = {}) {
   return save(data, { date: day });
 }
 
-module.exports = { read, save, saveLibrary, saveDay, reset, materialize, pick, reorderSlots, reorderFromCards, isEmptyManualNewsSlot, rememberCardEdit, rememberCardDelete, convertCard, quickAgenda, quickAgendaSave, dayTheme, RUNDOWN_FILE, LIBRARY_FILE };
+module.exports = { read, save, saveLibrary, reset, materialize, pick, reorderSlots, reorderFromCards, isEmptyManualNewsSlot, rememberCardEdit, rememberCardDelete, convertCard, quickAgenda, quickAgendaSave, dayTheme, RUNDOWN_FILE, LIBRARY_FILE };

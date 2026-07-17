@@ -2,17 +2,15 @@
 // Diseños por defecto a nivel de PLANTILLA + TEMA (afectan a las cartelas de esa
 // plantilla y ese esquema de color que no tengan su propio layout).
 //
-// VERSIONADO: cada versión de diseño (v1/v2) guarda sus predeterminados en un
-// archivo propio. Así, al probar el diseño v2 no se pisan los layouts de v1 y
-// el rollback es total: data/template-layouts.json (v1) queda intacto.
+// Los diseños predeterminados del único diseño vivo se guardan aparte de las
+// cartelas y de las plantillas propias del usuario.
 const fs = require('fs');
 const path = require('path');
-const { paths, cfg } = require('./config');
+const { paths } = require('./config');
 
 function file() {
-  const dir = path.dirname(paths.data);
-  const v2 = cfg.design && cfg.design.version === 'v2';
-  return path.join(dir, v2 ? 'template-layouts.v2.json' : 'template-layouts.json');
+  // El archivo clásico queda en disco como copia histórica, pero no se lee.
+  return path.join(path.dirname(paths.data), 'template-layouts.v2.json');
 }
 
 function load() {

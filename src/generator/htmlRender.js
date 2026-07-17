@@ -272,12 +272,25 @@ async function logoHtml(ctx, tpl) {
 const AUTOFIT = `
 (function(){
   document.querySelectorAll('[data-fit]').forEach(function(el){
+    // REEJECUTABLE (fix "miniatura bien / MP4 en marquesina"): este script
+    // corre dos veces — al cargar el HTML (a veces con la fuente aún sin
+    // cargar: mide MAL) y después con la fuente definitiva. Cada pasada debe
+    // limpiar el veredicto de la anterior; si no, una marca de desborde
+    // falsa se queda pegada y el vídeo convierte un titular que SÍ cabe en
+    // una marquesina gigante de una línea.
+    if(el.dataset.clamped){
+      el.style.whiteSpace='';el.style.display='';el.style.webkitBoxOrient='';
+      el.style.webkitLineClamp='';el.style.overflow='';
+      delete el.dataset.clamped;
+    }
+    delete el.dataset.overflow;
     var lo=+el.dataset.min, hi=+el.dataset.max, best=lo;
     while(lo<=hi){ var mid=(lo+hi)>>1; el.style.fontSize=mid+'px';
       if(el.scrollWidth<=el.parentElement.clientWidth && el.scrollHeight<=el.parentElement.clientHeight){best=mid;lo=mid+1;} else {hi=mid-1;} }
     el.style.fontSize=best+'px';
     if(el.scrollWidth>el.parentElement.clientWidth+1 || el.scrollHeight>el.parentElement.clientHeight+1){
       el.dataset.overflow='1'; // en vídeo se convierte en marquesina LED
+      el.dataset.clamped='1';
       var lh=parseFloat(getComputedStyle(el).lineHeight)||best*1.05;
       var lines=Math.max(1,Math.floor(el.parentElement.clientHeight/lh));
       el.style.whiteSpace='normal';

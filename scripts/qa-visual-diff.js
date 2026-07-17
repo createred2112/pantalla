@@ -26,7 +26,8 @@ const DIFF_DIR = path.join(OUT, 'qa-visual-diff');
 // render varía un pelo entre pasadas; 0.10% lo absorbe, un solape o un texto
 // movido lo dispara de sobra.
 const MAX_DIFF_PCT = Number(process.env.PANTALLA_QA_VISUAL_PCT || 0.10);
-const VERSIONS = ['v1', 'v2'];
+// Diseño v1 retirado (F3): solo se compara el diseño vivo.
+const VERSIONS = ['v2'];
 
 function matrixDir(version) { return path.join(OUT, `qa-template-matrix-${version}`); }
 

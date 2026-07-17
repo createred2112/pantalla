@@ -35,9 +35,28 @@ function current() {
   return { ...info, ageMs: Number.isFinite(ageMs) ? ageMs : null };
 }
 
-function removeStaleLock(staleMs) {
+function processIsAlive(pid) {
+  const n = Number(pid);
+  if (!Number.isInteger(n) || n <= 0) return false;
+  try {
+    process.kill(n, 0);
+    return true;
+  } catch (e) {
+    // Sin permiso para consultar significa que el proceso sí existe.
+    return Boolean(e && e.code === 'EPERM');
+  }
+}
+
+function shouldRemoveLock(info, staleMs, isAlive = processIsAlive) {
+  if (!info) return false;
+  const expired = Number.isFinite(Number(info.ageMs)) && Number(info.ageMs) >= staleMs;
+  const orphaned = Number.isInteger(Number(info.pid)) && !isAlive(Number(info.pid));
+  return expired || orphaned;
+}
+
+function removeAbandonedLock(staleMs) {
   const info = current();
-  if (!info || !info.ageMs || info.ageMs < staleMs) return false;
+  if (!shouldRemoveLock(info, staleMs)) return false;
   try {
     fs.rmSync(LOCK_DIR, { recursive: true, force: true });
     return true;
@@ -70,7 +89,7 @@ function acquire(owner, opts = {}) {
         },
       };
     } catch (e) {
-      if (e && e.code === 'EEXIST' && attempt === 0 && removeStaleLock(staleMs)) continue;
+      if (e && e.code === 'EEXIST' && attempt === 0 && removeAbandonedLock(staleMs)) continue;
       if (e && e.code === 'EEXIST') throw new PipelineBusyError(current());
       throw e;
     }
@@ -87,4 +106,8 @@ async function withLock(owner, fn, opts = {}) {
   }
 }
 
-module.exports = { acquire, withLock, current, PipelineBusyError, LOCK_DIR };
+module.exports = {
+  acquire, withLock, current, processIsAlive, shouldRemoveLock,
+  cleanup: () => removeAbandonedLock(DEFAULT_STALE_MS),
+  PipelineBusyError, LOCK_DIR,
+};

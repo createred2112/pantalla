@@ -49,6 +49,12 @@ test('assets con huella: el HTML referencia app.js?v=<hash> y solo eso se cachea
   expect(client && client.assets).toMatch(/^[0-9a-f]{10}$/);
   const who = await (await page.request.get('/api/whoami')).json();
   expect(who.assets).toBe(client.assets);
+  expect(who.qaMode).toBe(true);
+  // La última defensa del humo: el proceso de pruebas nunca ve el FTP real,
+  // aunque la config estuviera cargada antes de que global-setup la aislase.
+  const settings = await (await page.request.get('/api/settings')).json();
+  expect(settings.ftp.effective.host).toBe('');
+  expect(settings.ftp.effective.user).toBe('');
 });
 
 test('aviso de actualización: si el servidor tiene otra huella, banner y recarga', async () => {

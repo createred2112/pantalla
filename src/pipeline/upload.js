@@ -26,7 +26,7 @@ async function upload({ dryRun, files: plannedFiles, source = 'manual' } = {}) {
   const ftpCfg = ftpConfig();
   const hasCreds = ftpCfg.host && ftpCfg.user;
   if (dryRun || !hasCreds) {
-    const reason = dryRun ? 'dry-run solicitado' : 'faltan credenciales FTP';
+    const reason = dryRun ? 'comprobación sin envío' : 'faltan credenciales FTP';
     log.warn('upload', `Subida simulada (${reason}). Archivos: ${files.join(', ')}`);
     const r = { ok: true, dryRun: true, source, files, reason, remoteDir: ftpCfg.remoteDir };
     status.set('upload', r);

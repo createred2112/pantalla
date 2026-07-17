@@ -60,6 +60,7 @@ test('agenda exprés: guardar hoy y mañana y releerlas', async () => {
   await page.click('#aqToday');
   await page.fill('#aqText', `19:30 Concierto ${MARK} | Teatro Principal\n21:00 Cine al aire libre ${MARK} | Plaza España`);
   await page.click('#aqSave');
+  await expect(page.locator('#aqDlg')).toBeHidden();
   await toastVisible(/agenda|guardad/i);
 
   // MAÑANA
@@ -68,6 +69,7 @@ test('agenda exprés: guardar hoy y mañana y releerlas', async () => {
   await page.click('#aqTomorrow');
   await page.fill('#aqText', `20:00 Teatro ${MARK} | Principal Antzokia`);
   await page.click('#aqSave');
+  await expect(page.locator('#aqDlg')).toBeHidden();
   await toastVisible(/agenda|guardad/i);
 
   // Relectura visible: al reabrir, el texto guardado sigue ahí (hoy).
@@ -176,11 +178,11 @@ test('takeover on: la alerta ocupa la pantalla y el panel lo enseña', async () 
   await page.check('#tkOn');
   await page.selectOption('#tkMinutes', '15');
   await page.click('#bkGo');
-  await expect(page.locator('#toast')).toHaveText(/TAKEOVER activo/i, { timeout: 240000 });
+  await expect(page.locator('#toast')).toHaveText(/Alerta exclusiva activa/i, { timeout: 240000 });
   // Aserción visible: al reabrir el diálogo, el panel enseña el takeover activo.
   await page.click('#btnBreaking');
   await expect(page.locator('#tkState')).toBeVisible({ timeout: 30000 });
-  await expect(page.locator('#tkState')).toContainText(/takeover activo/i);
+  await expect(page.locator('#tkState')).toContainText(/Alerta exclusiva activa/i);
   await page.keyboard.press('Escape');
   const st = await (await page.request.get('/api/takeover')).json();
   expect(st.active).toBeTruthy();

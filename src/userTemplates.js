@@ -1,8 +1,8 @@
 'use strict';
 // PLANTILLAS PROPIAS ("Mis diseños"): cualquier composición del editor visual
 // se puede guardar como plantilla nueva con nombre. Viven en
-// data/user-templates.json con su layout DENTRO (independientes de la versión
-// de diseño v1/v2) y aparecen en la galería como una plantilla más.
+// data/user-templates.json con su composición DENTRO y aparecen en la galería
+// como una plantilla más.
 const fs = require('fs');
 const path = require('path');
 const { paths } = require('./config');

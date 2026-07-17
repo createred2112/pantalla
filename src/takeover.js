@@ -55,9 +55,23 @@ function apply(baseCards) {
   return out;
 }
 
+// Si la emisión está ocupada (candado del pipeline), NO nos rendimos: el
+// takeover debe entrar (o salir) en cuanto el candado se libere. Visto en QA:
+// apagar el takeover justo después de encenderlo perdía la restauración.
+async function withBusyRetry(fn, { attempts = 36, waitMs = 5000 } = {}) {
+  for (let i = 0; ; i++) {
+    try { return await fn(); }
+    catch (e) {
+      if (!e || e.code !== 'PIPELINE_BUSY' || i >= attempts - 1) throw e;
+      log.info('takeover', `La emisión está ocupada; reintento ${i + 1} en ${Math.round(waitMs / 1000)} s`);
+      await new Promise((resolve) => setTimeout(resolve, waitMs));
+    }
+  }
+}
+
 async function publishNow(reason) {
   try {
-    const r = await require('./pipeline/publish').publish({ uploadSource: 'automatic-takeover' });
+    const r = await withBusyRetry(() => require('./pipeline/publish').publish({ uploadSource: 'automatic-takeover' }));
     log.info('takeover', `${reason}: publicación ${r && r.ok ? 'OK' : 'con fallo'}`);
     return r;
   } catch (e) {
@@ -88,9 +102,9 @@ function activate({ title, body, theme, minutes, mode } = {}) {
   });
   const s = { cardId: card.id, title: clean, mode: mode === 'mix' ? 'mix' : 'full', startedAt: Date.now(), until: Date.now() + mins * 60000 };
   fs.writeFileSync(FILE, JSON.stringify(s));
-  log.warn('takeover', `TAKEOVER activado ${s.mode === 'full' ? 'a pantalla completa' : 'intercalado'} durante ${mins} min: ${clean}`);
-  try { require('./util/notify').notify('🚨 Takeover activado', `«${clean}» ocupa la pantalla ${mins} min. Volverá sola a la programación.`, 'takeover'); } catch {}
-  publishNow('Subiendo takeover'); // asíncrono a propósito
+  log.warn('takeover', `Alerta exclusiva activada ${s.mode === 'full' ? 'a pantalla completa' : 'intercalada'} durante ${mins} min: ${clean}`);
+  try { require('./util/notify').notify('🚨 Alerta exclusiva activada', `«${clean}» ocupa la pantalla ${mins} min. Volverá sola a la programación.`, 'takeover'); } catch {}
+  publishNow('Subiendo alerta exclusiva'); // asíncrono a propósito
   return { ok: true, ...state(), card };
 }
 
@@ -101,8 +115,8 @@ function deactivate(reason = 'manual') {
   if (s && s.cardId) {
     try { require('./store').remove(s.cardId); } catch {}
   }
-  log.info('takeover', `Takeover desactivado (${reason}); restaurando programación normal`);
-  try { require('./util/notify').notify('Takeover terminado', 'La pantalla vuelve a la programación normal.', 'takeover'); } catch {}
+  log.info('takeover', `Alerta exclusiva desactivada (${reason}); restaurando programación normal`);
+  try { require('./util/notify').notify('Alerta exclusiva terminada', 'La pantalla vuelve a la programación normal.', 'takeover'); } catch {}
   publishNow('Restaurando programación normal');
   return { ok: true, ...state() };
 }
@@ -118,4 +132,4 @@ function start() {
   if (t.unref) t.unref();
 }
 
-module.exports = { state, apply, activate, deactivate, start };
+module.exports = { state, apply, activate, deactivate, start, withBusyRetry };

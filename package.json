@@ -1,6 +1,6 @@
 {
   "name": "pantalla",
-  "version": "0.150.0",
+  "version": "0.151.0",
   "description": "Motor de cartelería digital para LA PANTALLA (gasteizberri): genera MP4 con texto/foto variables, importa piezas de vídeo, prepara siempre ocho vídeos con nombres fijos y sube por FTP sobreescribiendo. Incluye panel móvil de admin, logs y status.",
   "type": "commonjs",
   "main": "src/server.js",
@@ -15,19 +15,20 @@
     "admin:add": "node src/cli.js admin:add",
     "admin:remove": "node src/cli.js admin:remove",
     "admin:list": "node src/cli.js admin:list",
-    "design:status": "node scripts/design-version.js",
-    "design:v1": "node scripts/design-version.js v1",
-    "design:v2": "node scripts/design-version.js v2",
     "qa:templates": "node scripts/qa-template-matrix.js",
     "qa:templates:visual": "node scripts/qa-template-matrix.js --render",
     "qa:rundown-order": "node scripts/qa-rundown-order.js",
     "backup": "node src/cli.js backup",
     "backup:restore": "node src/cli.js backup:restore",
     "qa:backup": "node scripts/qa-backup.js",
+    "qa:pipeline-lock": "node scripts/qa-pipeline-lock.js",
+    "qa:takeover": "node scripts/qa-takeover-retry.js",
+    "qa:autofit": "node scripts/qa-autofit.js",
+    "qa:ui-copy": "node scripts/qa-ui-copy.js",
     "qa:e2e": "playwright test",
     "qa:visual:baseline": "node scripts/qa-visual-diff.js --baseline",
     "qa:visual:check": "node scripts/qa-visual-diff.js",
-    "test": "npm run qa:rundown-order && npm run qa:backup && npm run qa:templates && npm run qa:e2e && npm run qa:visual:check"
+    "test": "npm run qa:rundown-order && npm run qa:backup && npm run qa:pipeline-lock && npm run qa:takeover && npm run qa:templates && npm run qa:autofit && npm run qa:ui-copy && npm run qa:e2e && npm run qa:visual:check"
   },
   "devDependencies": {
     "@playwright/test": "^1.61.1",

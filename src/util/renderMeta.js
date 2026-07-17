@@ -80,8 +80,8 @@ function renderHash(card) {
   try { tplLayout = require('../templateLayouts').get(card.template, theme.key); } catch {}
   const tplBumpers = templateBumpersFor(card);
   const src = {
-    v: 45, // subir al cambiar el diseño/render de las plantillas en código
-    design: (cfg.design && cfg.design.version) || 'v1', // v1/v2: cada versión cachea lo suyo
+    v: 46, // subir al cambiar el diseño/render de las plantillas en código (46: fix autofit/marquesina)
+    design: 'v2', // v1 retirado (F3); constante para no invalidar los vídeos ya generados con v2
     template: card.template || '',
     theme,
     layout: card.layout || null,

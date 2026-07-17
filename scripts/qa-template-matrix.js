@@ -196,21 +196,12 @@ async function renderMatrix(version = '') {
 }
 
 (async () => {
-  // Audita las DOS versiones de diseño (v1 clásico y v2 gigante) en la misma
-  // pasada. cfg es el objeto vivo: cambiar design.version aquí conmuta en
-  // caliente igual que hace el panel.
-  cfg.design = cfg.design || {};
-  const original = cfg.design.version || 'v1';
-  try {
-    for (const version of ['v1', 'v2']) {
-      cfg.design.version = version;
-      const result = staticAudit();
-      console.log(`OK [diseño ${version}]: ${result.templates} plantillas x ${result.themes} paletas = ${result.combinations} combinaciones`);
-      if (process.argv.includes('--render')) console.log(`Matriz visual [${version}]: ${await renderMatrix(version)}`);
-    }
-  } finally {
-    cfg.design.version = original;
-  }
+  // Diseño v1 retirado (F3): se audita el único diseño vivo, el v2. El
+  // directorio de la matriz conserva el sufijo -v2 para no invalidar las
+  // líneas base visuales ya aprobadas.
+  const result = staticAudit();
+  console.log(`OK [diseño v2]: ${result.templates} plantillas x ${result.themes} paletas = ${result.combinations} combinaciones`);
+  if (process.argv.includes('--render')) console.log(`Matriz visual: ${await renderMatrix('v2')}`);
 })().catch((error) => {
   console.error(error.stack || error.message || error);
   process.exitCode = 1;

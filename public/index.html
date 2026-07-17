@@ -677,7 +677,7 @@
       </div>
 
       <div id="fileFields" style="display:none">
-        <label>Archivo (sube desde el móvil o usa uno del worker)</label>
+        <label>Archivo (sube desde el móvil o usa uno guardado)</label>
         <input type="file" id="edAnyFile" accept="image/*,video/*">
         <select id="edFileLibrary" class="video-pick"></select>
         <input id="edFile" placeholder="data/worker-inbox/archivo.jpg">
@@ -801,14 +801,6 @@
     <img id="setLogoDarkPrev" style="height:40px;margin-top:6px;background:#F2F1ED;border-radius:6px;padding:4px;display:none">
     <label>Tamaño del logo: <span id="setLogoWVal"></span>% de alto</label>
     <input type="range" id="setLogoW" min="5" max="22" step="1">
-
-    <h3 style="margin:16px 0 2px;font-size:14px">Versión del diseño</h3>
-    <label>Diseño de las cartelas</label>
-    <select id="setDesignVersion">
-      <option value="v1">v1 · Clásico</option>
-      <option value="v2">v2 · GIGANTE (letras enormes, para pantallas de poca resolución)</option>
-    </select>
-    <div class="hint">Cambio reversible: cada versión conserva sus diseños guardados y sus vídeos ya generados. Volver a v1 lo deja todo como estaba.</div>
 
     <h3 style="margin:16px 0 2px;font-size:14px">Emisión y avisos</h3>
     <label class="chk" style="margin:6px 0"><input type="checkbox" id="setAutopublish"> Publicación automática al guardar (90s de colchón; solo sube tandas completas y válidas; la anterior queda guardada para volver atrás)</label>
@@ -940,10 +932,10 @@
   <div class="dlg-b">
     <label style="margin-top:0">Pega la URL de la noticia (o escribe el titular directamente)</label>
     <input id="bkInput" placeholder="https://gasteizberri.com/…  o el titular a pelo" autocomplete="off">
-    <div class="hint" style="margin-top:8px">Se crea como alerta en primera posición del bucle, ya renderizada.
+    <div class="hint" style="margin-top:8px">Se crea como alerta en primera posición del bucle, con su MP4 ya preparado.
       La publicación requiere su confirmación.</div>
     <div id="tkBox" style="margin-top:12px;padding:10px;border:1px solid #7a1f1f;border-radius:10px;background:#1a0c14">
-      <label class="chk" style="margin:0 0 8px"><input type="checkbox" id="tkOn"> <b>MODO TAKEOVER</b>: la alerta ocupa la pantalla y se sube YA, sin confirmación. Al acabar el tiempo, la pantalla vuelve sola a la programación normal.</label>
+      <label class="chk" style="margin:0 0 8px"><input type="checkbox" id="tkOn"> <b>ALERTA EN EXCLUSIVA</b>: la alerta ocupa la pantalla y se sube YA, sin confirmación. Al acabar el tiempo, la pantalla vuelve sola a la programación normal.</label>
       <div class="mini2" id="tkOpts" style="display:none">
         <label>Durante<select id="tkMinutes">
           <option value="15">15 minutos</option>
@@ -962,7 +954,7 @@
   </div>
   <div class="dlg-f">
     <button class="ghost" onclick="breakingDlg.close()">Cancelar</button>
-    <button class="ghost" id="tkOff" style="display:none">Terminar takeover ahora</button>
+    <button class="ghost" id="tkOff" style="display:none">Terminar alerta exclusiva ahora</button>
     <button class="primary" id="bkGo">Crear y revisar →</button>
   </div>
 </dialog>
