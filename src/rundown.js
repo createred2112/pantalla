@@ -695,6 +695,7 @@ function bumperForSlot(slot, payload = {}) {
 function toCard(slot, library, order, date, pickMap = {}, dayThemeKey = '', autoPickMap = {}) {
   const s = normalizeSlot(slot);
   const p = slotPayload(s, library, date, { pickIndex: pickMap[s.id], autoPick: autoPickMap[s.id] });
+  const cleanPhoto = s.source === 'library' && s.libraryKey === 'fotosGasteizberri' && Boolean(p.photo);
   const semanticBumperKey = s.bumperKey || defaultBumperKeyForSlot(s);
   const bumper = bumperForSlot(s, p);
   const wantsVideo = s.video === true || Boolean(s.videoIntro || s.videoOutro || bumper.intro || bumper.outro);
@@ -728,9 +729,12 @@ function toCard(slot, library, order, date, pickMap = {}, dayThemeKey = '', auto
     // Auto significa el color de la pieza/plantilla. El color del día solo se
     // aplica cuando el usuario lo ha elegido expresamente.
     theme: themeOverride ? s.theme : (p.theme || dayThemeKey || null),
-    title: p.title || s.title || s.label,
-    subtitle: p.subtitle || s.subtitle || '',
-    body: p.body || s.body || '',
+    // Una foto puede emitirse limpia. Antes el fallback a la etiqueta del
+    // bloque obligaba a escribir un punto para impedir que apareciera
+    // "Foto GasteizBerri" encima de la imagen.
+    title: cleanPhoto ? String(p.title || '') : (p.title || s.title || s.label),
+    subtitle: cleanPhoto ? String(p.subtitle || '') : (p.subtitle || s.subtitle || ''),
+    body: cleanPhoto ? String(p.body || '') : (p.body || s.body || ''),
     date: p.date || s.date || '',
     data: p.data || null,
     photo: s.photo || p.photo || null,
@@ -1083,6 +1087,25 @@ function report(rundown, library, date) {
   });
 }
 
+function composeLineupCards(generated, currentCards) {
+  const lineup = Array.isArray(generated) ? generated : [];
+  let archived = 0;
+  const saved = (Array.isArray(currentCards) ? currentCards : [])
+    .filter((card) => card.source !== 'rundown')
+    .map((card, i) => {
+      if (card.enabled !== false) archived++;
+      return {
+        ...card,
+        // La escaleta es la única tanda activa. Las cartelas creadas a mano no
+        // se borran: quedan guardadas para reutilizarlas, pero no se suman por
+        // detrás y ya no pueden convertir una tanda de 8 en una de 9 o 14.
+        enabled: false,
+        order: lineup.length + i + 1,
+      };
+    });
+  return { cards: [...lineup, ...saved], archived };
+}
+
 function materialize(options = {}) {
   const { rundown, library, activeDate, report: rep } = read(options);
   const skip = skipSetFor(rundown, activeDate);
@@ -1096,11 +1119,9 @@ function materialize(options = {}) {
     : [];
   const theme = dayTheme(activeDate, rundown);
   const generated = active.map((slot, i) => toCard(slot, library, i + 1, activeDate, pick, theme, autoPick));
-  const manual = store.list()
-    .filter((card) => card.source !== 'rundown')
-    .map((card, i) => ({ ...card, order: generated.length + i + 1 }));
-  store.save({ cards: [...generated, ...manual] });
-  return { ok: true, count: generated.length, requiredCount: limit || undefined, omitted, cards: generated, report: rep };
+  const composed = composeLineupCards(generated, store.list());
+  store.save({ cards: composed.cards });
+  return { ok: true, count: generated.length, requiredCount: limit || undefined, omitted, archived: composed.archived, cards: generated, report: rep };
 }
 
 function pick(date, slotId, itemIndex, options = {}) {
@@ -1131,4 +1152,4 @@ function pick(date, slotId, itemIndex, options = {}) {
   return save(data, { date: day });
 }
 
-module.exports = { read, save, saveLibrary, reset, materialize, pick, reorderSlots, reorderFromCards, isEmptyManualNewsSlot, rememberCardEdit, rememberCardDelete, convertCard, quickAgenda, quickAgendaSave, dayTheme, RUNDOWN_FILE, LIBRARY_FILE };
+module.exports = { read, save, saveLibrary, reset, materialize, composeLineupCards, toCard, pick, reorderSlots, reorderFromCards, isEmptyManualNewsSlot, rememberCardEdit, rememberCardDelete, convertCard, quickAgenda, quickAgendaSave, dayTheme, RUNDOWN_FILE, LIBRARY_FILE };

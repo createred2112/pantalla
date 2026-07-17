@@ -79,6 +79,48 @@ test('agenda exprés: guardar hoy y mañana y releerlas', async () => {
   await page.locator('#aqDlg .ghost').first().click(); // cerrar
 });
 
+// ---------- 3. PRÓXIMA TANDA: PARTE DE LA ACTUAL ----------
+test('próxima tanda: abre con 8 posiciones y permite cambiar solo una', async () => {
+  await page.goto('/');
+  await page.click('#btnRundown');
+  await expect(page.locator('#wizardDlg')).toBeVisible();
+  await expect(page.locator('#wzTitle')).toContainText('Próxima tanda');
+  await expect(page.locator('#wzProgress')).toHaveText('8/8');
+  await expect(page.locator('[data-wz-item-type]')).toHaveCount(8);
+  await expect(page.locator('#wzBody')).toContainText('Partimos de la tanda actual');
+
+  await page.locator('[data-wz-item-type]').first().selectOption('tiempo');
+  await expect(page.locator('[data-wz-item-type]')).toHaveCount(8);
+  await expect(page.locator('#wzProgress')).toHaveText('8/8');
+
+  await page.click('#wzNext');
+  await expect(page.locator('#wzBody')).toContainText('7 sin cambios');
+  await expect(page.locator('#wzBody')).not.toContainText('Título | firma | texto');
+  expect(await page.locator('[data-wz-rotation]').count()).toBeGreaterThan(0);
+  await page.click('#wzBack');
+  await expect(page.locator('[data-wz-item-type]')).toHaveCount(8);
+  await expect(page.locator('[data-wz-item-type]').first()).toHaveValue('tiempo');
+
+  // Cerrar no pierde el trabajo: el borrador vuelve al abrir.
+  await page.click('#wzClose');
+  await page.click('#btnRundown');
+  await expect(page.locator('#wzBody')).toContainText('Borrador recuperado');
+  await expect(page.locator('[data-wz-item-type]').first()).toHaveValue('tiempo');
+  await page.click('[data-wz-discard]');
+  await expect(page.locator('[data-wz-item-type]').first()).toHaveValue('__keep__');
+  await page.click('#wzClose');
+});
+
+test('estado: enseña origen, última comprobación y dato de las fuentes automáticas', async () => {
+  await page.goto('/');
+  await page.click('#btnStatus');
+  await expect(page.locator('#statusDlg')).toBeVisible();
+  await expect(page.locator('#workerHealth')).toContainText('Open-Meteo');
+  await expect(page.locator('#workerHealth')).toContainText(/Última comprobación|Último intento/);
+  await expect(page.locator('#btnWorkerHealthRefresh')).toBeVisible();
+  await page.keyboard.press('Escape');
+});
+
 // ---------- 3. CREAR Y EDITAR UNA CARTELA ----------
 test('editar cartela: crear una manual, cambiarle el titular y verlo en el panel', async () => {
   await page.goto('/');
@@ -166,6 +208,10 @@ test('publicar en seco: la tanda completa se prepara y se anuncia 8/8', async ()
   const names = (tanda.files || []).map((f) => f.file).sort();
   expect(names).toHaveLength(8);
   for (let i = 1; i <= 8; i++) expect(names).toContain(`berri-${i}.mp4`);
+  // Las cartelas manuales creadas en pruebas anteriores se conservan, pero ya
+  // no se suman a la tanda ni provocan el antiguo "sobran cartelas".
+  await expect(page.locator('#listSummary')).toContainText('8 en la tanda');
+  await expect(page.locator('.saved-cards > summary')).toContainText('No salen en pantalla');
 });
 
 // ---------- 7. TAKEOVER: encender ----------

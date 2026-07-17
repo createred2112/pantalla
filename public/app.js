@@ -576,8 +576,8 @@ function applyUserMode(w) {
     const rundownHelp = $('#btnRundown small');
     const breakingTitle = $('#btnBreaking b');
     const breakingHelp = $('#btnBreaking small');
-    if (rundownTitle) rundownTitle.textContent = 'Crear emisión';
-    if (rundownHelp) rundownHelp.textContent = 'Elegir los 8 huecos';
+    if (rundownTitle) rundownTitle.textContent = 'Preparar próxima tanda';
+    if (rundownHelp) rundownHelp.textContent = 'Cambiar solo lo necesario';
     if (breakingTitle) breakingTitle.textContent = 'Aviso urgente';
     if (breakingHelp) breakingHelp.textContent = 'Publicar una alerta';
   }
@@ -770,16 +770,17 @@ function render() {
     if (sum) sum.textContent = '';
     return;
   }
+  const activeCards = cards.filter((card) => card.enabled !== false);
+  const savedCards = cards.filter((card) => card.enabled === false);
   if (sum) {
-    const act = cards.filter((c) => c.enabled !== false);
-    const secs = act.reduce((n, c) => n + cardDuration(c), 0);
-    const pending = cards.filter((c) => c.type === 'generated' && !c.rendered).length;
-    sum.textContent = `${act.length} activa(s) · vuelta de ${durationLabel(secs)}${pending ? ` · ${pending} por generar` : ''}`;
+    const secs = activeCards.reduce((n, c) => n + cardDuration(c), 0);
+    const pending = activeCards.filter((c) => c.type === 'generated' && !c.rendered).length;
+    sum.textContent = `${activeCards.length} en la tanda · vuelta de ${durationLabel(secs)}${pending ? ` · ${pending} por generar` : ''}`;
   }
   el.innerHTML = '';
   const previewQueue = [];
   const previewToken = ++rotationPreviewToken;
-  cards.forEach((c, i) => {
+  const appendCard = (c, i, target, position, groupLength, isSaved) => {
     const rendered = c.rendered || null;
     const staleRendered = c.staleRendered || null;
     // Miniatura: solo render fresco. Enseñar el viejo "con aviso" confunde:
@@ -816,15 +817,15 @@ function render() {
         ${c.enabled === false ? '<span class="tag off">oculta</span>' : ''}
         <span class="tag">${durationLabel(cardDuration(c))} final</span>
         <span class="spacer"></span>
-        <button class="iconbtn" data-up="${i}" ${i===0?'disabled':''} title="Subir">▲</button>
-        <button class="iconbtn" data-down="${i}" ${i===cards.length-1?'disabled':''} title="Bajar">▼</button>
+        ${isSaved ? '' : `<button class="iconbtn" data-up="${i}" ${position === 0 ? 'disabled' : ''} title="Subir">▲</button>
+        <button class="iconbtn" data-down="${i}" ${position === groupLength - 1 ? 'disabled' : ''} title="Bajar">▼</button>`}
         <button class="iconbtn" data-edit="${c.id}" title="${c.rundownLibraryKey ? 'Editar texto, plantilla y color' : 'Editar contenido'}">✎</button>
         ${c.type === 'generated' ? `<button class="iconbtn ${!rendered ? 'attn' : ''}" data-render="${c.id}" title="${rendered ? 'Regenerar archivo (no suele hacer falta)' : 'Generar el archivo'}">⟳</button>` : ''}
         ${rendered && rendered.type === 'video' ? `<button class="iconbtn" data-view-video="${c.id}" title="Ver vídeo generado">▶</button>` : ''}
         ${c.type === 'generated' && c.template !== 'gasolina' ? `<button class="iconbtn" data-design="${c.id}" title="Editor de diseño">🎨</button>` : ''}
         <button class="iconbtn danger" data-del="${c.id}" title="Eliminar">🗑</button>
       </div>`;
-    const plan = rotationPlanFor(c);
+    const plan = isSaved ? null : rotationPlanFor(c);
     const row = document.createElement('div');
     row.className = 'rotation-row' + (plan ? '' : ' no-branch');
     row.appendChild(div);
@@ -833,8 +834,18 @@ function render() {
       row.insertAdjacentHTML('beforeend', rotationSideHtml(plan, previewId));
       if (plan.kind === 'future') previewQueue.push({ id: previewId, card: plan.card });
     }
-    el.appendChild(row);
-  });
+    target.appendChild(row);
+  };
+  if (!activeCards.length) el.insertAdjacentHTML('beforeend', '<div class="empty">No hay ninguna tanda activa preparada.</div>');
+  activeCards.forEach((card, position) => appendCard(card, cards.indexOf(card), el, position, activeCards.length, false));
+  if (savedCards.length) {
+    const saved = document.createElement('details');
+    saved.className = 'saved-cards';
+    saved.innerHTML = `<summary>Cartelas guardadas (${savedCards.length}) <small>No salen en pantalla</small></summary><div class="saved-cards-list"></div>`;
+    el.appendChild(saved);
+    const target = saved.querySelector('.saved-cards-list');
+    savedCards.forEach((card, position) => appendCard(card, cards.indexOf(card), target, position, savedCards.length, true));
+  }
   loadRotationPreviews(previewQueue, previewToken);
 }
 
@@ -2276,7 +2287,7 @@ const PLAN_TYPES = [
   { id: 'noticia', label: 'Noticia propia · manual', slot: { source: 'fixed', template: 'noticia', label: 'Noticia propia', title: '', subtitle: 'GasteizBerri', body: '' } },
   { id: 'promo', label: 'Vídeo promo MP4 · archivo listo', slot: { source: 'file', type: 'video', file: '', label: 'Vídeo promo', title: 'Vídeo promo', subtitle: 'MP4 listo', duration: 8 } },
   { id: 'piscinas', label: 'Aforo piscinas · manual', slot: { source: 'worker', workerKey: 'poolCapacity', template: 'dato', label: 'Aforo piscinas', subtitle: 'Personas en las piscinas' } },
-  { id: 'ultima', label: 'Última hora · reservado (desactivado)', enabled: false, slot: { source: 'fixed', template: 'alerta', label: 'Última hora', subtitle: 'ÚLTIMA HORA' } },
+  { id: 'ultima', label: 'Última hora · reservado', enabled: false, slot: { source: 'fixed', template: 'alerta', label: 'Última hora', subtitle: 'ÚLTIMA HORA' } },
 ];
 
 function wizardCountState() {
@@ -2286,18 +2297,41 @@ function wizardCountState() {
   return { required, selected, diff, ok: diff === 0 };
 }
 
+function planTypeForExistingSlot(slot) {
+  const s = slot || {};
+  if (s.source === 'worker' && s.workerKey) return PLAN_TYPES.find((type) => type.slot.workerKey === s.workerKey) || null;
+  if (s.source === 'library' && s.libraryKey) return PLAN_TYPES.find((type) => type.slot.libraryKey === s.libraryKey) || null;
+  if (s.source === 'file') return PLAN_TYPES.find((type) => type.id === 'promo') || null;
+  if (s.template === 'alerta') return PLAN_TYPES.find((type) => type.id === 'ultima') || null;
+  if (s.source === 'fixed' && s.template === 'noticia') return PLAN_TYPES.find((type) => type.id === 'noticia') || null;
+  return null;
+}
+
+function wizardItemFromSlot(slot, index) {
+  const base = planTypeForExistingSlot(slot);
+  return {
+    typeId: base ? base.id : 'saved',
+    uid: `wz_saved_${index}_${String((slot && slot.id) || 'slot').replace(/[^a-z0-9_-]/gi, '_')}`,
+    slotSnapshot: { ...(slot || {}) },
+  };
+}
+
 function wizardChosenTypes() {
   const seen = {};
-  return ((WZ && WZ.items) || []).map((rec) => {
+  return ((WZ && WZ.items) || []).map((rec, position) => {
     const base = PLAN_TYPES.find((type) => type.id === rec.typeId);
-    if (!base) return null;
-    seen[base.id] = (seen[base.id] || 0) + 1;
+    const snapshot = rec.slotSnapshot && typeof rec.slotSnapshot === 'object' ? rec.slotSnapshot : null;
+    if (!base && !snapshot) return null;
+    const typeId = base ? base.id : 'saved';
+    seen[typeId] = (seen[typeId] || 0) + 1;
     return {
-      ...base,
+      ...(base || { label: `${snapshot.label || 'Cartela actual'} · guardada`, enabled: snapshot.enabled !== false }),
       id: rec.uid,
-      typeId: base.id,
-      instanceNumber: seen[base.id],
-      slot: { ...base.slot },
+      position: position + 1,
+      typeId,
+      instanceNumber: seen[typeId],
+      preserved: Boolean(snapshot),
+      slot: { ...((base && base.slot) || {}), ...(snapshot || {}) },
     };
   }).filter(Boolean);
 }
@@ -2308,12 +2342,20 @@ function hasWizardType(typeId) {
 
 function wizardCountHtml() {
   const c = wizardCountState();
-  const msg = c.ok
-    ? `Perfecto: ${c.required}/${c.required} huecos de emisión.`
-    : (c.diff < 0 ? `Faltan ${Math.abs(c.diff)} hueco(s) para llegar a ${c.required}.` : `Sobran ${c.diff} hueco(s): la pantalla solo debe recibir ${c.required}.`);
+  if (c.ok) return '';
+  const msg = c.diff < 0
+    ? `Faltan ${Math.abs(c.diff)} para llegar a ${c.required}.`
+    : `Sobran ${c.diff}; deja ${c.required}.`;
   return `<div class="status wz-count-sticky" style="border-color:${c.ok ? 'rgba(43,182,115,.55)' : 'rgba(232,172,22,.65)'};color:${c.ok ? '#bff0d5' : '#ffd98a'}">
-    <b>${c.selected}/${c.required} cartelas seleccionadas</b><br>${msg}
+    <b>${c.selected}/${c.required}</b> · ${msg}
   </div>`;
+}
+
+function wizardPositionOptions(type) {
+  const keep = type.preserved
+    ? `<option value="__keep__" selected>Sin cambios · ${esc(type.slot.label || type.label)}</option>`
+    : '';
+  return keep + PLAN_TYPES.map((candidate) => `<option value="${candidate.id}" ${!type.preserved && candidate.id === type.typeId ? 'selected' : ''}>${esc(candidate.label)}</option>`).join('');
 }
 
 function rdSetDirty(v) {
@@ -3419,11 +3461,166 @@ function confirmDiscard() {
 const wizardDlg = $('#wizardDlg');
 let WZ = null;
 
+function currentWizardSlots(data) {
+  const slots = (((data || {}).rundown || {}).slots || []);
+  const byId = new Map(slots.map((slot) => [String(slot.id), slot]));
+  const report = Array.isArray(data && data.report) ? data.report : [];
+  return report
+    .filter((row) => row.inEmission)
+    .sort((a, b) => Number(a.emissionOrder || a.order || 0) - Number(b.emissionOrder || b.order || 0))
+    .map((row) => byId.get(String(row.id)))
+    .filter(Boolean)
+    .slice(0, requiredVideoCount());
+}
+
+function wizardSlotFromManualCard(card) {
+  const file = card && card.type !== 'generated';
+  return {
+    id: `saved_${String((card && card.id) || Date.now()).replace(/[^a-z0-9_-]/gi, '_')}`,
+    label: String((card && (card.title || card.subtitle)) || 'Cartela guardada'),
+    enabled: true,
+    source: file ? 'file' : 'fixed',
+    libraryKey: '',
+    workerKey: '',
+    template: (card && card.template) || '',
+    theme: (card && card.theme) || '',
+    title: (card && card.title) || '',
+    subtitle: (card && card.subtitle) || '',
+    body: (card && card.body) || '',
+    date: (card && card.date) || '',
+    type: file ? card.type : 'generated',
+    file: (card && card.file) || '',
+    photo: (card && card.photo) || '',
+    layout: (card && card.layout) || null,
+    videoIntro: (card && card.videoIntro) || '',
+    videoOutro: (card && card.videoOutro) || '',
+    duration: Number(card && card.duration) || 8,
+    video: Boolean(card && card.video),
+  };
+}
+
+function initialWizardManual(items) {
+  const out = {};
+  for (const item of items || []) {
+    const slot = item.slotSnapshot || {};
+    out[item.uid] = {
+      title: slot.title || '',
+      subtitle: slot.subtitle || '',
+      body: slot.body || '',
+      file: slot.file || '',
+    };
+  }
+  return out;
+}
+
+function initialWizardPicks(items, data, date) {
+  const out = {};
+  const day = ((((data || {}).rundown || {}).days || {})[date] || {});
+  const fixed = day.pick && typeof day.pick === 'object' ? day.pick : {};
+  const lib = (data && data.library) || {};
+  for (const item of items || []) {
+    const slot = item.slotSnapshot || {};
+    if (slot.source !== 'library' || !Object.prototype.hasOwnProperty.call(fixed, slot.id)) continue;
+    const active = clientLibraryItems(lib, slot.libraryKey, date);
+    const chosen = active[Number(fixed[slot.id])];
+    const all = Array.isArray(lib[slot.libraryKey]) ? lib[slot.libraryKey] : [];
+    const fullIndex = chosen ? all.indexOf(chosen) : -1;
+    if (fullIndex >= 0) out[item.uid] = fullIndex;
+  }
+  return out;
+}
+
+function initialWizardRotations(items) {
+  const out = {};
+  for (const item of items || []) {
+    const slot = item.slotSnapshot || {};
+    if (slot.source === 'library' && slot.libraryKey !== 'agendaEventos') {
+      out[item.uid] = slot.rotation === 'hora' ? 'hora' : 'dia';
+    }
+  }
+  return out;
+}
+
+const WIZARD_DRAFT_KEY = 'pantalla-next-lineup-draft-v1';
+let WZ_DRAFT_TIMER = null;
+
+function clearWizardDraft() {
+  clearTimeout(WZ_DRAFT_TIMER);
+  WZ_DRAFT_TIMER = null;
+  try { localStorage.removeItem(WIZARD_DRAFT_KEY); } catch {}
+}
+
+function markWizardDirty() {
+  if (!WZ) return;
+  WZ._dirty = true;
+  clearTimeout(WZ_DRAFT_TIMER);
+  WZ_DRAFT_TIMER = setTimeout(saveWizardDraft, 250);
+}
+
+function saveWizardDraft() {
+  if (!WZ || !WZ._dirty) return;
+  try {
+    localStorage.setItem(WIZARD_DRAFT_KEY, JSON.stringify({
+      savedAt: Date.now(),
+      baseUpdatedAt: WZ._baseUpdatedAt || null,
+      wz: WZ,
+      library: (RUNDOWN && RUNDOWN.library) || {},
+    }));
+  } catch {}
+}
+
+function loadWizardDraft(data) {
+  try {
+    const saved = JSON.parse(localStorage.getItem(WIZARD_DRAFT_KEY) || 'null');
+    const currentStamp = (((data || {}).rundown || {}).updatedAt || null);
+    if (!saved || !saved.wz || Date.now() - Number(saved.savedAt || 0) > 7 * 86400000 || saved.baseUpdatedAt !== currentStamp) {
+      clearWizardDraft();
+      return null;
+    }
+    return saved;
+  } catch {
+    clearWizardDraft();
+    return null;
+  }
+}
+
 async function openWizard() {
   const date = localDatePart();
   RUNDOWN = await api('/rundown?date=' + encodeURIComponent(date)); // trae almacén, workers y claves
   const rec = (((RUNDOWN.rundown || {}).days || {})[date] || {});
-  WZ = { step: 1, date, theme: rec.theme || '', days: 3, items: [], manual: {}, adds: {}, picks: {}, error: '', agenda: initialAgendaMoments() };
+  const currentSlots = currentWizardSlots(RUNDOWN);
+  const missing = Math.max(0, requiredVideoCount() - currentSlots.length);
+  if (missing) {
+    currentSlots.push(...cards
+      .filter((card) => card.enabled !== false && card.source !== 'rundown')
+      .slice(0, missing)
+      .map(wizardSlotFromManualCard));
+  }
+  const items = currentSlots.map(wizardItemFromSlot);
+  const restored = loadWizardDraft(RUNDOWN);
+  if (restored) {
+    WZ = { ...restored.wz, _restored: true, _dirty: true };
+    if (restored.library && typeof restored.library === 'object') RUNDOWN.library = restored.library;
+    renderWizard();
+    wizardDlg.showModal();
+    return;
+  }
+  WZ = {
+    step: 1,
+    date,
+    theme: rec.theme || '',
+    days: 3,
+    items,
+    manual: initialWizardManual(items),
+    adds: {},
+    picks: initialWizardPicks(items, RUNDOWN, date),
+    rotations: initialWizardRotations(items),
+    error: '',
+    agenda: initialAgendaMoments(),
+    _baseUpdatedAt: ((RUNDOWN.rundown || {}).updatedAt || null),
+    _dirty: false,
+    _restored: false,
+  };
   renderWizard();
   wizardDlg.showModal();
 }
@@ -3559,12 +3756,7 @@ function libraryMetaForKey(key) {
 function wizardChosenLibraryIndex(t, items) {
   if (!WZ.picks) WZ.picks = {};
   if (Object.prototype.hasOwnProperty.call(WZ.picks, t.id)) return WZ.picks[t.id];
-  const activeDate = (RUNDOWN && RUNDOWN.activeDate) || localDatePart();
-  const active = clientLibraryItems(RUNDOWN.library || {}, t.slot.libraryKey, activeDate);
-  const auto = clientPickDaily(active, t.slot.label || t.id, activeDate);
-  const idx = auto ? items.indexOf(auto) : items.findIndex((it) => it && it.enabled !== false);
-  WZ.picks[t.id] = idx >= 0 ? idx : '';
-  return WZ.picks[t.id];
+  return '';
 }
 
 function wizardLibraryPlaceholder(key) {
@@ -3572,6 +3764,37 @@ function wizardLibraryPlaceholder(key) {
   if (key === 'consejosMeteorologicos') return 'Si sales, lleva la cabeza cubierta y busca la sombra | Consejo | Evita las horas centrales del día';
   if (key === 'datosCuriosos') return 'El casco medieval tiene forma de almendra | Dato curioso |';
   return 'Título | firma | texto';
+}
+
+function wizardRotationValue(t) {
+  if (!WZ.rotations) WZ.rotations = {};
+  if (WZ.rotations[t.id]) return WZ.rotations[t.id];
+  return t.slot.rotation === 'hora' ? 'hora' : 'dia';
+}
+
+function wizardRotationHtml(t) {
+  const value = wizardRotationValue(t);
+  return `<label>Rotación
+    <select data-wz-rotation="${esc(t.id)}">
+      <option value="dia" ${value === 'dia' ? 'selected' : ''}>Cada día</option>
+      <option value="hora" ${value === 'hora' ? 'selected' : ''}>Cada hora</option>
+    </select>
+  </label>`;
+}
+
+function wizardLibraryFieldLabels(key) {
+  if (key === 'fotosGasteizberri') return {
+    title: 'Titular sobre la foto (opcional)',
+    subtitle: 'Firma o etiqueta (opcional)',
+    body: 'Texto de apoyo (opcional)',
+    hint: 'Si dejas los tres textos vacíos, la fotografía se muestra limpia y sin nada encima.',
+  };
+  return {
+    title: 'Titular principal · el texto más grande',
+    subtitle: 'Firma o etiqueta · texto pequeño',
+    body: 'Texto de apoyo · párrafo secundario',
+    hint: 'Son tres campos separados: no tienes que escribir barras ni recordar ningún formato.',
+  };
 }
 
 function slotForPlanType(t) {
@@ -3583,53 +3806,61 @@ function slotForPlanType(t) {
 function wizardBumperLine(t) {
   const b = bumperForSlot(slotForPlanType(t));
   if (!b.intro && !b.outro) return '';
-  return `<div class="hint" style="margin-top:4px">Cortinilla automática: ${esc(bumperSummary(b))}</div>`;
+  return `<div class="hint" style="margin-top:4px">Cortinilla: ${esc(bumperSummary(b))}</div>`;
 }
 
-function wizardLibraryHtml(t) {
+function wizardLibraryHtml(t, options = {}) {
   const key = t.slot.libraryKey;
   const meta = libraryMetaForKey(key);
   const items = (RUNDOWN.library && Array.isArray(RUNDOWN.library[key])) ? RUNDOWN.library[key] : [];
+  const rotation = wizardRotationHtml(t);
+  if (options.compact) {
+    return `${rotation}<div class="hint wz-piece-count">${items.length} piezas</div>`;
+  }
   const pick = wizardChosenLibraryIndex(t, items);
   const selected = pick !== '' && Number.isInteger(Number(pick)) && items[Number(pick)] ? Number(pick) : -1;
-  const preview = items.slice(0, 6).map((p, i) => `· ${i === selected ? '<b>' : ''}${esc(p.title || p.body || '(sin título)')}${i === selected ? '</b>' : ''} <span class="hint">${esc(scheduleSummary(p))}</span>`).join('<br>');
   const item = selected >= 0 ? items[selected] : null;
+  const labels = wizardLibraryFieldLabels(key);
   const edit = item ? `<div class="library-item wz-lib-edit">
-      <div class="mini">
-        <label>Título<input data-wz-lib-field="${esc(key)}:${selected}:title" value="${esc(item.title || '')}"></label>
-        <label>Cabecera/firma<input data-wz-lib-field="${esc(key)}:${selected}:subtitle" value="${esc(item.subtitle || '')}"></label>
-      </div>
-      <label>Texto<textarea data-wz-lib-field="${esc(key)}:${selected}:body">${esc(item.body || '')}</textarea></label>
-      <div class="mini">
-        <label>Plantilla<select data-wz-lib-field="${esc(key)}:${selected}:template">
-          ${TEMPLATES.map((tpl) => `<option value="${esc(tpl.id)}" ${tpl.id === (item.template || meta.template) ? 'selected' : ''}>${esc(tpl.label)}</option>`).join('')}
-        </select></label>
-        <label>Color<select data-wz-lib-field="${esc(key)}:${selected}:theme">
-          <option value="" ${!(item.theme || meta.theme) ? 'selected' : ''}>Auto</option>
-          ${Object.keys(PALETTE).map((name) => `<option value="${esc(name)}" ${name === (item.theme || meta.theme) ? 'selected' : ''}>${esc(name)}</option>`).join('')}
-        </select></label>
-      </div>
-      <div class="slot-tools">
-        <button type="button" class="ghost" data-wz-lib-quick="${esc(key)}:${selected}:now">Sale desde ahora</button>
-        <button type="button" class="ghost" data-wz-lib-quick="${esc(key)}:${selected}:midnight">Hasta las 23:59</button>
-        <button type="button" class="ghost" data-wz-lib-quick="${esc(key)}:${selected}:tomorrow">Mañana todo el día</button>
-      </div>
-      <div class="mini">
-        <label>Empieza<input type="datetime-local" data-wz-lib-field="${esc(key)}:${selected}:startAt" value="${esc(item.startAt || '')}"></label>
-        <label>Termina<input type="datetime-local" data-wz-lib-field="${esc(key)}:${selected}:endAt" value="${esc(item.endAt || '')}"></label>
-      </div>
-      <label class="chk"><input type="checkbox" data-wz-lib-field="${esc(key)}:${selected}:enabled" ${item.enabled !== false ? 'checked' : ''}> Activa en la biblioteca</label>
-    </div>` : '<div class="hint">Elige una pieza existente para editarla aquí, o añade una nueva abajo.</div>';
-  return `<div class="status"><b>${items.length}</b> pieza(s) en el carrusel${items.length ? ':<br>' + preview + (items.length > 6 ? '<br>…' : '') : ''}</div>
-    <label>Qué pieza quieres usar ahora
+      <div class="hint wz-field-help">${esc(labels.hint)}</div>
+      <label>${esc(labels.title)}<input data-wz-lib-field="${esc(key)}:${selected}:title" value="${esc(item.title || '')}"></label>
+      <label>${esc(labels.subtitle)}<input data-wz-lib-field="${esc(key)}:${selected}:subtitle" value="${esc(item.subtitle || '')}"></label>
+      <label>${esc(labels.body)}<textarea data-wz-lib-field="${esc(key)}:${selected}:body">${esc(item.body || '')}</textarea></label>
+      <details class="adv wz-piece-options">
+        <summary>Diseño y fechas de esta pieza (opcional)</summary>
+        <div class="mini">
+          <label>Plantilla<select data-wz-lib-field="${esc(key)}:${selected}:template">
+            ${TEMPLATES.map((tpl) => `<option value="${esc(tpl.id)}" ${tpl.id === (item.template || meta.template) ? 'selected' : ''}>${esc(tpl.label)}</option>`).join('')}
+          </select></label>
+          <label>Color<select data-wz-lib-field="${esc(key)}:${selected}:theme">
+            <option value="" ${!(item.theme || meta.theme) ? 'selected' : ''}>Auto</option>
+            ${Object.keys(PALETTE).map((name) => `<option value="${esc(name)}" ${name === (item.theme || meta.theme) ? 'selected' : ''}>${esc(name)}</option>`).join('')}
+          </select></label>
+        </div>
+        <div class="slot-tools">
+          <button type="button" class="ghost" data-wz-lib-quick="${esc(key)}:${selected}:now">Sale desde ahora</button>
+          <button type="button" class="ghost" data-wz-lib-quick="${esc(key)}:${selected}:midnight">Hasta las 23:59</button>
+          <button type="button" class="ghost" data-wz-lib-quick="${esc(key)}:${selected}:tomorrow">Mañana todo el día</button>
+        </div>
+        <div class="mini">
+          <label>Empieza<input type="datetime-local" data-wz-lib-field="${esc(key)}:${selected}:startAt" value="${esc(item.startAt || '')}"></label>
+          <label>Termina<input type="datetime-local" data-wz-lib-field="${esc(key)}:${selected}:endAt" value="${esc(item.endAt || '')}"></label>
+        </div>
+        <label class="chk"><input type="checkbox" data-wz-lib-field="${esc(key)}:${selected}:enabled" ${item.enabled !== false ? 'checked' : ''}> Activa en la biblioteca</label>
+      </details>
+    </div>` : '';
+  const addButton = key === 'fotosGasteizberri'
+    ? '<div class="hint" style="margin-top:8px">Añade fotos desde Bancos.</div>'
+    : `<button type="button" class="ghost wz-add-piece" data-wz-library-add="${esc(t.id)}">＋ Añadir pieza</button>`;
+  return `${rotation}<div class="hint wz-piece-count">${items.length} piezas</div>
+    <label>Pieza inicial
       <select data-wz-pick="${esc(t.id)}">
-        <option value="">Automático: que rote el carrusel</option>
+        <option value="">Rotación automática</option>
         ${items.map((p, i) => `<option value="${i}" ${i === selected ? 'selected' : ''}>${esc(p.title || p.body || '(sin título)')} · ${esc(scheduleSummary(p))}</option>`).join('')}
       </select>
     </label>
     ${edit}
-    <label>Añadir nuevas piezas (una por línea: Título | firma | texto)</label>
-    <textarea data-wz-add="${esc(key)}" placeholder="${esc(wizardLibraryPlaceholder(key))}">${esc(WZ.adds[key] || '')}</textarea>`;
+    ${addButton}`;
 }
 
 function orderedAgendaMoments(items) {
@@ -3667,10 +3898,11 @@ function retargetAgendaMoments(items, fromDate, toDate) {
 function renderWizard() {
   const total = 3;
   const count = wizardCountState();
-  $('#wzTitle').textContent = `Escaleta · paso ${WZ.step} de ${total}`;
+  $('#wzTitle').textContent = `Próxima tanda · paso ${WZ.step} de ${total}`;
   $('#wzProgress').textContent = `${count.selected}/${count.required}`;
   $('#wzProgress').className = `tag ${count.ok ? 'ok' : 'warn'}`;
   $('#wzBack').hidden = WZ.step === 1;
+  $('#wzBack').textContent = WZ.step === 2 ? '← Cambiar posiciones' : '← Revisar contenido';
   $('#wzNext').textContent = WZ.step === 3 ? '✅ Guardar y ver vista previa' : 'Siguiente →';
   const chosen = wizardChosenTypes();
 
@@ -3679,77 +3911,93 @@ function renderWizard() {
     const tomorrow = addDays(today, 1);
     $('#wzBody').innerHTML = `
       ${wizardErrorHtml()}
-      <p class="hint" style="margin-top:0">La escaleta empieza vacía. Añade exactamente los huecos que quieras, repite cualquier tipo y ordénalos antes de continuar.</p>
+      ${WZ._restored ? '<div class="status wz-draft-ok"><b>Borrador recuperado.</b><button type="button" class="ghost" data-wz-discard>Descartar borrador</button></div>' : ''}
+      <p class="hint" style="margin-top:0"><b>Partimos de la tanda actual.</b> Cambia solo lo necesario.</p>
       ${wizardCountHtml()}
-      <label>Día de emisión</label>
-      <input id="wzDate" type="date" value="${esc(WZ.date || today)}">
-      <div class="slot-tools" style="margin:8px 0 10px">
-        <button type="button" class="ghost" data-wz-date="${today}">Hoy</button>
-        <button type="button" class="ghost" data-wz-date="${tomorrow}">Mañana</button>
-      </div>
-      <label>Paleta del día</label>
-      <select id="wzTheme">${dayThemeOptions(WZ.theme || '')}</select>
-      <div class="hint" style="margin:5px 0 10px">Auto usa el color propio de cada plantilla. Esta paleta solo se aplica porque tú la eliges aquí.</div>
-      <label>Días a cubrir</label>
-      <input id="wzDays" type="number" min="1" max="14" value="${WZ.days}">
-      <label>Añadir cartela</label>
+      ${count.selected < count.required ? `<label>Completar las posiciones que faltan</label>
       <div class="wz-catalog">${PLAN_TYPES.map((t) =>
-        `<button type="button" class="ghost" data-wz-add-type="${t.id}">+ ${esc(t.label)}</button>`).join('')}</div>
-      <label>Orden de emisión</label>
+        `<button type="button" class="ghost" data-wz-add-type="${t.id}">+ ${esc(t.label)}</button>`).join('')}</div>` : ''}
+      <label>Las ${count.required} posiciones de la próxima tanda</label>
       <div class="wz-sequence">${chosen.length ? chosen.map((t, i) => `<div class="wz-sequence-row">
-        <b>${i + 1}. ${esc((t.slot && t.slot.label) || t.label)}${chosen.filter((x) => x.typeId === t.typeId).length > 1 ? ` ${t.instanceNumber}` : ''}</b>
+        <b>${i + 1}.</b>
+        <select data-wz-item-type="${t.id}" aria-label="Contenido de la posición ${i + 1}">${wizardPositionOptions(t)}</select>
         <button type="button" class="ghost" data-wz-item-move="${t.id}:-1" ${i === 0 ? 'disabled' : ''} title="Subir">↑</button>
         <button type="button" class="ghost" data-wz-item-move="${t.id}:1" ${i === chosen.length - 1 ? 'disabled' : ''} title="Bajar">↓</button>
-        <button type="button" class="ghost" data-wz-item-del="${t.id}">Quitar</button>
-      </div>`).join('') : '<div class="empty">Aún no has añadido ninguna cartela.</div>'}</div>`;
+      </div>`).join('') : '<div class="empty">Aún no has añadido ninguna cartela.</div>'}</div>
+      <details class="adv wz-options">
+        <summary>Opciones de fecha, color y vista previa</summary>
+        <label>Día de emisión</label>
+        <input id="wzDate" type="date" value="${esc(WZ.date || today)}">
+        <div class="slot-tools" style="margin:8px 0 10px">
+          <button type="button" class="ghost" data-wz-date="${today}">Hoy</button>
+          <button type="button" class="ghost" data-wz-date="${tomorrow}">Mañana</button>
+        </div>
+        <label>Paleta del día</label>
+        <select id="wzTheme">${dayThemeOptions(WZ.theme || '')}</select>
+        <div class="hint" style="margin:5px 0 10px">Auto usa el color propio de cada plantilla. Esta paleta solo se aplica porque tú la eliges aquí.</div>
+        <label>Días que quieres revisar en la vista previa</label>
+        <input id="wzDays" type="number" min="1" max="14" value="${WZ.days}">
+      </details>`;
     return;
   }
 
   if (WZ.step === 2) {
-    let agendaShown = false;
-    const sections = chosen.map((t) => {
-      const head = `<h3 style="margin:14px 0 4px;font-size:14px">${t.label}</h3>${wizardBumperLine(t)}`;
+    const configurable = chosen.filter((t) => !t.preserved || (t.slot.source === 'library' && t.slot.libraryKey !== 'agendaEventos'));
+    const unchanged = chosen.length - chosen.filter((t) => !t.preserved).length;
+    const sectionHtml = (t) => {
+      const head = `<div class="wz-config-head"><b>Posición ${t.position} · ${esc((t.slot && t.slot.label) || t.label)}</b>${t.preserved ? '<span class="tag">Actual</span>' : '<span class="tag warn">Cambiada</span>'}</div>${wizardBumperLine(t)}`;
+      if (t.preserved && t.slot.source === 'library') {
+        return `<section class="wz-config-card compact">${head}${wizardLibraryHtml(t, { compact: true })}</section>`;
+      }
       if (t.slot.source === 'worker' && t.slot.workerKey !== 'poolCapacity') {
-        return head + `<div class="status">${esc(wzWorkerLine(t.slot.workerKey))}</div>`;
+        return `<section class="wz-config-card done">${head}<div class="status"><b>Lista.</b></div></section>`;
       }
       if (t.typeId === 'piscinas') {
-        return head + `<label>Aforo actual (lo escribes tú)</label>
-          <input data-wz-manual="${t.id}:title" value="${esc((WZ.manual[t.id] || {}).title || '')}" placeholder="p. ej. 1.240">`;
+        return `<section class="wz-config-card">${head}<label>Aforo actual (lo escribes tú)</label>
+          <input data-wz-manual="${t.id}:title" value="${esc((WZ.manual[t.id] || {}).title || '')}" placeholder="p. ej. 1.240"></section>`;
       }
       if (t.slot.source === 'file') {
         const cur = WZ.manual[t.id] || {};
-        return head + `<div class="status">MP4 listo: se copiará directamente como su berri-N.mp4.</div>
+        return `<section class="wz-config-card">${head}
           <label>Título interno</label><input data-wz-manual="${t.id}:title" value="${esc(cur.title || t.slot.title || '')}" placeholder="Vídeo promo">
           <label>Archivo MP4</label><input type="file" data-wz-upload="${t.id}" accept="video/mp4,video/*">
           <select data-wz-video-pick="${t.id}" class="video-pick">${videoOptions(cur.file || '', 'Elegir vídeo promo guardado...')}</select>
           <input data-wz-manual="${t.id}:file" value="${esc(cur.file || '')}" placeholder="data/uploads/promo.mp4">
-          <div class="hint" style="margin-top:5px">La duración se calcula desde el MP4 real.</div>`;
+          </section>`;
       }
       if (t.slot.source === 'fixed' && t.typeId === 'noticia') {
         const cur = WZ.manual[t.id] || {};
-        return head + `<label>Titular</label><input data-wz-manual="${t.id}:title" value="${esc(cur.title || '')}" placeholder="Titular de la noticia">
-          <label>Subtítulo</label><input data-wz-manual="${t.id}:subtitle" value="${esc(cur.subtitle || 'GasteizBerri')}" placeholder="Sección o firma">
-          <label>Texto</label><textarea data-wz-manual="${t.id}:body" placeholder="Texto breve para pantalla">${esc(cur.body || '')}</textarea>`;
+        return `<section class="wz-config-card">${head}
+          <label>Titular principal · texto grande</label><input data-wz-manual="${t.id}:title" value="${esc(cur.title || '')}" placeholder="Titular de la noticia">
+          <label>Firma o etiqueta · texto pequeño</label><input data-wz-manual="${t.id}:subtitle" value="${esc(cur.subtitle || 'GasteizBerri')}" placeholder="Sección o firma">
+          <label>Texto de apoyo · párrafo secundario</label><textarea data-wz-manual="${t.id}:body" placeholder="Texto breve para pantalla">${esc(cur.body || '')}</textarea></section>`;
       }
       if (t.typeId === 'agenda') {
-        if (agendaShown) return head + '<div class="status">Esta cartela usa la misma Agenda. Solo ocupa otro hueco de la secuencia.</div>';
-        agendaShown = true;
-        return head + '<div class="status"><b>Agenda se gestiona desde su botón propio en la portada.</b><br>Aquí solo decides cuántas cartelas de Agenda hay en la secuencia.</div>';
+        return `<section class="wz-config-card done">${head}<div class="status">Se edita en “Agenda del día”.</div></section>`;
       }
       if (t.typeId === 'ultima') {
-        return head + `<div class="status">Reservado y desactivado. Se activa desde el botón 🚨 del panel cuando haga falta.</div>`;
+        return `<section class="wz-config-card done">${head}<div class="status">Se activa con 🚨.</div></section>`;
       }
       if (t.slot.source === 'library') {
-        return head + wizardLibraryHtml(t);
+        return `<section class="wz-config-card">${head}${wizardLibraryHtml(t)}</section>`;
       }
-      return head + '<div class="status">Sin configuración adicional.</div>';
-    }).join('');
-    $('#wzBody').innerHTML = `${wizardErrorHtml()}<p class="hint" style="margin-top:0">Revise el contenido de cada tipo. Los datos automáticos no requieren edición.</p>` + sections;
+      return `<section class="wz-config-card done">${head}<div class="status"><b>Lista.</b></div></section>`;
+    };
+    const changedSections = configurable.filter((t) => !t.preserved).map(sectionHtml).join('');
+    const currentCarousels = configurable.filter((t) => t.preserved).map(sectionHtml).join('');
+    const rotationPanel = currentCarousels ? `<details class="wz-current-rotations">
+      <summary>Otros carruseles · rotación (${configurable.filter((t) => t.preserved).length})</summary>
+      <div class="wz-current-rotation-list">${currentCarousels}</div>
+    </details>` : '';
+    const sections = `${changedSections}${rotationPanel}`;
+    $('#wzBody').innerHTML = `${wizardErrorHtml()}
+      <div class="wz-step2-summary"><span class="tag ok">${unchanged} sin cambios</span></div>
+      ${sections || '<div class="status"><b>No hay nada que configurar.</b></div>'}`;
     return;
   }
 
   // Paso 3: confirmación
-  const newPieces = Object.values(WZ.adds).reduce((n, txt) => n + String(txt || '').split(/\r?\n/).filter((l) => l.trim()).length, 0);
+  const newPieces = Object.values(WZ.adds || {}).reduce((n, txt) => n + String(txt || '').split(/\r?\n/).filter((l) => l.trim()).length, 0);
   const agendaMoments = hasWizardType('agenda')
     ? ((RUNDOWN.library && RUNDOWN.library.agendaEventos) || []).length
     : 0;
@@ -3766,7 +4014,7 @@ function renderWizard() {
       Guion de <b>${chosen.length}</b> cartelas: ${chosen.map((t) => esc(t.slot.label)).join(' → ')}<br>
       ${wizardCountHtml()}
       Paleta del día: <b>${esc(WZ.theme || 'Color propio de cada plantilla')}</b><br>
-      Cobertura: <b>${WZ.days}</b> día(s); el carrusel cambia a diario sin repetir<br>
+      Vista previa: <b>${WZ.days}</b> día(s); los carruseles siguen rotando automáticamente<br>
       ${hasWizardType('agenda') ? `Agenda: <b>${agendaMoments}</b> pase(s) guardado(s); se editan desde la portada<br>` : ''}
       ${newPieces ? `Se incorporan <b>${newPieces}</b> pieza(s) nuevas al carrusel<br>` : ''}
       ${bumperRows.length ? `Cortinillas automáticas:<br>${bumperRows.join('<br>')}<br>` : ''}
@@ -3799,6 +4047,10 @@ function wzCollect() {
     WZ.manual[id] = WZ.manual[id] || {};
     WZ.manual[id][field] = el.value;
   });
+  $('#wzBody').querySelectorAll('[data-wz-rotation]').forEach((el) => {
+    if (!WZ.rotations) WZ.rotations = {};
+    WZ.rotations[el.dataset.wzRotation] = el.value === 'hora' ? 'hora' : 'dia';
+  });
   $('#wzBody').querySelectorAll('[data-wz-pick]').forEach((el) => {
     WZ.picks[el.dataset.wzPick] = el.value === '' ? '' : Number(el.value);
   });
@@ -3820,19 +4072,25 @@ async function wizardFinish() {
   try {
     const stamp = Date.now().toString(36);
     const chosen = wizardChosenTypes();
-    const totals = chosen.reduce((acc, t) => ({ ...acc, [t.typeId]: (acc[t.typeId] || 0) + 1 }), {});
+    const totals = chosen.reduce((acc, t) => {
+      const key = t.typeId === 'saved' ? t.id : t.typeId;
+      return { ...acc, [key]: (acc[key] || 0) + 1 };
+    }, {});
     const slots = chosen.map((t) => {
-      const suffix = totals[t.typeId] > 1 ? ` ${t.instanceNumber}` : '';
-      const s = { id: `plan_${t.typeId}_${t.id}_${stamp}`, enabled: t.enabled !== false, duration: t.duration || 8, video: false, theme: '', title: '', subtitle: '', body: '', date: '', template: '', libraryKey: '', workerKey: '', ...t.slot };
-      s.label = `${s.label || t.label}${suffix}`;
+      const totalKey = t.typeId === 'saved' ? t.id : t.typeId;
+      const suffix = totals[totalKey] > 1 ? ` ${t.instanceNumber}` : '';
+      const preservedId = t.preserved && t.slot && t.slot.id ? String(t.slot.id) : '';
+      const s = { id: preservedId || `plan_${t.typeId}_${t.id}_${stamp}`, enabled: t.enabled !== false, duration: t.duration || 8, video: false, theme: '', title: '', subtitle: '', body: '', date: '', template: '', libraryKey: '', workerKey: '', ...t.slot };
+      if (!preservedId) s.label = `${s.label || t.label}${suffix}`;
       Object.assign(s, WZ.manual[t.id] || {});
+      if (s.source === 'library' && s.libraryKey !== 'agendaEventos') s.rotation = wizardRotationValue(t);
       s.bumperKey = defaultBumperKeyForSlot(s);
       s.duration = Number(s.duration) || 8;
       return s;
     });
     const lib = RUNDOWN.library || {};
     const activeDate = (WZ && WZ.date) || (RUNDOWN && RUNDOWN.activeDate) || localDatePart();
-    for (const [key, text] of Object.entries(WZ.adds)) {
+    for (const [key, text] of Object.entries(WZ.adds || {})) {
       const meta = (RUNDOWN.libraryKeys || []).find((k) => k.key === key) || { key, template: 'noticia', theme: '' };
       const items = parseBulkItems(text || '', meta);
       if (items.length) { if (!Array.isArray(lib[key])) lib[key] = []; lib[key].push(...items); }
@@ -3846,15 +4104,32 @@ async function wizardFinish() {
       const activeIndex = selectedItem ? activeItems.indexOf(selectedItem) : -1;
       if (activeIndex >= 0) pick[slots[i].id] = activeIndex;
     });
-    const dayPack = { ...(Object.keys(pick).length ? { pick } : {}), ...(WZ.theme ? { theme: WZ.theme } : {}) };
-    const days = Object.keys(dayPack).length ? { [activeDate]: dayPack } : {};
+    const oldDays = ((RUNDOWN.rundown || {}).days && typeof RUNDOWN.rundown.days === 'object') ? RUNDOWN.rundown.days : {};
+    const oldDay = oldDays[activeDate] && typeof oldDays[activeDate] === 'object' ? oldDays[activeDate] : {};
+    const keptSlotIds = new Set(slots.map((slot) => String(slot.id)));
+    const autoPick = {};
+    for (const [slotId, value] of Object.entries(oldDay.autoPick || {})) {
+      if (keptSlotIds.has(String(slotId)) && !Object.prototype.hasOwnProperty.call(pick, slotId)) autoPick[slotId] = value;
+    }
+    const dayPack = {
+      ...(Object.keys(pick).length ? { pick } : {}),
+      ...(Object.keys(autoPick).length ? { autoPick } : {}),
+      ...(WZ.theme ? { theme: WZ.theme } : {}),
+    };
+    const days = { ...oldDays };
+    if (Object.keys(dayPack).length) days[activeDate] = dayPack;
+    else delete days[activeDate];
     await api('/rundown?date=' + encodeURIComponent(activeDate), { method: 'PUT', body: JSON.stringify({ title: `Guion (${WZ.days} días)`, slots, days }) });
     await api('/rundown/library', { method: 'PUT', body: JSON.stringify(lib) });
     await api('/workers/refresh', { method: 'POST' }).catch(() => {});
-    await api('/rundown/materialize', { method: 'POST', body: JSON.stringify({ date: activeDate }) });
+    const applied = await api('/rundown/materialize', { method: 'POST', body: JSON.stringify({ date: activeDate }) });
     RD_PLAN_DAYS = WZ.days;
+    WZ._dirty = false;
+    clearWizardDraft();
     wizardDlg.close();
-    toast('Guion guardado y cartelas creadas · abriendo la vista previa');
+    toast(applied.archived
+      ? `Tanda de 8 preparada · ${applied.archived} cartela(s) antigua(s) quedan guardadas`
+      : 'Tanda de 8 preparada · abriendo la vista previa');
     load();
     window.open('/review.html', '_blank');
   } catch (e) {
@@ -4003,13 +4278,34 @@ $('#aqSave').addEventListener('click', async () => {
   finally { btn.disabled = false; btn.textContent = old; }
 });
 $('#btnBanks').addEventListener('click', openBanks);
-$('#wzClose').addEventListener('click', () => wizardDlg.close());
-$('#wzAdvanced').addEventListener('click', () => { wizardDlg.close(); openRundown(); });
-$('#wzBack').addEventListener('click', () => { wzCollect(); WZ.step = Math.max(1, WZ.step - 1); renderWizard(); });
+$('#wzClose').addEventListener('click', () => { wzCollect(); saveWizardDraft(); wizardDlg.close(); });
+$('#wzAdvanced').addEventListener('click', () => { wzCollect(); saveWizardDraft(); wizardDlg.close(); openRundown(); });
+$('#wzBack').addEventListener('click', () => { wzCollect(); markWizardDirty(); WZ.step = Math.max(1, WZ.step - 1); renderWizard(); saveWizardDraft(); });
 $('#wzBody').addEventListener('click', (e) => {
+  const goPositions = e.target.closest('[data-wz-go-positions]');
+  if (goPositions) {
+    wzCollect();
+    markWizardDirty();
+    WZ.step = 1;
+    renderWizard();
+    saveWizardDraft();
+    return;
+  }
+  const discard = e.target.closest('[data-wz-discard]');
+  if (discard) {
+    clearWizardDraft();
+    wizardDlg.close();
+    openWizard();
+    return;
+  }
   const addType = e.target.closest('[data-wz-add-type]');
   if (addType) {
     wzCollect();
+    if (WZ.items.length >= requiredVideoCount()) {
+      toast('La tanda ya tiene sus 8 posiciones. Cambia una desde su selector.');
+      return;
+    }
+    markWizardDirty();
     WZ.items.push({ typeId: addType.dataset.wzAddType, uid: `wz_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 5)}` });
     WZ.error = '';
     renderWizard();
@@ -4018,6 +4314,7 @@ $('#wzBody').addEventListener('click', (e) => {
   const delItem = e.target.closest('[data-wz-item-del]');
   if (delItem) {
     wzCollect();
+    markWizardDirty();
     WZ.items = WZ.items.filter((item) => item.uid !== delItem.dataset.wzItemDel);
     renderWizard();
     return;
@@ -4025,6 +4322,7 @@ $('#wzBody').addEventListener('click', (e) => {
   const moveItem = e.target.closest('[data-wz-item-move]');
   if (moveItem) {
     wzCollect();
+    markWizardDirty();
     const [uid, deltaRaw] = moveItem.dataset.wzItemMove.split(':');
     const from = WZ.items.findIndex((item) => item.uid === uid);
     const to = from + Number(deltaRaw);
@@ -4038,9 +4336,24 @@ $('#wzBody').addEventListener('click', (e) => {
   const dateBtn = e.target.closest('[data-wz-date]');
   if (dateBtn) {
     wzCollect();
+    markWizardDirty();
     const oldDate = WZ.date || localDatePart();
     WZ.date = dateBtn.dataset.wzDate || localDatePart();
     WZ.agenda = normalizeAgendaMoments(retargetAgendaMoments(WZ.agenda || [], oldDate, WZ.date));
+    renderWizard();
+    return;
+  }
+  const addLibrary = e.target.closest('[data-wz-library-add]');
+  if (addLibrary) {
+    wzCollect();
+    const type = wizardChosenTypes().find((item) => item.id === addLibrary.dataset.wzLibraryAdd);
+    if (!type || type.slot.source !== 'library') return;
+    const key = type.slot.libraryKey;
+    const meta = libraryMetaForKey(key);
+    if (!Array.isArray(RUNDOWN.library[key])) RUNDOWN.library[key] = [];
+    RUNDOWN.library[key].push(blankLibraryItem(meta));
+    WZ.picks[type.id] = RUNDOWN.library[key].length - 1;
+    markWizardDirty();
     renderWizard();
     return;
   }
@@ -4126,6 +4439,20 @@ $('#wzBody').addEventListener('click', (e) => {
   }
 });
 $('#wzBody').addEventListener('change', async (e) => {
+  markWizardDirty();
+  if (e.target && e.target.matches('[data-wz-item-type]')) {
+    const uid = e.target.dataset.wzItemType;
+    const item = WZ.items.find((rec) => rec.uid === uid);
+    if (!item || e.target.value === '__keep__') return;
+    item.typeId = e.target.value;
+    delete item.slotSnapshot;
+    delete WZ.manual[uid];
+    delete WZ.picks[uid];
+    if (WZ.rotations) delete WZ.rotations[uid];
+    WZ.error = '';
+    renderWizard();
+    return;
+  }
   if (e.target && e.target.id === 'wzDate') {
     const oldDate = WZ.date || localDatePart();
     wzCollect();
@@ -4160,6 +4487,7 @@ $('#wzBody').addEventListener('change', async (e) => {
     }
   }
 });
+$('#wzBody').addEventListener('input', () => markWizardDirty());
 $('#wzNext').addEventListener('click', () => {
   try {
     wzCollect();
@@ -4797,6 +5125,43 @@ $('#btnPublishConfirm').addEventListener('click', async () => {
 const statusDlg = $('#statusDlg');
 $('#btnStatus').addEventListener('click', async () => { await loadStatus(true); statusDlg.showModal(); });
 
+function renderWorkerHealth(workers) {
+  const box = $('#workerHealth');
+  if (!box) return;
+  const rows = (workers || []).filter((worker) => worker.key !== 'poolCapacity');
+  box.innerHTML = rows.map((worker) => {
+    const checked = worker.lastCheckAt || worker.at;
+    const ok = worker.lastCheckOk !== false && worker.fresh;
+    const badge = worker.lastCheckOk === false ? 'Falló' : (worker.fresh ? 'Correcto' : 'Sin dato vigente');
+    const detail = worker.lastCheckOk === false
+      ? `Último intento: ${fmtStamp(checked)} · ${worker.lastError || 'La fuente no respondió'}`
+      : `Última comprobación correcta: ${fmtStamp(checked)}`;
+    return `<div class="worker-health-row">
+      <div class="worker-health-head"><b>${esc(worker.label || worker.key)}</b><span class="tag ${ok ? 'ok' : 'warn'}">${esc(badge)}</span></div>
+      <small>${esc(detail)}</small>
+      <small><b>Dato recibido:</b> ${esc(worker.preview || 'Todavía no hay datos')}</small>
+    </div>`;
+  }).join('') || '<div class="hint">No hay fuentes automáticas configuradas.</div>';
+}
+
+$('#btnWorkerHealthRefresh').addEventListener('click', async (e) => {
+  const btn = e.currentTarget;
+  btn.disabled = true;
+  btn.textContent = 'Comprobando fuentes…';
+  try {
+    await api('/workers/refresh', { method: 'POST', body: '{}' });
+    const fresh = await api('/rundown?date=' + encodeURIComponent(localDatePart()));
+    RUNDOWN = fresh;
+    renderWorkerHealth(fresh.workers || []);
+    toast('Fuentes automáticas comprobadas');
+  } catch (error) {
+    toast('No se pudieron comprobar: ' + error.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Comprobar todas las fuentes ahora';
+  }
+});
+
 // ROLLBACK: vuelve a la tanda anterior (guardada en cada publicación) y la sube.
 $('#btnRollback').addEventListener('click', async () => {
   const btn = $('#btnRollback');
@@ -4829,6 +5194,10 @@ async function loadStatus(full) {
       `Pantalla ${s.screen.width}×${s.screen.height} · FTP ${s.ftpConfigured ? '<b>configurado</b>' : '<b style="color:#e0a106">sin configurar</b>'} · Última publicación real: <b>${last}</b>${opText}` +
       uploadResultHtml(latestUploadActivity(), true);
     if (full) {
+      try {
+        const auto = await api('/rundown?date=' + encodeURIComponent(localDatePart()));
+        renderWorkerHealth(auto.workers || []);
+      } catch { renderWorkerHealth([]); }
       const busyHtml = op
         ? `<div>⏳ <b>Operación en curso</b> · ${esc(op.owner || 'emisión')} · empezó ${esc(new Date(op.startedAt).toLocaleString('es-ES', { timeZone: DISPLAY_TIME_ZONE }))}</div>`
         : '<div>✅ <b>Sin operación en curso</b> · se puede preparar o subir</div>';

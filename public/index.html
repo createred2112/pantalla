@@ -139,6 +139,24 @@
   .audit-icon{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--line);font-weight:900;flex:none}
   .audit-row.ok .audit-icon{background:var(--ok);color:#04150d}
   .audit-row.bad .audit-icon{background:var(--accent);color:#fff}
+  .worker-health{display:flex;flex-direction:column;gap:8px;margin:8px 0 14px}
+  .worker-health-row{border:1px solid var(--line);border-radius:10px;background:#081729;padding:10px}
+  .worker-health-head{display:flex;gap:8px;align-items:center}.worker-health-head b{flex:1;font-size:13px}
+  .worker-health-row small{display:block;color:var(--muted);margin-top:5px;line-height:1.35}
+  .wz-step2-intro,.wz-config-card{border:1px solid var(--line);border-radius:12px;background:#081729;padding:12px;margin-bottom:10px}
+  .wz-step2-intro b,.wz-step2-intro span{display:block}.wz-step2-intro span{color:var(--muted);font-size:12px;margin:5px 0 10px;line-height:1.4}
+  .wz-step2-intro button{width:100%}
+  .wz-step2-summary{display:flex;justify-content:flex-end;margin:-2px 0 8px}
+  .wz-config-card.done{border-color:rgba(43,182,115,.35)}
+  .wz-config-card.compact{background:#09192d}
+  .wz-config-head{display:flex;align-items:center;gap:8px;margin-bottom:8px}.wz-config-head b{flex:1;font-size:14px}
+  .wz-current-rotations{border:1px solid var(--line);border-radius:12px;background:#09192d;padding:11px 12px;margin-bottom:10px}
+  .wz-current-rotations>summary{cursor:pointer;font-weight:800;color:#d8e6ff}
+  .wz-current-rotations>.hint{font-style:normal;font-size:12px;line-height:1.4;margin:8px 0}
+  .wz-current-rotation-list .wz-config-card:last-child{margin-bottom:0}
+  .wz-piece-count{font-style:normal;margin:4px 0 0}
+  .wz-field-help{font-style:normal;background:rgba(43,182,115,.08);border-left:3px solid var(--ok);padding:8px;margin-bottom:8px}
+  .wz-add-piece{width:100%;margin-top:9px}.wz-piece-options{margin-top:10px}.wz-draft-ok button{width:100%;margin-top:8px}
   .audit-row.skip .audit-icon{background:var(--warn);color:#081729}
   .audit-title{flex:1;min-width:0}
   .audit-title b{display:block;font-size:14px}
@@ -275,8 +293,9 @@
   .wz-catalog{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin:6px 0 12px}
   .wz-catalog button{text-align:left;padding:9px 10px}
   .wz-sequence{display:flex;flex-direction:column;gap:6px;margin-top:6px}
-  .wz-sequence-row{display:grid;grid-template-columns:1fr auto auto auto;gap:6px;align-items:center;border:1px solid var(--line);background:#081729;border-radius:8px;padding:7px 8px}
+  .wz-sequence-row{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;gap:6px;align-items:center;border:1px solid var(--line);background:#081729;border-radius:8px;padding:7px 8px}
   .wz-sequence-row b{font-size:13px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .wz-sequence-row select{min-width:0;margin:0}
   .wz-sequence-row button{padding:6px 8px}
   .agenda-workspace{display:flex;flex-direction:column;gap:18px}
   .agenda-section{border-top:1px solid var(--line);padding-top:14px}
@@ -322,6 +341,11 @@
     .agenda-event-card{grid-template-columns:1fr 1fr}.agenda-event-card .agenda-event-main,.agenda-event-card details{grid-column:1/-1}
     .agenda-pass-times,.agenda-pass-events{grid-template-columns:1fr}
     .agenda-wide{grid-column:1}
+    #wizardDlg .dlg-f{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;padding:10px}
+    #wizardDlg .dlg-f .spacer{display:none}
+    #wizardDlg .dlg-f button{width:100%;min-width:0;white-space:normal;padding:9px 7px}
+    #wizardDlg #wzProgress{justify-self:end;align-self:center}
+    #wizardDlg #wzBack[hidden]~#wzNext{grid-column:1/-1}
     .tl-card{flex-basis:132px}
     .slot-grid{grid-template-columns:1fr}
     .slot-wide{grid-column:1}
@@ -386,6 +410,10 @@
 
   .list-head{display:flex;align-items:baseline;gap:10px;margin:20px 2px 10px}
   .list-head h2{font-size:12px;margin:0;letter-spacing:2px;text-transform:uppercase;color:var(--muted);font-weight:800}
+  .saved-cards{margin:18px 0 4px;border:1px solid var(--line);border-radius:10px;background:#071322}
+  .saved-cards>summary{cursor:pointer;padding:12px 14px;font-weight:900;color:#cbd8ee}
+  .saved-cards>summary small{display:block;margin-top:3px;color:var(--muted);font-weight:600}
+  .saved-cards-list{padding:2px 10px 10px;counter-reset:cardn}
   .hint2{font-size:12px;color:var(--muted);opacity:.9;margin-left:auto;text-align:right}
 
   /* Numeración de emisión sobre cada cartela */
@@ -548,7 +576,7 @@
   <div class="bar">
     <button class="tool featured" id="btnRundown">
       <span class="ico">🗓</span>
-      <span class="tool-txt"><b>Nueva escaleta</b><small>Elegir los 8 huecos de pantalla</small></span>
+      <span class="tool-txt"><b>Preparar próxima tanda</b><small>Cambiar solo lo que necesites</small></span>
     </button>
     <button class="tool" id="btnAgenda">
       <span class="ico">▣</span>
@@ -904,6 +932,10 @@
       <button type="button" class="ghost" id="btnEmisiones">🕰 Emisiones anteriores</button>
     </div>
     <div id="statusBox" class="status"></div>
+    <h3 style="margin:14px 0 6px;font-size:13px">Datos automáticos</h3>
+    <p class="hint" style="margin:0 0 8px">Aquí puedes ver de dónde sale cada dato, cuándo se comprobó y qué recibió.</p>
+    <div id="workerHealth" class="worker-health"><div class="hint">Abre Estado para comprobar las fuentes.</div></div>
+    <button type="button" class="ghost" id="btnWorkerHealthRefresh" style="width:100%">Comprobar todas las fuentes ahora</button>
     <h3 style="margin:14px 0 6px;font-size:13px">Registro claro de operaciones</h3>
     <div id="auditBox" class="audit-list"></div>
     <details class="tech-details">

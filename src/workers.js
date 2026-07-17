@@ -225,6 +225,7 @@ async function refreshAll(opts = {}) {
   const only = new Set([...(opts.keys || []), ...(opts.forceKeys || [])].filter(Boolean));
   const forced = new Set([...(opts.forceKeys || [])].filter(Boolean));
   let fetched = 0;
+  let changed = false;
   for (const [key, p] of Object.entries(PROVIDERS)) {
     if (only.size && !only.has(key)) continue;
     if (p.manual) { results[key] = { ok: true, manual: true }; continue; }
@@ -236,15 +237,19 @@ async function refreshAll(opts = {}) {
     }
     try {
       const data = await p.fn();
-      all[key] = { data, at: new Date().toISOString(), ok: true };
+      const checkedAt = new Date().toISOString();
+      all[key] = { data, at: checkedAt, ok: true, lastCheckAt: checkedAt, lastCheckOk: true, lastError: '' };
       results[key] = { ok: true };
       fetched++;
+      changed = true;
     } catch (e) {
+      all[key] = { ...(rec || {}), lastCheckAt: new Date().toISOString(), lastCheckOk: false, lastError: e.message };
       results[key] = { ok: false, error: e.message };
+      changed = true;
       log.warn('workers', `Worker ${key} falló: ${e.message} (se mantiene el dato anterior si existe)`);
     }
   }
-  if (fetched) saveAll(all);
+  if (changed) saveAll(all);
   if (fetched || Object.values(results).some((r) => !r.ok)) {
     log.info('workers', `Datos automáticos: ${fetched} actualizado(s), ${Object.values(results).filter((r) => r.skipped).length} aún vigente(s)`);
   }
@@ -262,6 +267,9 @@ function state() {
       label: PROVIDERS[key].label,
       fresh,
       at: rec ? rec.at : null,
+      lastCheckAt: rec ? (rec.lastCheckAt || rec.at || null) : null,
+      lastCheckOk: rec ? rec.lastCheckOk !== false : null,
+      lastError: rec ? String(rec.lastError || '') : '',
       preview: rec && rec.data ? `${rec.data.title} · ${rec.data.subtitle}` : null,
     };
   });

@@ -14,6 +14,8 @@ let _fontCss = null;
 let _queue = Promise.resolve();
 let _idleTimer = null;
 let _pageUses = 0;
+let _closing = null;
+let _activePages = 0;
 
 const IDLE_CLOSE_MS = Number(process.env.PANTALLA_CHROME_IDLE_MS || 15000);
 const MAX_PAGES_PER_BROWSER = Number(process.env.PANTALLA_CHROME_MAX_PAGES || 24);
@@ -26,16 +28,20 @@ function enqueue(task) {
 
 function scheduleClose() {
   clearTimeout(_idleTimer);
-  _idleTimer = setTimeout(() => { close(); }, IDLE_CLOSE_MS);
+  _idleTimer = setTimeout(() => { void close(); }, IDLE_CLOSE_MS);
   if (_idleTimer.unref) _idleTimer.unref();
 }
 
 async function browser() {
   clearTimeout(_idleTimer);
+  // El temporizador de inactividad puede haber empezado a cerrar Chromium un
+  // instante antes de que llegue el siguiente trabajo. Esperar ese cierre
+  // evita crear una página dentro de una sesión que ya está desapareciendo.
+  if (_closing) await _closing;
   if (_browser && _browser.connected) return _browser;
   renderGuard.assertCanUseChrome('render');
   const puppeteer = require('puppeteer');
-  _browser = await puppeteer.launch({
+  const launched = await puppeteer.launch({
     headless: 'new',
     protocolTimeout: 240000,
     args: [
@@ -59,8 +65,9 @@ async function browser() {
       '--font-render-hinting=none',
     ],
   });
+  _browser = launched;
   _pageUses = 0;
-  _browser.on('disconnected', () => { _browser = null; });
+  launched.on('disconnected', () => { if (_browser === launched) _browser = null; });
   return _browser;
 }
 
@@ -68,12 +75,14 @@ async function withPage(task) {
   return enqueue(async () => {
     const b = await browser();
     const page = await b.newPage();
+    _activePages++;
     try {
       page.setDefaultTimeout(240000);
       page.setDefaultNavigationTimeout(240000);
       return await task(page);
     } finally {
       try { await page.close(); } catch {}
+      _activePages = Math.max(0, _activePages - 1);
       _pageUses++;
       if (_pageUses >= MAX_PAGES_PER_BROWSER) await close();
       else scheduleClose();
@@ -356,7 +365,23 @@ async function renderFrame(card, ctx, tpl, frame) {
 async function close() {
   clearTimeout(_idleTimer);
   _idleTimer = null;
-  if (_browser) { try { await _browser.close(); } catch {} _browser = null; }
+  if (_closing) return _closing;
+  // Un cierre del servidor puede llegar mientras la última captura todavía
+  // está usando la página. Dejar que termine evita que Puppeteer rechace por
+  // detrás setViewport/setContent con TargetCloseError.
+  if (_activePages > 0) {
+    await _queue.catch(() => {});
+    clearTimeout(_idleTimer);
+    _idleTimer = null;
+    if (_closing) return _closing;
+  }
+  const closing = _browser;
+  if (!closing) return;
+  if (_browser === closing) _browser = null;
+  _closing = (async () => {
+    try { await closing.close(); } catch {}
+  })().finally(() => { _closing = null; });
+  return _closing;
 }
 
 for (const sig of ['SIGINT', 'SIGTERM']) {
