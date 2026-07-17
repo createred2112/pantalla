@@ -21,6 +21,14 @@
   @media (prefers-reduced-motion:reduce){
     *,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}
   }
+  /* PWA en iPhone: respeta la isla dinámica / notch y el borde inferior.
+     Sin esto, la cabecera queda debajo de la barra de estado y no se alcanza. */
+  @supports (padding: env(safe-area-inset-top)){
+    body > header{padding-top:calc(10px + env(safe-area-inset-top)) !important}
+    body{padding-bottom:env(safe-area-inset-bottom)}
+    .toast{bottom:calc(24px + env(safe-area-inset-bottom)) !important}
+    dialog{max-height:calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 20px)}
+  }
 </style>
 <style>
   :root{

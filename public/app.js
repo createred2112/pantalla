@@ -377,7 +377,13 @@ function b64ToU8(base64) {
 }
 $('#btnPushEnable').addEventListener('click', async () => {
   try {
-    if (!('serviceWorker' in navigator) || !('PushManager' in window)) { toast('Este navegador no soporta avisos push'); return; }
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+      const ios = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+      alert(ios
+        ? 'En iPhone los avisos solo funcionan con el panel INSTALADO como app:\n\n1. Abre el panel en Safari\n2. Compartir → «Añadir a pantalla de inicio»\n3. Abre el panel desde ese icono nuevo\n4. Vuelve a pulsar «Activar avisos» aquí\n\n(Necesita iOS 16.4 o superior)'
+        : 'Este navegador no soporta avisos push. Prueba con Chrome, Edge o Firefox actualizados.');
+      return;
+    }
     const perm = await Notification.requestPermission();
     if (perm !== 'granted') { toast('Permiso de avisos denegado'); return; }
     const { key } = await api('/push/key');
