@@ -100,7 +100,13 @@ app.get('/review.html', (req, res) => sendVersionedHtml(res, 'review.html'));
 app.get('/editor.html', (req, res) => sendVersionedHtml(res, 'editor.html'));
 app.get('/galeria.html', (req, res) => sendVersionedHtml(res, 'galeria.html'));
 
-app.use(express.static(PUBLIC));
+// HTML/JS/CSS del panel SIEMPRE revalidados (ETag → 304 baratos): se acabó el
+// "mata la app / Ctrl+F5" tras cada despliegue, también en la PWA de iOS.
+app.use(express.static(PUBLIC, {
+  setHeaders: (res, filePath) => {
+    if (/\.(html|js|css|webmanifest)$/i.test(filePath)) res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+  },
+}));
 app.use('/media/uploads', express.static(paths.uploads));
 app.use('/media/inbox', express.static(paths.workerInbox));
 app.use('/media/output', express.static(paths.output));

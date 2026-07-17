@@ -1347,6 +1347,9 @@ function openEditor(card) {
   ED_LIBRARY_INDEX = -1;
   $('#edRundownBox').style.display = 'none';
   $('#edRundownBox').innerHTML = '';
+  // Reconstruir el selector de plantillas AL ABRIR: así las ★ recién creadas
+  // aparecen siempre, aunque la lista global se cargara hace rato.
+  $('#edTemplate').innerHTML = TEMPLATES.map((t) => `<option value="${t.id}">${t.label}</option>`).join('');
   fillSourceSelector(card);
   $('#btnDuplicate').style.display = card && card.id ? '' : 'none';
   // ⏱ Horario de la cartela
