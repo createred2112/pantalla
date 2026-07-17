@@ -13,7 +13,8 @@ module.exports = {
     const els = [];
 
     if (hasPhoto) {
-      els.push({ type: 'rect', x: 0, y: 0, w: W, h: H, gradient: 'linear-gradient(180deg, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0.5) 50%, rgba(0,0,0,0.94) 100%)' });
+      // Sombra solo donde hay texto: la foto respira arriba.
+      els.push({ type: 'rect', x: 0, y: K.r(H * 0.42), w: W, h: K.r(H * 0.58), gradient: 'linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.5) 45%, rgba(0,0,0,0.92) 100%)' });
       els.push(K.title(ctx, {
         x: pad, y: H * 0.2, w: W - pad * 2, h: H - strip - H * 0.24,
         text: card.title, color: text, lines: 3, min: 0.15, max: 0.27, valign: 'bottom', lineHeight: 0.93,

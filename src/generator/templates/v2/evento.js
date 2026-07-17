@@ -15,7 +15,10 @@ module.exports = {
     const els = [];
 
     if (hasPhoto) {
-      els.push({ type: 'rect', x: 0, y: 0, w: W, h: H, gradient: 'linear-gradient(180deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.88) 100%)' });
+      // Antes un velo negro tapaba la foto entera; ahora sombra arriba (chip y
+      // nombre) y abajo (fecha y lugar), con el centro de la foto visible.
+      els.push({ type: 'rect', x: 0, y: 0, w: W, h: K.r(H * 0.55), gradient: 'linear-gradient(180deg, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0) 100%)' });
+      els.push({ type: 'rect', x: 0, y: K.r(H * 0.45), w: W, h: K.r(H * 0.55), gradient: 'linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.75) 100%)' });
     }
     if (card.subtitle) {
       els.push(K.chipXL(ctx, { x: pad, y: H * 0.06, bg: theme.accent, color: theme.accentText, text: card.subtitle, size: 0.058 }));

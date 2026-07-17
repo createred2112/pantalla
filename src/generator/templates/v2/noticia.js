@@ -14,7 +14,10 @@ module.exports = {
 
     if (hasPhoto) {
       const text = '#ffffff';
-      els.push({ type: 'rect', x: 0, y: 0, w: W, h: H, gradient: 'linear-gradient(180deg, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0.55) 55%, rgba(0,0,0,0.94) 100%)' });
+      // La FOTO manda: nada de velos a pantalla completa. Solo una sombra
+      // arriba (para el chip) y otra abajo, justo donde vive el texto.
+      els.push({ type: 'rect', x: 0, y: 0, w: W, h: K.r(H * 0.18), gradient: 'linear-gradient(180deg, rgba(0,0,0,0.4), rgba(0,0,0,0))' });
+      els.push({ type: 'rect', x: 0, y: K.r(H * 0.5), w: W, h: K.r(H * 0.5), gradient: 'linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.55) 45%, rgba(0,0,0,0.9) 100%)' });
       if (card.subtitle) {
         els.push(...K.band(ctx, { y: 0, h: H * 0.115, bg: theme.accent, color: theme.accentText, text: card.subtitle, align: 'left', size: 0.07 }));
       }
