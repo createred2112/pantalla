@@ -760,18 +760,29 @@ $('#btnDefault').addEventListener('click', async () => {
   } catch (e) { toast(e.message || 'Error al guardar o generar'); }
 });
 // PLANTILLA PROPIA: esta composición pasa a ser una plantilla nueva con
-// nombre, disponible en la galería (★) para cualquier cartela futura.
+// nombre Y SE APLICA a esta cartela en el acto (plantilla nueva, sin layout
+// propio que la tape, y MP4 regenerado). Antes solo la creaba en la galería
+// y la cartela seguía igual — confuso y desquiciante.
 $('#btnSaveAsNew').addEventListener('click', async () => {
   const name = prompt('Nombre de la nueva plantilla (p. ej. "Póster evento grande"):');
   if (!name || !name.trim()) return;
+  const btn = $('#btnSaveAsNew');
   try {
-    const base = String(FRAME.template || 'noticia').startsWith('u_') ? 'noticia' : FRAME.template;
-    const r = await requestJson('/api/templates/custom', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ label: name.trim(), baseTemplate: base, layout: layoutPayload(), theme: FRAME.theme && FRAME.theme.key }),
+    await withBusy(btn, 'Creando y aplicando…', async () => {
+      const base = String(FRAME.template || 'noticia').startsWith('u_') ? 'noticia' : FRAME.template;
+      const r = await requestJson('/api/templates/custom', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ label: name.trim(), baseTemplate: base, layout: layoutPayload(), theme: FRAME.theme && FRAME.theme.key }),
+      });
+      // Aplicar a ESTA cartela: la plantilla nueva ya lleva la composición
+      // dentro, así que fuera el layout propio (dejaría de verse la plantilla).
+      await requestJson('/api/cards/' + ID + '/layout', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ layout: null }) });
+      await requestJson('/api/cards/' + ID, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ template: r.id }) });
+      await renderSavedCard();
+      await refreshFrame();
     });
-    toast(`Plantilla «${name.trim()}» creada ✓ — ya está en la galería`);
+    toast(`Plantilla «${name.trim()}» creada y APLICADA a esta cartela ✓`);
   } catch (e) { toast(e.message || 'No se pudo crear la plantilla'); }
 });
 
