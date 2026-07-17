@@ -4841,3 +4841,40 @@ loadConfig().then(load).then(() => {
   else if (accion === 'publicar') preparePublish();
 });
 loadPilot();
+
+// ===== AVISO DE ACTUALIZACIÓN (F2) =====
+// La PWA de iOS puede pasar días con la página cargada: el servidor puede
+// tener panel nuevo mientras aquí sigue corriendo el viejo. Cada vez que la
+// app vuelve a primer plano (y cada 5 min), se compara la huella con la que
+// esta página traía al nacer; si difiere, banner y recarga en un toque.
+const PANTALLA_CLIENT = window.PANTALLA_CLIENT || null;
+let _updateBannerShown = false;
+
+function showUpdateBanner(newVersion) {
+  if (_updateBannerShown) return;
+  _updateBannerShown = true;
+  const bar = document.createElement('div');
+  bar.id = 'updateBanner';
+  bar.style.cssText = 'position:fixed;left:0;right:0;top:0;z-index:9999;display:flex;gap:12px;align-items:center;justify-content:center;padding:12px calc(10px + env(safe-area-inset-right)) 12px calc(10px + env(safe-area-inset-left));padding-top:calc(12px + env(safe-area-inset-top));background:#D6FF00;color:#0E0E0E;font-weight:800;box-shadow:0 2px 14px rgba(0,0,0,.45)';
+  const label = document.createElement('span');
+  label.textContent = `Hay una versión nueva del panel${newVersion ? ' (v' + newVersion + ')' : ''}`;
+  const btn = document.createElement('button');
+  btn.id = 'updateBannerReload';
+  btn.textContent = 'Actualizar';
+  btn.style.cssText = 'border:0;border-radius:999px;padding:8px 18px;background:#0E0E0E;color:#D6FF00;font:inherit;font-weight:800;cursor:pointer';
+  btn.addEventListener('click', () => location.reload());
+  bar.append(label, btn);
+  document.body.appendChild(bar);
+}
+
+async function checkPanelUpdate() {
+  if (!PANTALLA_CLIENT || !PANTALLA_CLIENT.assets || _updateBannerShown) return;
+  try {
+    const w = await api('/whoami');
+    if (w && w.assets && w.assets !== PANTALLA_CLIENT.assets) showUpdateBanner(w.version);
+  } catch { /* sin red: se reintenta en el siguiente ciclo */ }
+}
+window.checkPanelUpdate = checkPanelUpdate; // accesible para el humo e2e
+setInterval(checkPanelUpdate, 5 * 60000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) checkPanelUpdate(); });
+window.addEventListener('pageshow', (e) => { if (e.persisted) checkPanelUpdate(); });

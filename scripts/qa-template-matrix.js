@@ -8,6 +8,13 @@ const templates = require('../src/generator/templates');
 const renderer = require('../src/generator/renderCard');
 const { cfg, paths } = require('../src/config');
 
+// La auditoría valida las plantillas DE SERIE. Los layouts predeterminados
+// guardados por el usuario en data/template-layouts*.json son legítimos (p.
+// ej. ocultar la fecha de "evento") pero cambian de máquina a máquina: si se
+// colaran aquí, el QA daría rojo con datos reales sin que el código esté mal.
+// Los casos de layouts guardados se construyen explícitamente más abajo.
+require('../src/templateLayouts').get = () => null;
+
 const MARK = {
   title: 'MARCA TITULO 9381',
   subtitle: 'MARCA SUBTITULO 9381',
@@ -168,6 +175,9 @@ async function renderMatrix(version = '') {
   fs.mkdirSync(out, { recursive: true });
   const cellW = 320, imageH = 180, labelH = 22, cellH = imageH + labelH, cols = 4;
   for (const theme of Object.keys(cfg.palette || {})) {
+    // --resume: no repetir hojas ya generadas (reintentos baratos si una
+    // pasada anterior se cortó a medias).
+    if (process.argv.includes('--resume') && fs.existsSync(path.join(out, `${theme}.png`))) continue;
     const cells = [];
     for (const tpl of templates.list()) {
       const result = await renderer.renderToBuffer(cardFor(tpl.id, theme));

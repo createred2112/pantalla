@@ -21,6 +21,20 @@ const auth = require('./auth');
 const rundown = require('./rundown');
 const renderGuard = require('./util/renderGuard');
 
+// RED DE SEGURIDAD DEL PROCESO (F1): un error suelto en una promesa (p. ej.
+// un hipo de Chromium durante una publicación en segundo plano) NO puede
+// tumbar el panel entero. Se registra con su pila y el servidor sigue; cada
+// etapa del pipeline ya reporta sus propios fallos por su canal.
+// (Pendiente F2/F3: capturar en origen los listeners de puppeteer en
+// htmlRender/video, que es de donde escapan estos rechazos.)
+process.on('unhandledRejection', (reason) => {
+  const msg = reason && reason.stack ? reason.stack : String(reason);
+  try { log.error('proceso', 'Promesa sin capturar (el panel sigue en pie): ' + msg); } catch {}
+});
+process.on('uncaughtException', (err) => {
+  try { log.error('proceso', 'Excepción sin capturar (el panel sigue en pie): ' + (err && err.stack || err)); } catch {}
+});
+
 ensureDirs();
 const app = express();
 app.set('trust proxy', 1); // detrás del proxy de CloudPanel (https + IP real)
@@ -68,6 +82,9 @@ app.get('/api/whoami', (req, res) => {
     simpleMode: Boolean(u && u.simpleMode),
     hasAdmins: auth.hasAdmins(),
     version: PKG.version,
+    // Huella actual de la interfaz: si difiere de la que tiene la página
+    // abierta, el panel enseña el banner "Actualizar" (ver public/app.js).
+    assets: typeof assetsFingerprint === 'function' ? assetsFingerprint() : null,
   });
 });
 
@@ -87,11 +104,45 @@ app.use((req, res, next) => {
 });
 
 // A partir de aquí, todo requiere sesión válida.
+
+// HUELLA DE CONTENIDO (F2): cada asset del panel se referencia como
+// archivo.js?v=<hash-de-su-contenido>. Si el archivo cambia, cambia la URL:
+// ningún navegador ni PWA puede quedarse con JavaScript viejo por caché.
+// (El ?v por versión de paquete se quedaba corto: un cambio sin subir la
+// versión no invalidaba nada.)
+const crypto = require('crypto');
+const _assetHashes = new Map(); // archivo -> { mtimeMs, hash }
+function assetHash(file) {
+  try {
+    const full = path.join(PUBLIC, file);
+    const st = fs.statSync(full);
+    const rec = _assetHashes.get(file);
+    if (rec && rec.mtimeMs === st.mtimeMs) return rec.hash;
+    const hash = crypto.createHash('sha1').update(fs.readFileSync(full)).digest('hex').slice(0, 10);
+    _assetHashes.set(file, { mtimeMs: st.mtimeMs, hash });
+    return hash;
+  } catch { return PKG.version; }
+}
+
+// Huella CONJUNTA de la interfaz: si cualquier pieza cambia tras un deploy,
+// la huella cambia y el panel abierto enseña el aviso "Actualizar".
+function assetsFingerprint() {
+  const files = ['index.html', 'app.js', 'editor.html', 'editor.js', 'review.html', 'review.js', 'galeria.html', 'espejo.html', 'sw.js'];
+  return crypto.createHash('sha1')
+    .update(files.map((f) => assetHash(f)).join('|') + PKG.version)
+    .digest('hex').slice(0, 10);
+}
+
 function sendVersionedHtml(res, file) {
   const full = path.join(PUBLIC, file);
   if (!fs.existsSync(full)) return res.status(404).end();
   const html = fs.readFileSync(full, 'utf8')
-    .replace(/src="([^":]+\.js)"/g, `src="$1?v=${PKG.version}"`);
+    .replace(/src="([^":]+\.js)"/g, (m, src) => `src="${src}?v=${assetHash(src)}"`)
+    .replace(/href="([^":]+\.css)"/g, (m, href) => `href="${href}?v=${assetHash(href)}"`)
+    // La página sabe con qué huella nació: el aviso de actualización compara
+    // esto contra /api/whoami cuando la PWA vuelve a primer plano.
+    .replace('<head>', `<head><script>window.PANTALLA_CLIENT={version:${JSON.stringify(PKG.version)},assets:${JSON.stringify(assetsFingerprint())}}</script>`);
+  res.setHeader('Cache-Control', 'no-cache, must-revalidate'); // el HTML, jamás cacheado
   res.type('html').send(html);
 }
 
@@ -100,11 +151,23 @@ app.get('/review.html', (req, res) => sendVersionedHtml(res, 'review.html'));
 app.get('/editor.html', (req, res) => sendVersionedHtml(res, 'editor.html'));
 app.get('/galeria.html', (req, res) => sendVersionedHtml(res, 'galeria.html'));
 
-// HTML/JS/CSS del panel SIEMPRE revalidados (ETag → 304 baratos): se acabó el
-// "mata la app / Ctrl+F5" tras cada despliegue, también en la PWA de iOS.
+// Política de caché (F2):
+// - HTML, sw.js y manifest: SIEMPRE revalidados (no-cache).
+// - JS/CSS pedidos CON huella (?v=hash): cacheables un año e inmutables — la
+//   URL cambia cuando cambia el contenido, así que nunca pueden quedar viejos.
+// - JS/CSS sin huella: no-cache (por si algo los referencia a pelo).
 app.use(express.static(PUBLIC, {
   setHeaders: (res, filePath) => {
-    if (/\.(html|js|css|webmanifest)$/i.test(filePath)) res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+    const req = res.req || {};
+    const name = path.basename(filePath);
+    if (/\.(html|webmanifest)$/i.test(filePath) || name === 'sw.js') {
+      res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+    } else if (/\.(js|css)$/i.test(filePath)) {
+      const v = req.query && req.query.v;
+      res.setHeader('Cache-Control', v && v === assetHash(name)
+        ? 'public, max-age=31536000, immutable'
+        : 'no-cache, must-revalidate');
+    }
   },
 }));
 app.use('/media/uploads', express.static(paths.uploads));
@@ -1266,6 +1329,7 @@ app.listen(env.port, () => {
   workers.start();
   notify.start(); // recordatorios proactivos (agenda sin cargar, etc.)
   require('./util/janitor').start(); // limpieza diaria de renders huérfanos
+  require('./util/backup').start(); // backup diario de data/ + config/ (14 días)
   require('./takeover').start(); // vuelta automática del takeover al expirar
   autopublish.startWindows(); // vigilante de franjas horarias por cartela
 });

@@ -20,3 +20,21 @@ data/template-layouts.json
 data/template-layouts.v2.json
 config/pantalla.config.json
 design-preview/
+
+backups/
+.last-deploy
+
+# QA (F1): artefactos de test que no van a git
+tests/e2e/.qa-snapshot/
+tests/visual-baseline/
+test-results/
+playwright-report/
+vps-data/
+data/user-templates.json
+data/takeover.json
+data/push-subs.json
+data/push-keys.json
+data/emisiones/
+data/last-tanda/
+data/kulturklik-cache.json
+data/efemerides-cache.json

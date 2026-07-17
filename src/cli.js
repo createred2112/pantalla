@@ -28,6 +28,24 @@ async function main() {
       console.log(`Administrador "${user}" creado.`);
       return { ok: true };
     }
+    case 'backup': {
+      const r = require('./util/backup').run();
+      console.log(`Backup creado: ${r.file} (${r.sizeMb} MB)`);
+      return r;
+    }
+    case 'backup:restore': {
+      if (!args[0]) {
+        const items = require('./util/backup').list();
+        console.log('Uso: npm run backup:restore -- backups/<archivo>.tgz');
+        console.log(items.length ? 'Disponibles:\n' + items.map((i) => `· ${i.file} (${i.sizeMb} MB)`).join('\n') : 'No hay backups todavía.');
+        process.exit(1);
+      }
+      const r = require('./util/backup').restore(args[0]);
+      console.log(`Restaurado: ${r.restored}`);
+      console.log(`El estado anterior quedó a salvo en: ${r.safety}`);
+      console.log('Reinicia el servidor (o espera al siguiente pase) para que todo lo lea de nuevo.');
+      return r;
+    }
     case 'admin:remove': {
       const ok = auth.removeAdmin(args[0]);
       console.log(ok ? `Eliminado "${args[0]}".` : `No existe "${args[0]}".`);
