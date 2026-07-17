@@ -20,10 +20,20 @@ module.exports = {
       .slice(0, 40);
 
     els.push(K.chipXL(ctx, { x: pad, y: H * 0.045, bg: theme.accent, color: theme.accentText, text: card.subtitle || 'GASOLINA 95 · HOY', size: 0.055 }));
-    if (card.date) els.push(K.foot(ctx, { text: card.date, color: theme.textMuted, y: H * 0.05 }));
+    // Fuente/fecha ABAJO a la derecha (arriba se pisaba con el chip cuando el
+    // worker manda textos largos tipo "MITECO ..."), y con autofit: si es muy
+    // larga, encoge en vez de montarse encima de nada.
+    if (card.date) {
+      els.push({
+        type: 'text', x: K.r(W * 0.4), y: K.r(H * 0.885), w: K.r(W * 0.6) - pad, h: K.r(H * 0.075),
+        text: String(card.date).toUpperCase(), font: 'text', weight: 800, color: theme.textMuted,
+        align: 'right', valign: 'center', lineHeight: 1,
+        autofit: { min: K.r(H * 0.028), max: K.r(H * 0.055), lines: 1 },
+      });
+    }
 
     const top = K.r(H * 0.185);
-    const bottom = K.r(H * 0.82);
+    const bottom = K.r(H * 0.86);
     const rowH = (bottom - top) / 2;
     const priceW = K.r(W * 0.38);
     const nameX = pad + priceW + K.r(W * 0.035);

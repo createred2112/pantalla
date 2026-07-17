@@ -1661,6 +1661,11 @@ async function saveEditor({ renderAfter = false } = {}) {
         ED_SLOT.subtitle = data.subtitle || '';
         ED_SLOT.body = data.body || '';
         ED_SLOT.date = data.date || '';
+      } else {
+        // Workers: el dato vivo (título/cuerpo) es del worker, pero la
+        // ETIQUETA del chip y la FUENTE/FECHA son tuyas y se conservan.
+        ED_SLOT.subtitle = data.subtitle || '';
+        ED_SLOT.date = data.date || '';
       }
       await api('/rundown', { method: 'PUT', body: JSON.stringify(RUNDOWN.rundown) });
       await api('/rundown/materialize', { method: 'POST', body: '{}' });

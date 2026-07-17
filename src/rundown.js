@@ -650,9 +650,12 @@ function slotPayload(slot, library, date, options = {}) {
         : (rec.data.template || s.template || 'dato');
       return {
         title: rec.data.title,
-        subtitle: rec.data.subtitle || s.subtitle || '',
+        // La etiqueta y la fuente/fecha las mandas TÚ si las has escrito en el
+        // bloque; el worker solo pone las suyas cuando están vacías. (El dato
+        // vivo —título/cuerpo— sigue siendo siempre del worker.)
+        subtitle: s.subtitle || rec.data.subtitle || '',
         body: rec.data.body || '',
-        date: rec.data.date || '',
+        date: s.date || rec.data.date || '',
         // El worker sabe cuál es su mejor presentación (luz→curva, fuel→lista).
         template: workerTemplate,
         theme: s.theme || '',
@@ -971,6 +974,12 @@ function rememberCardEdit(card, patch = {}) {
     setIfPresent('title', card.title || '');
     setIfPresent('subtitle', card.subtitle || '');
     setIfPresent('body', card.body || '');
+    setIfPresent('date', card.date || '');
+  }
+  // En workers, la ETIQUETA (chip) y la FUENTE/FECHA sí son tuyas: se guardan
+  // en el bloque y el siguiente pase las respeta (el dato vivo no se toca).
+  if (source === 'worker') {
+    setIfPresent('subtitle', card.subtitle || '');
     setIfPresent('date', card.date || '');
   }
 

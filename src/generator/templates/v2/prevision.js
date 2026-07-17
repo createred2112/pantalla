@@ -16,8 +16,14 @@ module.exports = {
     const els = [];
 
     els.push(K.chipXL(ctx, { x: pad, y: H * 0.045, bg: theme.accent, color: theme.accentText, text: card.subtitle || 'PREVISIÓN', size: 0.055 }));
+    // Fuente abajo a la derecha con autofit: nunca se pisa con el chip.
     if (card.date) {
-      els.push(K.foot(ctx, { text: card.date, color: theme.textMuted, y: H * 0.05 }));
+      els.push({
+        type: 'text', x: K.r(W * 0.4), y: K.r(H * 0.9), w: K.r(W * 0.6) - pad, h: K.r(H * 0.07),
+        text: String(card.date).toUpperCase(), font: 'text', weight: 800, color: theme.textMuted,
+        align: 'right', valign: 'center', lineHeight: 1,
+        autofit: { min: K.r(H * 0.028), max: K.r(H * 0.05), lines: 1 },
+      });
     }
 
     const colW = K.r((W - pad * 2) / days.length);
