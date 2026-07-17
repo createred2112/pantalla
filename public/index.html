@@ -27,8 +27,13 @@
     body > header{padding-top:calc(10px + env(safe-area-inset-top)) !important}
     body{padding-bottom:env(safe-area-inset-bottom)}
     .toast{bottom:calc(24px + env(safe-area-inset-bottom)) !important}
-    dialog{max-height:calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 20px)}
   }
+  /* Diálogos: cabecera y BOTONERA (Guardar…) siempre visibles; el scroll vive
+     en el cuerpo. Antes, en pantallas bajas, la botonera quedaba fuera. */
+  dialog[open]{display:flex;flex-direction:column}
+  dialog{max-height:92dvh;max-height:calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 24px)}
+  .dlg-h,.dlg-f{flex-shrink:0}
+  .dlg-b{flex:1 1 auto;min-height:0;max-height:none !important}
 </style>
 <style>
   :root{
