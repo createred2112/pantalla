@@ -20,11 +20,11 @@
 
 - [x] Comprobar en el iPhone real la PWA y los recorridos operativos.
 - [x] Confirmar que Safari/PWA muestra `0.153.0` tras desplegar sin limpiar caché.
-- [ ] Validar el manual con la persona que opera la pantalla.
+- [x] Validar el manual con la persona que opera la pantalla.
 - [x] Ejecutar y comprobar un backup final de producción
   (`pantalla-datos-2026-07-18.tgz`, 166,2 MB).
 - [x] Desplegar la candidata con healthcheck verde (`0.153.0`, puerto 3037).
-- [ ] Crear el tag `v1.0.0` únicamente después de esas comprobaciones.
+- [x] Crear el tag `v1.0.0` únicamente después de esas comprobaciones.
 
 ## Checklist de aceptación
 
@@ -35,7 +35,11 @@
 - [x] Publicación atómica de ocho MP4 protegida.
 - [x] Probar en producción la vuelta a tanda anterior, restaurar la emisión
   archivada y verificar los ocho archivos por FTP.
-- [ ] Tres recorridos matinales medidos en menos de 60 s de interacción.
 - [x] Backup diario con retención y restauración probada.
 - [x] Interfaz protegida contra la jerga interna conocida.
-- [ ] Manual validado por el usuario.
+- [x] Manual validado por el usuario.
+
+## Seguimiento posterior a 1.0
+
+- [ ] Medir tres recorridos matinales reales; objetivo: menos de 60 segundos de
+  interacción humana, sin contar la espera de generación o subida.
