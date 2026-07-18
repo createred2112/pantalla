@@ -6,6 +6,25 @@ const H = { 'Content-Type': 'application/json', ...(TOKEN ? { 'x-panel-token': T
 
 const $ = (s) => document.querySelector(s);
 const DISPLAY_TIME_ZONE = 'Europe/Madrid';
+
+// F4/iPhone: Safari centra los <dialog> respecto al área completa aunque el
+// teclado reduzca la zona realmente visible. Publicamos esa altura en CSS y,
+// al enfocar un campo dentro de un diálogo, lo acercamos al centro del scroll.
+// La cabecera y la botonera siguen fijas; solo se desplaza el cuerpo.
+function syncVisualHeight() {
+  const height = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+  document.documentElement.style.setProperty('--visual-height', `${Math.max(240, Math.round(height))}px`);
+}
+syncVisualHeight();
+window.visualViewport?.addEventListener('resize', syncVisualHeight);
+window.visualViewport?.addEventListener('scroll', syncVisualHeight);
+window.addEventListener('orientationchange', syncVisualHeight);
+document.addEventListener('focusin', (event) => {
+  const field = event.target && event.target.closest && event.target.closest('dialog[open] input, dialog[open] textarea, dialog[open] select');
+  if (!field) return;
+  setTimeout(() => field.scrollIntoView({ block: 'center', inline: 'nearest' }), 120);
+});
+
 const api = async (path, opts = {}) => {
   const r = await fetch('/api' + path, { headers: H, ...opts });
   if (r.status === 401) { location.href = '/login'; throw new Error('sesión expirada'); }

@@ -30,10 +30,13 @@
   }
   /* Diálogos: cabecera y BOTONERA (Guardar…) siempre visibles; el scroll vive
      en el cuerpo. Antes, en pantallas bajas, la botonera quedaba fuera. */
+  :root{--visual-height:100dvh}
   dialog[open]{display:flex;flex-direction:column}
-  dialog{max-height:92dvh;max-height:calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 24px)}
+  dialog{max-height:92dvh;max-height:min(
+    calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 24px),
+    calc(var(--visual-height) - 16px));overscroll-behavior:contain}
   .dlg-h,.dlg-f{flex-shrink:0}
-  .dlg-b{flex:1 1 auto;min-height:0;max-height:none !important}
+  .dlg-b{flex:1 1 auto;min-height:0;max-height:none !important;overscroll-behavior:contain}
 </style>
 <style>
   :root{
@@ -768,6 +771,7 @@
 
 <dialog id="aqDlg" style="max-width:580px;width:96vw">
   <div class="dlg-h"><h2>📅 Agenda exprés</h2><button class="ghost" onclick="aqDlg.close()">✕</button></div>
+  <div class="dlg-b">
   <div style="display:flex;gap:8px;margin-bottom:10px;align-items:center">
     <button class="ghost" id="aqToday" type="button">Hoy</button>
     <button class="ghost" id="aqTomorrow" type="button">Mañana</button>
@@ -786,6 +790,7 @@
   </div>
   <label class="chk" style="margin:0 0 10px"><input type="checkbox" id="aqHide" checked> Ocultar cada evento 45 min después de su hora</label>
   <label class="chk" id="aqPreviewRow" style="margin:0 0 10px;display:none"><input type="checkbox" id="aqPreview"> 📌 Crear además la cartela <b>«AGENDA · MAÑANA»</b> visible HOY (caduca sola esta noche a las 23:59)</label>
+  </div>
   <div class="dlg-f" style="margin-top:12px">
     <button class="ghost" type="button" id="aqAdvanced">Modo avanzado</button>
     <button class="ghost" onclick="aqDlg.close()">Cancelar</button>

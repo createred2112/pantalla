@@ -6,11 +6,11 @@
 
 ## El modelo de diseño, en tres frases
 
-1. Si una cartela tiene un diseño propio creado con v2, se usa ese diseño.
+1. Si una cartela tiene un diseño propio creado con el editor, se usa ese diseño.
 2. Si no, se usa su plantilla propia ★ o el diseño predeterminado de su
-   plantilla y color.
+   plantilla.
 3. Si tampoco existe, se usa la plantilla GIGANTE incluida en el código; el
-   tema aporta los colores y los datos de la cartela aportan el contenido.
+   estilo de esa plantilla aporta los colores y la cartela aporta el contenido.
 
 ## Qué se ha simplificado
 

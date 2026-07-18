@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Editor · Estudio GasteizBerri</title>
 <style>
   @font-face{font-family:'Anton';font-weight:400;src:url('/fonts/Anton-400.ttf') format('truetype')}
@@ -17,7 +17,7 @@
   @font-face{font-family:'Archivo';font-weight:900;src:url('/fonts/Archivo-900.ttf') format('truetype')}
   :root{--bg:#0b1f3a;--card:#13294b;--line:#244170;--accent:#e2231a;--sel:#2bb6ff;--txt:#eaf0fb;--muted:#9fb2d4}
   *{box-sizing:border-box}
-  body{margin:0;height:100vh;display:flex;flex-direction:column;font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif;background:#06101f;color:var(--txt);overflow:hidden}
+  body{margin:0;height:100vh;height:100dvh;display:flex;flex-direction:column;font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif;background:#06101f;color:var(--txt);overflow:hidden}
   header{background:#081729;border-bottom:1px solid var(--line);padding:8px 12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
   header h1{font-size:14px;margin:0}
   header .grow{flex:1}
@@ -51,8 +51,8 @@
     button{min-height:44px}
   }
   @supports (padding: env(safe-area-inset-top)){
-    header{padding-top:calc(8px + env(safe-area-inset-top))}
-    .kbd{padding-bottom:calc(10px + env(safe-area-inset-bottom))}
+    header{padding-top:calc(8px + env(safe-area-inset-top));padding-left:calc(12px + env(safe-area-inset-left));padding-right:calc(12px + env(safe-area-inset-right))}
+    .kbd,.panel{padding-bottom:calc(10px + env(safe-area-inset-bottom))}
   }
   #canvas.boxes .el{outline-color:rgba(255,255,255,.45)}
   .handle{position:absolute;background:var(--sel);border:2px solid #fff;z-index:20}
@@ -91,6 +91,38 @@
   .kbd b{color:var(--muted);background:#0e2240;border-radius:4px;padding:1px 5px;font-weight:600}
   .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#000c;border:1px solid var(--line);padding:9px 16px;border-radius:999px;opacity:0;transition:.2s;z-index:99}
   .toast.show{opacity:1}
+  .only-mobile{display:none}
+  /* El editor no puede conservar una columna fija de 330 px junto al lienzo
+     en un iPhone de 390 px. En vertical se apilan: lienzo arriba y controles
+     abajo. En horizontal se conserva el reparto lateral, pero se compacta la
+     cabecera para no comerse la poca altura disponible. */
+  @media (max-width:700px) and (orientation:portrait){
+    header{gap:6px;padding-block:6px}
+    header h1,#hint,#scope,.kbd{display:none}
+    header .grow{display:none}
+    .wrap{flex-direction:column}
+    .stage{flex:0 0 42%;min-height:220px}
+    .side{width:100%;flex:1;border-left:0;border-top:1px solid var(--line)}
+    #layers{max-height:110px;padding:7px 10px}
+    .panel{padding:10px 12px}
+    #btnUndo,#btnRedo{font-size:0;width:44px;padding-inline:0}
+    #btnUndo::before{content:'↩';font-size:19px}
+    #btnRedo::before{content:'↪';font-size:19px}
+    .only-desktop{display:none}.only-mobile{display:inline}
+  }
+  @media (max-height:500px) and (orientation:landscape){
+    header{gap:5px;padding-block:4px;flex-wrap:nowrap;overflow-x:auto}
+    header h1,#hint,#scope,.kbd,.chk{display:none}
+    header .grow{display:none}
+    .side{width:290px}
+    #layers{max-height:92px;padding:6px 9px}
+    .panel{padding:8px 10px}
+    #btnUndo,#btnRedo{font-size:0;width:44px;padding-inline:0;flex:none}
+    #btnUndo::before{content:'↩';font-size:19px}
+    #btnRedo::before{content:'↪';font-size:19px}
+    details.menu summary,header button{white-space:nowrap;flex:none}
+    .only-desktop{display:none}.only-mobile{display:inline}
+  }
 </style>
 </head>
 <body>
@@ -117,7 +149,7 @@
     </div>
   </details>
   <button class="ghost" onclick="location.href='/'">← Volver</button>
-  <button class="primary" id="btnSave">Guardar y actualizar MP4</button>
+  <button class="primary" id="btnSave"><span class="only-desktop">Guardar y actualizar MP4</span><span class="only-mobile">Guardar</span></button>
 </header>
 <div class="wrap">
   <div class="stage" id="stage">
