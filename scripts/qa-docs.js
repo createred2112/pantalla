@@ -38,4 +38,10 @@ for (const stale of ['## Temas de color', 'selector + muestras de color', 'fonts
 const changelog = fs.readFileSync(path.join(ROOT, 'CHANGELOG.md'), 'utf8');
 assert(changelog.includes('0.100') && changelog.includes('0.152.0'), 'el changelog no cubre 0.100 → 0.152.0');
 
-console.log('OK: manual, capturas, enlaces, changelog y runbook de 10 pasos');
+const deploy = fs.readFileSync(path.join(ROOT, 'scripts', 'update-server.sh'), 'utf8');
+const rootBranch = deploy.match(/if \[ "\$\(id -u\)" -eq 0 \][\s\S]*?\n  fi/);
+assert(rootBranch, 'no se encuentra la rama de despliegue ejecutada como root');
+assert(rootBranch[0].includes('run_as_app_user "--healthcheck"'), 'root debe verificar con el entorno Node del usuario del sitio');
+assert(!/restart_app\s*\n\s*load_node\s*\n\s*healthcheck/.test(rootBranch[0]), 'root no puede depender de tener npm instalado');
+
+console.log('OK: manual, capturas, enlaces, changelog, deploy root y runbook de 10 pasos');

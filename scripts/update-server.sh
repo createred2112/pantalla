@@ -156,8 +156,10 @@ main() {
     log "Ejecutando como $APP_USER"
     run_as_app_user "$mode"
     restart_app
-    load_node
-    healthcheck
+    # root puede no tener Node/npm aunque el usuario del sitio sí (CloudPanel
+    # instala NVM por usuario). La actualización ya se ejecutó como APP_USER;
+    # la verificación debe usar exactamente el mismo entorno.
+    run_as_app_user "--healthcheck"
     log "DEPLOY OK"
     return
   fi
