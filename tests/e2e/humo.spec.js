@@ -200,6 +200,63 @@ test('estado: enseña origen, última comprobación y dato de las fuentes autom�
   await page.keyboard.press('Escape');
 });
 
+test('recuperación: rollback e histórico muestran progreso y resultado persistente', async () => {
+  await page.goto('/');
+  await page.click('#btnStatus');
+  await expect(page.locator('#statusDlg')).toBeVisible();
+  const files = Array.from({ length: 8 }, (_, i) => `berri-${i + 1}.mp4`);
+
+  await page.route('**/api/tanda', (route) => route.fulfill({
+    contentType: 'application/json',
+    body: JSON.stringify({ hasPrevious: true, files: [] }),
+  }));
+  await page.route('**/api/tanda/rollback', async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 350));
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: true, upload: { ok: true, done: 8, count: 8, files, verify: { ok: true, checked: 8 } } }),
+    });
+  });
+  await page.click('#btnRollback');
+  await expect(page.locator('#screenOperationNotice')).toBeVisible();
+  await expect(page.locator('#screenOperationNotice')).toContainText('Volviendo a la tanda anterior');
+  await expect(page.locator('#screenOperationNotice')).toHaveClass(/ok/, { timeout: 5000 });
+  await expect(page.locator('#screenOperationNotice')).toContainText('8/8 archivos subidos y verificados');
+  await expect(page.locator('#screenOperationNotice')).toBeVisible(); // no desaparece como un toast
+  await page.click('[data-screen-operation-close]');
+  await expect(page.locator('#screenOperationNotice')).toBeHidden();
+
+  await page.route('**/api/emisiones', (route) => route.fulfill({
+    contentType: 'application/json',
+    body: JSON.stringify({ items: [{
+      id: 'qa-restore', publishedAt: new Date().toISOString(),
+      items: files.map((file, order) => ({ order, file, title: file, poster: '', available: true })),
+    }] }),
+  }));
+  await page.route('**/api/emisiones/qa-restore/restore', async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 350));
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: true, count: 8, upload: { ok: true, done: 8, count: 8, files, verify: { ok: true, checked: 8 } } }),
+    });
+  });
+  await page.click('#btnEmisiones');
+  await expect(page.locator('#emDlg')).toBeVisible();
+  await page.click('[data-em-restore="qa-restore"]');
+  await expect(page.locator('#screenOperationNotice')).toBeVisible();
+  await expect(page.locator('#screenOperationNotice')).toContainText('Restaurando la emisión elegida');
+  await expect(page.locator('#screenOperationNotice')).toHaveClass(/ok/, { timeout: 5000 });
+  await expect(page.locator('#screenOperationNotice')).toContainText('Emisión restaurada y en pantalla');
+  await expect(page.locator('#emDlg')).toBeVisible(); // conserva el resultado delante del usuario
+
+  await page.unroute('**/api/tanda');
+  await page.unroute('**/api/tanda/rollback');
+  await page.unroute('**/api/emisiones');
+  await page.unroute('**/api/emisiones/qa-restore/restore');
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Escape');
+});
+
 // ---------- 3. CREAR Y EDITAR UNA CARTELA ----------
 test('editar cartela: crear una manual, cambiarle el titular y verlo en el panel', async () => {
   await page.goto('/');

@@ -48,6 +48,69 @@ function toast(msg) {
   toast._t = setTimeout(() => t.classList.remove('show'), 2200);
 }
 
+// Las operaciones de recuperación cambian la pantalla REAL. Un toast de dos
+// segundos no basta: el aviso queda por encima del diálogo, fuerza un repintado
+// antes de iniciar la petición y conserva el resultado hasta que la persona lo
+// cierre expresamente.
+let SCREEN_OPERATION_TIMER = null;
+function screenOperationNotice(host, state, title, detail) {
+  let box = $('#screenOperationNotice');
+  if (!box) {
+    box = document.createElement('div');
+    box.id = 'screenOperationNotice';
+    box.setAttribute('role', 'status');
+    box.setAttribute('aria-live', 'assertive');
+    box.innerHTML = '<span class="op-spin"></span><div><b></b><small></small></div><button type="button" class="ghost" data-screen-operation-close>Cerrar</button>';
+  }
+  const target = host && host.open ? host : document.body;
+  if (box.parentElement !== target) target.appendChild(box);
+  box.className = `screen-operation ${state || 'busy'}`;
+  box.querySelector('b').textContent = title || 'Trabajando en la pantalla';
+  box.querySelector('small').textContent = detail || 'Espera hasta ver el resultado.';
+  box.querySelector('[data-screen-operation-close]').hidden = state === 'busy';
+  box.hidden = false;
+  return box;
+}
+function closeScreenOperation() {
+  clearInterval(SCREEN_OPERATION_TIMER);
+  SCREEN_OPERATION_TIMER = null;
+  const box = $('#screenOperationNotice');
+  if (box) box.hidden = true;
+}
+async function beginScreenOperation(host, title, detail) {
+  closeScreenOperation();
+  screenOperationNotice(host, 'busy', title, detail);
+  // Dos frames garantizan que Safari pinte el estado ANTES de esperar al FTP.
+  await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  SCREEN_OPERATION_TIMER = setInterval(async () => {
+    try {
+      const s = await api('/status');
+      APP_STATUS = s.status;
+      const activity = activityFromStatus(APP_STATUS);
+      if (activity) screenOperationNotice(host, 'busy', title, activity.detail || activity.title);
+    } catch { /* el aviso inicial sigue visible aunque falle el sondeo */ }
+  }, 800);
+}
+function finishScreenOperation(host, ok, title, detail) {
+  clearInterval(SCREEN_OPERATION_TIMER);
+  SCREEN_OPERATION_TIMER = null;
+  screenOperationNotice(host, ok ? 'ok' : 'err', title, detail);
+}
+function recoveryUploadOutcome(result) {
+  const up = (result && result.upload) || {};
+  const count = Number(up.done || up.count || (up.files && up.files.length) || (result && result.count) || 0);
+  const verified = Boolean(up.verify && up.verify.ok === true);
+  const ok = Boolean(result && result.ok !== false && up.ok !== false && verified);
+  let detail = `${count || 8}/8 archivos subidos`;
+  if (verified) detail += ' y verificados por FTP.';
+  else if (up.verify && up.verify.ok === false) detail += `, pero ${Number(up.verify.mismatches && up.verify.mismatches.length) || 'hay'} no coinciden en el FTP. Revisa Estado.`;
+  else detail += ', pero el servidor no pudo verificar el FTP. Revisa Estado.';
+  return { ok, detail };
+}
+document.addEventListener('click', (event) => {
+  if (event.target.closest('[data-screen-operation-close]')) closeScreenOperation();
+});
+
 let cards = [];
 let TEMPLATES = [];
 let SAFETY = {};
@@ -986,6 +1049,8 @@ function uploadSourceLabel(source, dryRun) {
     'automatic-daily': 'Subida automática diaria',
     'automatic-hourly': 'Subida automática horaria',
     'automatic-watch': 'Subida automática por cambios',
+    'manual-rollback': 'Vuelta a la tanda anterior',
+    'manual-restore': 'Restauración desde el histórico',
   };
   return map[source] || 'Subida';
 }
@@ -2297,10 +2362,16 @@ $('#emList').addEventListener('click', async (e) => {
   btn.disabled = true;
   btn.textContent = 'Restaurando y subiendo…';
   try {
+    await beginScreenOperation(emDlg, 'Restaurando la emisión elegida', 'Preparando los 8 archivos para la pantalla real…');
     const r = await api('/emisiones/' + encodeURIComponent(btn.dataset.emRestore) + '/restore', { method: 'POST', body: '{}' });
-    toast(r.ok ? 'Emisión restaurada y en pantalla ✓' : 'Restauración con error');
-    emDlg.close();
-  } catch (err) { toast(err.message || 'No se pudo restaurar'); btn.disabled = false; btn.textContent = 'Restaurar y subir'; }
+    const outcome = recoveryUploadOutcome(r);
+    finishScreenOperation(emDlg, outcome.ok, outcome.ok ? 'Emisión restaurada y en pantalla' : 'Restauración sin verificar', outcome.detail);
+    toast(outcome.ok ? 'Emisión restaurada y en pantalla ✓' : 'La restauración necesita revisión');
+    await loadStatus(true);
+  } catch (err) {
+    finishScreenOperation(emDlg, false, 'No se pudo restaurar la emisión', err.message || 'Revisa Estado antes de volver a intentarlo.');
+    toast(err.message || 'No se pudo restaurar');
+  } finally { btn.disabled = false; btn.textContent = 'Restaurar y subir'; }
 });
 
 // --- Escaleta editorial ---
@@ -5551,10 +5622,16 @@ $('#btnRollback').addEventListener('click', async () => {
     if (!t.hasPrevious) { toast('No hay tanda anterior guardada todavía'); return; }
     if (!confirm('¿Restaurar la TANDA ANTERIOR y subirla a la pantalla? La actual pasará a ser la "anterior" (puedes volver a alternar).')) return;
     btn.disabled = true; btn.textContent = 'Restaurando y subiendo…';
+    await beginScreenOperation(statusDlg, 'Volviendo a la tanda anterior', 'Preparando los 8 archivos para la pantalla real…');
     const r = await api('/tanda/rollback', { method: 'POST', body: '{}' }, 180000);
-    toast(r.ok ? 'Tanda anterior en pantalla ✓' : 'No se pudo volver a la tanda anterior: revisa el registro');
-    loadStatus(true);
-  } catch (e) { toast(e.message || 'No se pudo volver a la tanda anterior'); }
+    const outcome = recoveryUploadOutcome(r);
+    finishScreenOperation(statusDlg, outcome.ok, outcome.ok ? 'Tanda anterior restaurada' : 'Vuelta sin verificar', outcome.detail);
+    toast(outcome.ok ? 'Tanda anterior en pantalla ✓' : 'La vuelta necesita revisión');
+    await loadStatus(true);
+  } catch (e) {
+    finishScreenOperation(statusDlg, false, 'No se pudo volver a la tanda anterior', e.message || 'Revisa Estado antes de volver a intentarlo.');
+    toast(e.message || 'No se pudo volver a la tanda anterior');
+  }
   finally { btn.disabled = false; btn.textContent = '↩ Volver a la tanda anterior'; }
 });
 

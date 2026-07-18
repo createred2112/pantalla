@@ -17,6 +17,8 @@ las correcciones pequeñas intermedias quedan en el historial Git.
   su texto principal usa una familia más abierta y legible.
 - Los estados operativos se desplazan debajo de la tanda para que no separen
   las acciones de sus cartelas.
+- Volver a la tanda anterior y restaurar el histórico muestran progreso por
+  archivo y conservan un resultado visible hasta que la persona lo cierre.
 
 ## 0.152.0 — Candidata F4
 

@@ -12,7 +12,7 @@
 - Cierre funcional aprobado el 18-07-2026: la candidata queda congelada. Las
   mejoras no bloqueantes (por ejemplo, iconos SVG animados) pasan a la serie
   posterior a 1.0.
-- Batería final ejecutada el 18-07-2026: 17/17 recorridos E2E, 16/16 estilos y
+- Batería final ejecutada el 18-07-2026: 18/18 recorridos E2E, 16/16 estilos y
   comparación visual con 0,000 % de diferencia.
 
 ## Puertas antes del tag
