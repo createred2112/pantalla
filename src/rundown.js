@@ -1118,7 +1118,11 @@ function planMaterialization(options = {}) {
   const structural = rep.filter((row) => row.enabled && !row.skippedToday);
   const ready = rep.filter((row) => row.inEmission);
   const blockers = structural
-    .filter((row) => row.autoSkipped || row.missing)
+    // Un worker sin dato fresco conserva una cartela de respaldo explícita
+    // ("sin datos recientes") y por tanto puede completar la tanda. Se señala
+    // en Estado, pero no debe bloquear el preflight ni mezclarse con Agenda,
+    // Fotos o un archivo realmente ausente.
+    .filter((row) => row.autoSkipped || (row.missing && row.source !== 'worker'))
     .map((row) => ({
       slotId: String(row.id),
       label: String(row.label || row.id || 'Posición'),

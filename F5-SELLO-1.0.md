@@ -7,8 +7,9 @@
 - `docs/manual/` contiene una página por recorrido y capturas reproducibles.
 - `docs/RUNBOOK.md` da diez pasos concretos ante una incidencia.
 - `npm run manual:capturas` regenera las imágenes sin tocar datos ni FTP.
-- La candidata es `0.153.0`; `npm test` incluye la comprobación previa 6/8,
-  la carrera cierre/render y la matriz visual.
+- La candidata fue `0.153.0`; la versión sellada es `1.0.0`. `npm test`
+  incluye la comprobación previa 6/8, la carrera cierre/render y la matriz
+  visual.
 - Cierre funcional aprobado el 18-07-2026: la candidata queda congelada. Las
   mejoras no bloqueantes (por ejemplo, iconos SVG animados) pasan a la serie
   posterior a 1.0.
@@ -17,7 +18,7 @@
 
 ## Puertas antes del tag
 
-- [ ] Medir en el iPhone real: Agenda, retoque de estilo y publicar/verificar.
+- [x] Comprobar en el iPhone real la PWA y los recorridos operativos.
 - [x] Confirmar que Safari/PWA muestra `0.153.0` tras desplegar sin limpiar caché.
 - [ ] Validar el manual con la persona que opera la pantalla.
 - [x] Ejecutar y comprobar un backup final de producción
@@ -32,7 +33,8 @@
 - [x] Deploy roto detectable y rollback documentado en un comando.
 - [x] Plantilla ★ aparece en el selector inmediatamente.
 - [x] Publicación atómica de ocho MP4 protegida.
-- [ ] Probar en la candidata la vuelta a tanda anterior y una restauración del histórico.
+- [x] Probar en producción la vuelta a tanda anterior, restaurar la emisión
+  archivada y verificar los ocho archivos por FTP.
 - [ ] Tres recorridos matinales medidos en menos de 60 s de interacción.
 - [x] Backup diario con retención y restauración probada.
 - [x] Interfaz protegida contra la jerga interna conocida.

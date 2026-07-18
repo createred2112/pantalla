@@ -14,3 +14,12 @@ pantalla actualizada y queda registrado con fecha y hora.
 
 Si falla una posición o no hay exactamente ocho MP4, el envío se detiene y la
 pantalla conserva la última tanda válida.
+
+## Recuperar una emisión
+
+Desde **Estado**, **Volver a la tanda anterior** recupera la publicación previa.
+**Emisiones anteriores** permite elegir una tanda archivada concreta. Ambas
+acciones cambian la pantalla real: muestran el progreso de los ocho archivos y
+mantienen el resultado visible hasta pulsar **Cerrar**. Si la verificación FTP
+no coincide, el panel lo marca como error y hay que revisar Estado antes de
+repetir la operación.

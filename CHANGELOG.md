@@ -3,6 +3,18 @@
 Cambios relevantes desde la serie 0.100. Se agrupan por entregas de producto;
 las correcciones pequeñas intermedias quedan en el historial Git.
 
+## 1.0.0 — Primera versión estable
+
+- Recorrido diario consolidado alrededor de ocho huecos visibles: Agenda,
+  carruseles, fotos, vista previa y publicación sin reconstruir la tanda.
+- Contrato de emisión seguro: ocho MP4 o ningún cambio, backup de producción,
+  historial, rollback y verificación FTP probados sobre la pantalla real.
+- Recuperaciones con progreso por archivo y resultado persistente; un fallo de
+  verificación queda señalado y nunca se presenta como éxito.
+- PWA e interfaz táctil verificadas en iPhone, actualización por huella de
+  assets y batería final de 18 recorridos end-to-end.
+- La serie 0.153 queda como candidata de la que se selló esta versión.
+
 ## 0.153.0 — Tanda visual y cierre seguro
 
 - La portada pasa a ser la tanda: ocho huecos numerados, con miniatura real,

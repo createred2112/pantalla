@@ -4,7 +4,7 @@ Motor de cartelería digital de GasteizBerri. Genera la programación de un pane
 LED urbano, la presenta como una vuelta de ocho vídeos y la publica por FTP.
 El panel de administración es una PWA móvil pensada para una sola persona.
 
-Versión actual: **0.153.0, candidata a 1.0**.
+Versión actual: **1.0.0**.
 
 ## Contrato de emisión
 
@@ -247,13 +247,12 @@ cero.
 
 Para incidencias, seguir [el runbook de diez pasos](docs/RUNBOOK.md).
 
-## Estado de la candidata 1.0
+## Estado de la versión 1.0
 
 - F0: diagnóstico — cerrado.
 - F1: red de seguridad — cerrada.
 - F2: entrega, caché, backup y rollback — cerrada.
 - F3: simplificación — cerrada.
-- F4: recorridos y ergonomía móvil — código cerrado; pendiente medición final
-  en el iPhone real.
-- F5: candidata desplegada y batería final verde; pendientes validación en el
-  iPhone real, backup final, prueba de recuperación y tag `v1.0.0`.
+- F4: recorridos y ergonomía móvil — cerrada y probada en iPhone.
+- F5: batería final verde, backup de producción y recuperación real
+  rollback/histórico comprobados.

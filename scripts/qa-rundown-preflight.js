@@ -35,6 +35,18 @@ async function main() {
   assert.strictEqual(complete.ok, true);
   assert.strictEqual(complete.readyCount, 8);
 
+  const workerFallback = rundown.planMaterialization({
+    date: '2026-07-18',
+    rundown: {
+      title: 'QA worker degradado', days: {},
+      slots: [fixed('uno'), fixed('dos'), fixed('tres'), fixed('cuatro'), fixed('cinco'), fixed('seis'), fixed('siete'),
+        { id: 'worker', label: 'Dato automático', enabled: true, source: 'worker', workerKey: 'qaMissingWorker', template: 'noticia' }],
+    },
+    library: {},
+  });
+  assert.strictEqual(workerFallback.ok, true);
+  assert.deepStrictEqual(workerFallback.blockers, []);
+
   let generated = false;
   const result = await publish({
     lock: false,
