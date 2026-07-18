@@ -18,7 +18,7 @@
 ## Puertas antes del tag
 
 - [ ] Medir en el iPhone real: Agenda, retoque de estilo y publicar/verificar.
-- [ ] Confirmar que Safari/PWA muestra `0.153.0` tras desplegar sin limpiar caché.
+- [x] Confirmar que Safari/PWA muestra `0.153.0` tras desplegar sin limpiar caché.
 - [ ] Validar el manual con la persona que opera la pantalla.
 - [x] Ejecutar y comprobar un backup final de producción
   (`pantalla-datos-2026-07-18.tgz`, 166,2 MB).
@@ -28,7 +28,7 @@
 ## Checklist de aceptación
 
 - [x] `npm test` verde y por debajo de 10 minutos.
-- [ ] Deploy → PWA muestra siempre la versión nueva sin limpiar caché.
+- [x] Deploy → PWA muestra siempre la versión nueva sin limpiar caché.
 - [x] Deploy roto detectable y rollback documentado en un comando.
 - [x] Plantilla ★ aparece en el selector inmediatamente.
 - [x] Publicación atómica de ocho MP4 protegida.
