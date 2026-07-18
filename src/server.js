@@ -568,6 +568,7 @@ app.get('/api/agenda/web', async (req, res) => {
       title: m ? title.replace(m[0], '').replace(/\s+/g, ' ').trim() : title,
       time: it.time || (m ? `${String(m[1]).padStart(2, '0')}:${m[2]}` : ''),
       place: stripHtml(it.place || ''),
+      type: stripHtml(it.type || ''),
       url: it.url || '',
     });
   };
@@ -575,7 +576,7 @@ app.get('/api/agenda/web', async (req, res) => {
   //    Una descarga al día por fecha, cacheada; el resto del día sale de disco.
   try {
     const kk = await require('./suggestions').kulturklik(day);
-    for (const ev of kk.items || []) push({ title: ev.title, time: ev.time, place: [ev.place, ev.type].filter(Boolean).join(' · ') });
+    for (const ev of kk.items || []) push({ title: ev.title, time: ev.time, place: ev.place, type: ev.type });
     if (items.length) source = 'Kulturklik / Euskadi.eus' + (kk.cached ? ' (actualizado hoy)' : '');
   } catch (e) {
     log.warn('agenda', 'Kulturklik no disponible: ' + e.message);

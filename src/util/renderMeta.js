@@ -83,6 +83,7 @@ function renderHash(card) {
     v: 46, // subir al cambiar el diseño/render de las plantillas en código (46: fix autofit/marquesina)
     design: 'v2', // v1 retirado (F3); constante para no invalidar los vídeos ya generados con v2
     template: card.template || '',
+    agendaSceneDesign: card.template === 'agenda' ? 4 : null,
     theme,
     layout: card.layout || null,
     tplLayout,

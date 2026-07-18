@@ -159,7 +159,7 @@ function normalizeLibraryItem(item, defaults) {
 }
 
 function agendaEventId(item) {
-  const raw = `${item && item.date || ''}|${item && item.time || ''}|${item && item.title || ''}|${item && item.subtitle || ''}|${item && item.place || ''}`.toLowerCase();
+  const raw = `${item && item.date || ''}|${item && item.time || ''}|${item && item.type || ''}|${item && item.title || ''}|${item && item.subtitle || ''}|${item && item.place || ''}`.toLowerCase();
   let hash = 0;
   for (const ch of raw) hash = ((hash * 31) + ch.charCodeAt(0)) >>> 0;
   return `evt_${hash.toString(36)}`;
@@ -171,6 +171,7 @@ function normalizeAgendaEvent(item) {
     id: String(ev.id || agendaEventId(ev)),
     date: String(ev.date || ev.day || '').trim().slice(0, 10),
     time: String(ev.time || '').trim(),
+    type: String(ev.type || ev.eventType || '').trim(),
     title: String(ev.title || ev.name || '').trim(),
     subtitle: String(ev.subtitle || '').trim(),
     place: String(ev.place || ev.location || '').trim(),
@@ -183,21 +184,34 @@ function normalizeAgendaEvent(item) {
 function agendaLineToEvent(line) {
   const parts = String(line || '').split('|').map((x) => x.trim());
   const dated = /^\d{4}-\d{2}-\d{2}$/.test(parts[0] || '');
+  const signal = dated ? (parts[1] || '') : (parts.length >= 3 ? parts[0] : '');
+  const expo = /^EXPO$/i.test(signal);
+  const legacyDatedWithoutTime = dated && parts.length === 3 && !expo && !/^\d{1,2}[:.]\d{2}$/.test(signal);
   const ev = normalizeAgendaEvent({
     date: dated ? parts[0] : '',
-    time: dated ? (parts[1] || '') : (parts.length >= 3 ? parts[0] : ''),
-    title: dated ? (parts[2] || '') : (parts.length >= 3 ? parts[1] : (parts[0] || '')),
+    time: expo || legacyDatedWithoutTime ? '' : signal,
+    type: expo ? 'Exposición' : '',
+    title: legacyDatedWithoutTime ? signal : (dated ? (parts[2] || '') : (parts.length >= 3 ? parts[1] : (parts[0] || ''))),
     subtitle: dated && parts.length >= 5 ? parts[3] : (!dated && parts.length >= 4 ? parts[2] : ''),
-    place: dated
+    place: legacyDatedWithoutTime ? (parts[2] || '') : (dated
       ? (parts.length >= 5 ? parts[4] : (parts[3] || ''))
-      : (parts.length >= 4 ? parts[3] : (parts.length >= 3 ? parts[2] : (parts[1] || ''))),
+      : (parts.length >= 4 ? parts[3] : (parts.length >= 3 ? parts[2] : (parts[1] || '')))),
   });
   return ev.title ? ev : null;
 }
 
+function agendaSignal(ev) {
+  if (String(ev && ev.time || '').trim()) return String(ev.time).trim();
+  return /exposici|erakusketa/i.test(String(ev && ev.type || '')) ? 'EXPO' : '';
+}
+
 function agendaEventLine(ev) {
   const detail = [ev.subtitle, ev.place].map((x) => String(x || '').trim()).filter(Boolean).join(' · ');
-  return [ev.date, ev.time, ev.title, detail].map((x) => String(x || '').trim()).filter(Boolean).join(' | ');
+  const values = ev.date
+    ? [ev.date, agendaSignal(ev), ev.title, detail]
+    : [agendaSignal(ev), ev.title, detail];
+  while (values.length && !String(values[values.length - 1] || '').trim()) values.pop();
+  return values.map((x) => String(x || '').trim()).join(' | ');
 }
 
 function dayNumber(date) {
@@ -761,14 +775,17 @@ function toCard(slot, library, order, date, pickMap = {}, dayThemeKey = '', auto
 const QUICK_NOTES = '__expres__';
 
 function parseQuickLine(line, day) {
-  const m = String(line || '').trim().match(/^(\d{1,2})[:.hH](\d{2})\s+(.*)$/);
+  const raw = String(line || '').trim();
+  const expo = /^EXPO\s+/i.test(raw);
+  const m = expo ? null : raw.match(/^(\d{1,2})[:.hH](\d{2})\s+(.*)$/);
   const time = m ? `${String(m[1]).padStart(2, '0')}:${m[2]}` : '';
-  const rest = (m ? m[3] : String(line || '').trim()).split('|').map((x) => x.trim());
-  return normalizeAgendaEvent({ date: day, time, title: rest[0] || '', place: rest[1] || '', subtitle: rest[2] || '' });
+  const rest = (m ? m[3] : (expo ? raw.replace(/^EXPO\s+/i, '') : raw)).split('|').map((x) => x.trim());
+  return normalizeAgendaEvent({ date: day, time, type: expo ? 'Exposición' : '', title: rest[0] || '', place: rest[1] || '', subtitle: rest[2] || '' });
 }
 
 function quickLineOf(ev) {
-  return `${ev.time ? ev.time + ' ' : ''}${ev.title}${ev.place ? ' | ' + ev.place : ''}${ev.subtitle ? ' | ' + ev.subtitle : ''}`;
+  const signal = agendaSignal(ev);
+  return `${signal ? signal + ' ' : ''}${ev.title}${ev.place ? ' | ' + ev.place : ''}${ev.subtitle ? ' | ' + ev.subtitle : ''}`;
 }
 
 function quickAgenda(date) {
@@ -839,7 +856,7 @@ function quickAgendaSave(date, text, options = {}) {
     const existing = store.list().find((c) => c.slug === 'agenda-manana');
     if (options.previewToday && events.length) {
       const lines = events
-        .map((ev) => [ev.time, ev.title, [ev.subtitle, ev.place].map((x) => String(x || '').trim()).filter(Boolean).join(' · ')].filter(Boolean).join(' | '))
+        .map((ev) => agendaEventLine({ ...ev, date: '' }))
         .join('\n');
       const patch = {
         type: 'generated', template: 'agenda', theme: 'blanco',

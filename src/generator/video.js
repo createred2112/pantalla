@@ -273,6 +273,57 @@ async function stitchClips(inputs, out, dir, W, H, fps, opts = {}) {
   return out;
 }
 
+async function encodeStillScenes(files, secondsPerScene, fps, out, dir, opts = {}, motion = {}) {
+  const segments = [];
+  for (let i = 0; i < files.length; i++) {
+    const segment = path.join(dir, `agenda-seg${String(i).padStart(2, '0')}.mp4`);
+    await runFfmpeg([
+      '-y', '-loop', '1', '-framerate', String(fps), '-i', files[i],
+      '-t', secondsPerScene.toFixed(3), '-an', '-vf', 'format=yuv420p',
+      '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-profile:v', 'high',
+      '-preset', 'veryfast', '-movflags', '+faststart', segment,
+    ], opts);
+    segments.push(segment);
+  }
+  if (segments.length === 1) {
+    fs.copyFileSync(segments[0], out);
+    return out;
+  }
+  const halfWipe = 0.32;
+  const color = /^#[0-9a-f]{6}$/i.test(String(motion.color || ''))
+    ? `0x${String(motion.color).slice(1)}` : '0xEF2B2D';
+  const transitions = [];
+  for (let i = 0; i < files.length - 1; i++) {
+    const transition = path.join(dir, `agenda-wipe${String(i).padStart(2, '0')}.mp4`);
+    await runFfmpeg([
+      '-y',
+      '-loop', '1', '-framerate', String(fps), '-i', files[i],
+      '-loop', '1', '-framerate', String(fps), '-i', files[i + 1],
+      '-f', 'lavfi', '-i', `color=c=${color}:s=${motion.W}x${motion.H}:r=${fps}:d=${halfWipe}`,
+      '-filter_complex',
+      `[2:v]split=2[c0][c1];` +
+      `[0:v][c0]overlay=x='-w+(t/${halfWipe})*w':y=0:shortest=1[cover];` +
+      `[1:v][c1]overlay=x='(t/${halfWipe})*w':y=0:shortest=1[reveal];` +
+      `[cover][reveal]concat=n=2:v=1:a=0,format=yuv420p[v]`,
+      '-map', '[v]', '-an', '-c:v', 'libx264', '-pix_fmt', 'yuv420p',
+      '-profile:v', 'high', '-preset', 'veryfast', '-movflags', '+faststart', transition,
+    ], opts);
+    transitions.push(transition);
+  }
+  const list = path.join(dir, 'agenda-sequence.txt');
+  const sequence = [];
+  segments.forEach((segment, i) => {
+    if (i > 0) sequence.push(transitions[i - 1]);
+    sequence.push(segment);
+  });
+  fs.writeFileSync(list, sequence.map(concatLine).join('\n'));
+  await runFfmpeg([
+    '-y', '-f', 'concat', '-safe', '0', '-i', list,
+    '-c', 'copy', '-movflags', '+faststart', out,
+  ], opts);
+  return out;
+}
+
 function bumperRef(card, field) {
   if (card[field]) return card[field];
   const all = cfg.templateBumpers || {};
@@ -298,6 +349,63 @@ function bumperPath(card, field, label) {
   return p;
 }
 
+// Agenda es deliberadamente una secuencia de láminas quietas. En un panel
+// LED grueso, una entrada animada roba tiempo de lectura y hace vibrar los
+// bordes. Capturamos una sola imagen nítida por evento y ffmpeg las mantiene
+// cinco segundos cada una dentro de UN único MP4. Entre escenas, la siguiente
+// lámina cubre a la anterior con un barrido broadcast de izquierda a derecha.
+async function renderAgendaSlideshow(card, prep, deadline) {
+  const { ctx, tpl } = prep;
+  const { W, H } = ctx;
+  const scenes = tpl.videoScenes(card);
+  const configuredFps = Number(cfg.video && cfg.video.fps) || 25;
+  const fps = Math.min(Math.max(8, configuredFps), MAX_FULL_FPS);
+  const secondsPerScene = Math.max(5, (Number(card.duration) || 10) / Math.max(1, scenes.length));
+  const timeLeft = () => Math.max(1, deadline - Date.now());
+  const checkTime = (phase) => {
+    if (Date.now() > deadline) throw timeoutError(card, phase);
+  };
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pantalla-agenda-'));
+  try {
+    const stills = [];
+    // Una página nueva por escena evita que Chromium arrastre medidas de
+    // autofit entre dos láminas con longitudes de texto muy distintas.
+    for (let i = 0; i < scenes.length; i++) {
+      await withPage(async (page) => {
+        checkTime('preparando escenas de agenda');
+        const scenePrep = prepare(scenes[i]);
+        const html = await buildHtml(scenes[i], scenePrep.ctx, scenePrep.tpl, scenePrep.frame);
+        await page.setViewport({ width: W, height: H, deviceScaleFactor: 1 });
+        await page.setContent(html, { waitUntil: 'load' });
+        try { await page.evaluate('document.fonts.ready'); } catch {}
+        await page.evaluate(AUTOFIT);
+        const file = path.join(dir, `scene${String(i).padStart(2, '0')}.jpg`);
+        await page.screenshot({ path: file, type: 'jpeg', quality: 94, clip: { x: 0, y: 0, width: W, height: H } });
+        stills.push(file);
+      });
+    }
+
+    fs.mkdirSync(paths.output, { recursive: true });
+    if (!card._previewVideo && stills[0]) fs.copyFileSync(stills[0], path.join(paths.output, card.id + '.jpg'));
+    const main = path.join(dir, 'main.mp4');
+    log.info('video', `Agenda ${card.id}: ${scenes.length} escena(s), ${secondsPerScene.toFixed(1)} s por evento`);
+    await encodeStillScenes(stills, secondsPerScene, fps, main, dir, {
+      timeoutMs: timeLeft(), timeoutError: timeoutError(card, 'codificando agenda'),
+    }, { W, H, color: ctx.theme.accent });
+    const intro = bumperPath(card, 'videoIntro', 'de entrada');
+    const outro = bumperPath(card, 'videoOutro', 'de salida');
+    const out = path.join(paths.output, card.id + '.mp4');
+    checkTime('antes de unir cortinillas');
+    await stitchClips([intro, main, outro].filter(Boolean), out, dir, W, H, fps, {
+      timeoutMs: timeLeft(), timeoutError: timeoutError(card, 'uniendo cortinillas'),
+    });
+    log.info('video', `MP4 de agenda listo ${card.id}: ${scenes.length} evento(s)`);
+    return { file: out, ext: 'mp4', durationSeconds: mediaDuration.roundedDuration(out) };
+  } finally {
+    try { for (const f of fs.readdirSync(dir)) fs.rmSync(path.join(dir, f)); fs.rmdirSync(dir); } catch {}
+  }
+}
+
 // Renderiza la cartela a un MP4 en output/. Devuelve { file, ext:'mp4' }.
 async function renderVideoToFile(card) {
   renderGuard.assertCanUseChrome('video');
@@ -309,6 +417,9 @@ async function renderVideoToFile(card) {
   };
   const prep = prepare(card);
   if (!prep) throw new Error('plantilla no animable');
+  if (card.template === 'agenda' && typeof prep.tpl.videoScenes === 'function') {
+    return renderAgendaSlideshow(card, prep, deadline);
+  }
   const { ctx, tpl, frame } = prep;
   const { W, H } = ctx;
   const duration = Math.max(2, Math.min(20, Number(card.duration) || 6));

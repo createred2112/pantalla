@@ -97,10 +97,25 @@ async function suggest(key, existingTitles = []) {
 // SOLO al abrir la Agenda exprés: sin sondeos ni tareas de fondo.
 const KK_CACHE = path.join(path.dirname(paths.data), 'kulturklik-cache.json');
 const KK_MAX_PAGES = 6;
+const KK_CACHE_VERSION = 2;
 
 function kkTime(hours) {
   const m = String(hours || '').match(/(\d{1,2})[:.](\d{2})/);
   return m ? `${String(m[1]).padStart(2, '0')}:${m[2]}` : '';
+}
+
+// Kulturklik usa openingHours también para horarios de apertura de muestras
+// que duran días o semanas. En una exposición esa primera hora NO es la hora
+// de inicio del evento y mostrarla como tal resulta engañoso.
+function normalizeKulturklikEvent(ev) {
+  const type = clean(ev.typeEs || ev.typeEu || '', 30);
+  const exhibition = /exposici|erakusketa/i.test(type);
+  return {
+    time: exhibition ? '' : kkTime(ev.openingHoursEs || ev.openingHoursEu),
+    title: clean(ev.nameEs || ev.nameEu || '', 110),
+    place: clean(ev.establishmentEs || ev.establishmentEu || '', 60),
+    type,
+  };
 }
 
 async function kulturklik(dateStr) {
@@ -109,7 +124,7 @@ async function kulturklik(dateStr) {
   let cache = {};
   try { cache = JSON.parse(fs.readFileSync(KK_CACHE, 'utf8')) || {}; } catch {}
   const hit = cache[day];
-  if (hit && hit.fetchedOn === today && Array.isArray(hit.items)) {
+  if (hit && hit.version === KK_CACHE_VERSION && hit.fetchedOn === today && Array.isArray(hit.items)) {
     return { ok: true, cached: true, date: day, items: hit.items };
   }
   const [y, m, d] = day.split('-');
@@ -122,15 +137,10 @@ async function kulturklik(dateStr) {
     const j = await r.json();
     for (const ev of j.items || []) {
       if (!/vitoria/i.test(String(ev.municipalityEs || ''))) continue;
-      const title = clean(String(ev.nameEs || ev.nameEu || '').replace(/^"|"$/g, ''), 110);
-      if (!title || seen.has(title.toLowerCase())) continue;
-      seen.add(title.toLowerCase());
-      items.push({
-        time: kkTime(ev.openingHoursEs || ev.openingHoursEu),
-        title,
-        place: clean(ev.establishmentEs || ev.establishmentEu || '', 60),
-        type: clean(ev.typeEs || '', 30),
-      });
+      const item = normalizeKulturklikEvent(ev);
+      if (!item.title || seen.has(item.title.toLowerCase())) continue;
+      seen.add(item.title.toLowerCase());
+      items.push(item);
     }
     if (page >= Number(j.totalPages || 1)) break;
   }
@@ -138,11 +148,11 @@ async function kulturklik(dateStr) {
   const top = items.slice(0, 40);
   // Caché: solo hoy y mañana (lo viejo se poda para no crecer).
   const next = {};
-  next[day] = { fetchedOn: today, items: top };
+  next[day] = { version: KK_CACHE_VERSION, fetchedOn: today, items: top };
   for (const [k, v] of Object.entries(cache)) if (k >= today && k !== day) next[k] = v;
   try { fs.writeFileSync(KK_CACHE, JSON.stringify(next)); } catch {}
   log.info('suggest', `Kulturklik ${day}: ${top.length} evento(s) de Vitoria-Gasteiz cacheados`);
   return { ok: true, cached: false, date: day, items: top };
 }
 
-module.exports = { suggest, kulturklik, SEEDS };
+module.exports = { suggest, kulturklik, normalizeKulturklikEvent, SEEDS };

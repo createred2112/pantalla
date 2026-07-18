@@ -155,6 +155,10 @@
   .wz-current-rotations>.hint{font-style:normal;font-size:12px;line-height:1.4;margin:8px 0}
   .wz-current-rotation-list .wz-config-card:last-child{margin-bottom:0}
   .wz-piece-count{font-style:normal;margin:4px 0 0}
+  .aq-suggestions{display:flex;flex-direction:column;gap:6px;font-style:normal}
+  .aq-suggestions button{text-align:left;padding:9px 10px}
+  .aq-suggestions button span{display:block;color:var(--txt);font-weight:800;line-height:1.25}
+  .aq-suggestions button small{display:block;color:var(--muted);font-size:12px;margin-top:2px}
   .wz-field-help{font-style:normal;background:rgba(43,182,115,.08);border-left:3px solid var(--ok);padding:8px;margin-bottom:8px}
   .wz-add-piece{width:100%;margin-top:9px}.wz-piece-options{margin-top:10px}.wz-draft-ok button{width:100%;margin-top:8px}
   .audit-row.skip .audit-icon{background:var(--warn);color:#081729}
@@ -772,22 +776,20 @@
     <button class="ghost" id="aqTomorrow" type="button">Mañana</button>
     <input type="date" id="aqDate" style="flex:1;min-width:140px">
   </div>
-  <label>Un evento por línea: <b>HORA Título | Lugar</b> (la hora y el lugar son opcionales)</label>
-  <textarea id="aqText" rows="8" style="width:100%;font-size:15px" placeholder="19:30 Concierto de jazz | Teatro Principal&#10;20:00 Cuentacuentos | Ignacio Aldecoa&#10;Mercado de la Almendra | Casco Viejo"></textarea>
+  <label>Un evento por línea · <b>HORA Título | Lugar</b> o <b>EXPO Título | Lugar</b></label>
+  <textarea id="aqText" rows="8" style="width:100%;font-size:15px" placeholder="19:30 Concierto de jazz | Teatro Principal&#10;EXPO Mirar el agua | Montehermoso&#10;Mercado de la Almendra | Casco Viejo"></textarea>
   <div class="hint" id="aqPreview" style="margin:6px 0 10px"></div>
   <div id="aqWebBox" style="margin:0 0 10px;padding:10px;border:1px dashed var(--line);border-radius:10px;background:#0a1a30">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-      <b style="font-size:13px">Eventos de la web</b>
+      <b style="font-size:13px">Sugerencias</b>
       <span class="hint" id="aqWebSource" style="flex:1"></span>
       <button class="ghost" type="button" id="aqWebReload" style="padding:5px 10px">↻</button>
     </div>
     <div id="aqWebList" class="hint">Cargando sugerencias…</div>
   </div>
-  <label class="chk" style="margin:0 0 10px"><input type="checkbox" id="aqHide" checked> Cada evento desaparece solo de la pantalla al pasar su hora (45 min después). Si no queda ninguno, la cartela se retira.</label>
+  <label class="chk" style="margin:0 0 10px"><input type="checkbox" id="aqHide" checked> Ocultar cada evento 45 min después de su hora</label>
   <label class="chk" id="aqPreviewRow" style="margin:0 0 10px;display:none"><input type="checkbox" id="aqPreview"> 📌 Crear además la cartela <b>«AGENDA · MAÑANA»</b> visible HOY (caduca sola esta noche a las 23:59)</label>
-  <label>Color del día (opcional; vacío = automático)</label>
-  <select id="aqTheme"></select>
-  <div class="hint" style="margin-top:8px">Al guardar, la cartela de agenda del día queda lista. Lo que escribas aquí sustituye los eventos de ese día; los pases hechos a mano en modo avanzado no se tocan.</div>
+  <details class="adv"><summary>Color (opcional)</summary><select id="aqTheme"></select></details>
   <div class="dlg-f" style="margin-top:12px">
     <button class="ghost" type="button" id="aqAdvanced">Modo avanzado</button>
     <button class="ghost" onclick="aqDlg.close()">Cancelar</button>

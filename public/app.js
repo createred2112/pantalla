@@ -2640,14 +2640,14 @@ function blankAgendaLibraryItem(afterItem = null) {
 }
 
 function agendaEventId(ev) {
-  const raw = `${ev && ev.date || ''}|${ev && ev.time || ''}|${ev && ev.title || ''}|${ev && ev.subtitle || ''}|${ev && ev.place || ''}`.toLowerCase();
+  const raw = `${ev && ev.date || ''}|${ev && ev.time || ''}|${ev && ev.type || ''}|${ev && ev.title || ''}|${ev && ev.subtitle || ''}|${ev && ev.place || ''}`.toLowerCase();
   let hash = 0;
   for (const ch of raw) hash = ((hash * 31) + ch.charCodeAt(0)) >>> 0;
   return 'evt_' + hash.toString(36);
 }
 
 function blankAgendaBankEvent() {
-  return { id: 'evt_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), date: (RUNDOWN && RUNDOWN.activeDate) || localDatePart(), time: '', title: '', subtitle: '', place: '', notes: '', enabled: true };
+  return { id: 'evt_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), date: (RUNDOWN && RUNDOWN.activeDate) || localDatePart(), time: '', type: '', title: '', subtitle: '', place: '', notes: '', enabled: true };
 }
 
 function ensureAgendaBank() {
@@ -2660,9 +2660,18 @@ function ensureAgendaBank() {
   return RUNDOWN.library.agendaBanco;
 }
 
+function agendaSignal(ev) {
+  if (String(ev && ev.time || '').trim()) return String(ev.time).trim();
+  return /exposici|erakusketa/i.test(String(ev && ev.type || '')) ? 'EXPO' : '';
+}
+
 function agendaEventLine(ev) {
   const detail = [ev.subtitle, ev.place].map((x) => String(x || '').trim()).filter(Boolean).join(' · ');
-  return [ev.date, ev.time, ev.title, detail].map((x) => String(x || '').trim()).filter(Boolean).join(' | ');
+  const values = ev.date
+    ? [ev.date, agendaSignal(ev), ev.title, detail]
+    : [agendaSignal(ev), ev.title, detail];
+  while (values.length && !String(values[values.length - 1] || '').trim()) values.pop();
+  return values.map((x) => String(x || '').trim()).join(' | ');
 }
 
 function agendaResolvedBody(item) {
@@ -2683,18 +2692,22 @@ function agendaResolvedBody(item) {
 }
 
 function agendaBankLabel(ev) {
-  return [ev.date ? fmtShortDate(ev.date) : '', ev.time, ev.title, ev.subtitle, ev.place].map((x) => String(x || '').trim()).filter(Boolean).join(' · ') || '(evento sin rellenar)';
+  return [ev.date ? fmtShortDate(ev.date) : '', agendaSignal(ev), ev.title, ev.subtitle, ev.place].map((x) => String(x || '').trim()).filter(Boolean).join(' · ') || '(evento sin rellenar)';
 }
 
 function agendaLineToEvent(line) {
   const parts = String(line || '').split('|').map((x) => x.trim());
   const dated = /^\d{4}-\d{2}-\d{2}$/.test(parts[0] || '');
+  const signal = dated ? (parts[1] || '') : (parts.length >= 3 ? parts[0] : '');
+  const expo = /^EXPO$/i.test(signal);
+  const legacyDatedWithoutTime = dated && parts.length === 3 && !expo && !/^\d{1,2}[:.]\d{2}$/.test(signal);
   const ev = blankAgendaBankEvent();
   ev.date = dated ? parts[0] : '';
-  ev.time = dated ? (parts[1] || '') : (parts.length >= 3 ? parts[0] : '');
-  ev.title = dated ? (parts[2] || '') : (parts.length >= 3 ? parts[1] : (parts[0] || ''));
+  ev.time = expo || legacyDatedWithoutTime ? '' : signal;
+  ev.type = expo ? 'Exposición' : '';
+  ev.title = legacyDatedWithoutTime ? signal : (dated ? (parts[2] || '') : (parts.length >= 3 ? parts[1] : (parts[0] || '')));
   ev.subtitle = dated && parts.length >= 5 ? parts[3] : (!dated && parts.length >= 4 ? parts[2] : '');
-  ev.place = dated ? (parts.length >= 5 ? parts[4] : (parts[3] || '')) : (parts.length >= 4 ? parts[3] : (parts.length >= 3 ? parts[2] : (parts[1] || '')));
+  ev.place = legacyDatedWithoutTime ? (parts[2] || '') : (dated ? (parts.length >= 5 ? parts[4] : (parts[3] || '')) : (parts.length >= 4 ? parts[3] : (parts.length >= 3 ? parts[2] : (parts[1] || ''))));
   ev.id = agendaEventId(ev);
   return ev.title ? ev : null;
 }
@@ -2990,6 +3003,7 @@ function renderAgendaBankPanel() {
   const rows = bank.length ? bank.map((ev, i) => `<article class="agenda-event-card ${ev.enabled === false ? 'off' : ''}" data-agenda-bank-item="${i}">
       <label>Día<input type="date" data-agenda-bank-field="date" value="${esc(ev.date || '')}"></label>
       <label>Hora<input type="time" data-agenda-bank-field="time" value="${esc(ev.time || '')}"></label>
+      <label>Tipo<input data-agenda-bank-field="type" value="${esc(ev.type || '')}" placeholder="Exposición, concierto…"></label>
       <label class="agenda-event-main">Evento<input data-agenda-bank-field="title" value="${esc(ev.title || '')}" placeholder="Nombre del evento"></label>
       <label class="agenda-event-main">Lugar<input data-agenda-bank-field="place" value="${esc(ev.place || '')}" placeholder="Lugar"></label>
       <button type="button" class="ghost" data-agenda-bank-del="${i}">Quitar</button>
@@ -4171,16 +4185,17 @@ let AQ_EDIT_SEQ = 0;
 
 function aqParse(text) {
   return String(text || '').split(/\n/).map((s) => s.trim()).filter(Boolean).map((l) => {
-    const m = l.match(/^(\d{1,2})[:.hH](\d{2})\s+(.*)$/);
+    const expo = /^EXPO\s+/i.test(l);
+    const m = expo ? null : l.match(/^(\d{1,2})[:.hH](\d{2})\s+(.*)$/);
     const time = m ? `${String(m[1]).padStart(2, '0')}:${m[2]}` : '';
-    const rest = (m ? m[3] : l).split('|').map((x) => x.trim());
-    return { time, title: rest[0] || '', place: rest[1] || '' };
+    const rest = (m ? m[3] : (expo ? l.replace(/^EXPO\s+/i, '') : l)).split('|').map((x) => x.trim());
+    return { time, type: expo ? 'Exposición' : '', title: rest[0] || '', place: rest[1] || '' };
   }).filter((e) => e.title);
 }
 function aqRefreshPreview() {
   const evs = aqParse($('#aqText').value);
   $('#aqPreview').innerHTML = evs.length
-    ? `Saldrán <b>${evs.length}</b> evento(s): ` + evs.slice(0, 6).map((e) => esc(`${e.time ? e.time + ' ' : ''}${e.title}`)).join(' · ') + (evs.length > 6 ? ' …' : '')
+    ? `Saldrán <b>${evs.length}</b> evento(s): ` + evs.slice(0, 6).map((e) => esc(`${e.time ? e.time + ' ' : (e.type ? 'EXPO ' : '')}${e.title}`)).join(' · ') + (evs.length > 6 ? ' …' : '')
     : 'Sin eventos: la cartela de agenda no se emitirá ese día.';
 }
 function aqMarkDate() {
@@ -4229,9 +4244,10 @@ async function aqLoadWeb(date = AQ_DATE, seq = AQ_LOAD_SEQ) {
       return;
     }
     src.textContent = r.source ? 'fuente: ' + r.source : '';
-    list.innerHTML = '<div style="display:flex;flex-direction:column;gap:6px">' + r.items.map((ev, i) =>
-      `<button type="button" class="ghost" data-aq-add="${i}" style="text-align:left;padding:8px 10px">＋ ${esc(`${ev.time ? ev.time + ' ' : ''}${ev.title}${ev.place ? ' | ' + ev.place : ''}`)}</button>`
-    ).join('') + '</div>';
+    list.innerHTML = '<div class="aq-suggestions">' + r.items.map((ev, i) => {
+      const meta = [ev.time, ev.type].filter(Boolean).join(' · ');
+      return `<button type="button" class="ghost" data-aq-add="${i}"><span>${esc(ev.title)}</span>${meta ? `<small>${esc(meta)}</small>` : ''}${ev.place ? `<small>${esc(ev.place)}</small>` : ''}</button>`;
+    }).join('') + '</div>';
     list.dataset.items = JSON.stringify(r.items);
   } catch (e) {
     if (seq !== AQ_LOAD_SEQ) return;
@@ -4245,14 +4261,15 @@ $('#aqWebList').addEventListener('click', (e) => {
   const items = JSON.parse($('#aqWebList').dataset.items || '[]');
   const ev = items[Number(btn.dataset.aqAdd)];
   if (!ev) return;
-  const line = `${ev.time ? ev.time + ' ' : ''}${ev.title}${ev.place ? ' | ' + ev.place : ''}`;
+  const expo = /exposici|erakusketa/i.test(String(ev.type || ''));
+  const line = `${ev.time ? ev.time + ' ' : (expo ? 'EXPO ' : '')}${ev.title}${ev.place ? ' | ' + ev.place : ''}`;
   const ta = $('#aqText');
   if (ta.value.split(/\n/).some((l) => l.trim() === line.trim())) { toast('Ese evento ya está en la lista'); return; }
   ta.value = (ta.value.trim() ? ta.value.replace(/\s+$/, '') + '\n' : '') + line;
   AQ_EDIT_SEQ++;
   aqRefreshPreview();
   btn.disabled = true;
-  btn.textContent = '✓ ' + btn.textContent.slice(2);
+  btn.textContent = '✓ Añadido';
 });
 $('#aqToday').addEventListener('click', () => openAgendaQuick(localDatePart()));
 $('#aqTomorrow').addEventListener('click', () => openAgendaQuick(addDays(localDatePart(), 1)));

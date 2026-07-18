@@ -58,7 +58,7 @@ test('agenda exprés: guardar hoy y mañana y releerlas', async () => {
 
   // HOY
   await page.click('#aqToday');
-  await page.fill('#aqText', `19:30 Concierto ${MARK} | Teatro Principal\n21:00 Cine al aire libre ${MARK} | Plaza España`);
+  await page.fill('#aqText', `19:30 Concierto ${MARK} | Teatro Principal\nEXPO Mirar el agua ${MARK} | Montehermoso\n21:00 Cine al aire libre ${MARK} | Plaza España`);
   await page.click('#aqSave');
   await expect(page.locator('#aqDlg')).toBeHidden();
   await toastVisible(/agenda|guardad/i);
@@ -76,6 +76,7 @@ test('agenda exprés: guardar hoy y mañana y releerlas', async () => {
   await page.click('#btnAgenda');
   await page.click('#aqToday');
   await expect(page.locator('#aqText')).toHaveValue(new RegExp(`Concierto ${MARK}`));
+  await expect(page.locator('#aqText')).toHaveValue(new RegExp(`EXPO Mirar el agua ${MARK}`));
   await page.locator('#aqDlg .ghost').first().click(); // cerrar
 });
 
