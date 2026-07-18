@@ -9,6 +9,11 @@
 - `npm run manual:capturas` regenera las imágenes sin tocar datos ni FTP.
 - La candidata es `0.153.0`; `npm test` incluye la comprobación previa 6/8,
   la carrera cierre/render y la matriz visual.
+- Cierre funcional aprobado el 18-07-2026: la candidata queda congelada. Las
+  mejoras no bloqueantes (por ejemplo, iconos SVG animados) pasan a la serie
+  posterior a 1.0.
+- Batería final ejecutada el 18-07-2026: 17/17 recorridos E2E, 16/16 estilos y
+  comparación visual con 0,000 % de diferencia.
 
 ## Puertas antes del tag
 
@@ -16,7 +21,7 @@
 - [ ] Confirmar que Safari/PWA muestra `0.153.0` tras desplegar sin limpiar caché.
 - [ ] Validar el manual con la persona que opera la pantalla.
 - [ ] Ejecutar y comprobar un backup final de producción.
-- [ ] Desplegar la candidata con healthcheck verde.
+- [x] Desplegar la candidata con healthcheck verde (`0.153.0`, puerto 3037).
 - [ ] Crear el tag `v1.0.0` únicamente después de esas comprobaciones.
 
 ## Checklist de aceptación

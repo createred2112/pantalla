@@ -255,5 +255,5 @@ Para incidencias, seguir [el runbook de diez pasos](docs/RUNBOOK.md).
 - F3: simplificación — cerrada.
 - F4: recorridos y ergonomía móvil — código cerrado; pendiente medición final
   en el iPhone real.
-- F5: documentación preparada; pendientes validación, backup final, tag
-  `v1.0.0` y despliegue verificado.
+- F5: candidata desplegada y batería final verde; pendientes validación en el
+  iPhone real, backup final, prueba de recuperación y tag `v1.0.0`.
