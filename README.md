@@ -71,8 +71,9 @@ texto, fecha y foto** automáticamente. Después puedes:
 
 - **Probar plantillas visualmente**: la galería muestra una miniatura de cada
   plantilla renderizada con tus datos; toca una para elegirla.
-- **Ajustar el detalle**: cambia textos, tema de color, foto y duración antes de
-  guardar. Cada miniatura refleja el tema de color seleccionado.
+- **Ajustar el detalle**: cambia textos, foto y duración antes de guardar. Cada
+  plantilla tiene un único estilo cromático estable; si quieres retocarlo,
+  hazlo una vez desde el editor visual de esa plantilla.
 
 ## Acceso de administradores
 
@@ -180,9 +181,8 @@ internas y respaldos, no una versión seleccionable.
 - `data/template-layouts.json` y los diseños de cartela antiguos se conservan
   en disco como datos históricos, pero ya no se aplican.
 
-`npm run qa:templates` audita todas las plantillas disponibles × todas las
-paletas del diseño vivo; con `--render` genera su matriz en
-`output/qa-template-matrix-v2/`.
+`npm run qa:templates` audita los 16 estilos únicos, uno por plantilla; con
+`--render` genera una sola hoja en `output/qa-template-matrix-v2/styles.png`.
 
 ## Configuración
 

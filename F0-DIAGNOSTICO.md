@@ -13,6 +13,10 @@
   patrón dominante del historial es: feature → regresión visual o de frescura →
   parche → parche del parche (ej.: 0.149.5 → 0.149.6 → 0.149.7, tres intentos
   seguidos contra el mismo síntoma de "plantilla ★ no aparece").
+> Nota posterior: este documento conserva el diagnóstico de partida. La
+> dimensión de paletas descrita aquí fue retirada después: ahora existe un
+> único estilo cromático por plantilla.
+
 - Working tree limpio. OJO: la `data/` de esta carpeta es la copia local de
   desarrollo; la `data/` real vive en el VPS. Cualquier prueba "con datos
   reales" debe partir de una copia traída del VPS o asumir esta divergencia.

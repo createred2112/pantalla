@@ -24,14 +24,13 @@ function saveAll() {
   writeJsonAtomic(FILE, loadAll());
 }
 
-// Tema resuelto de la cartela (solo ese tema invalida, no toda la paleta).
+// Estilo fijo de la plantilla. Los temas guardados en cartelas antiguas ya no
+// forman parte del render ni de su caché.
 function themeFor(card) {
-  let key = card.theme || '';
+  let key = '';
   try {
-    if (!key) {
-      const tpl = require('../generator/templates').get(card.template);
-      key = (tpl && tpl.defaultTheme) || (cfg.defaults && cfg.defaults.theme) || 'carbon';
-    }
+    const tpl = require('../generator/templates').get(card.template);
+    key = (tpl && tpl.defaultTheme) || (cfg.defaults && cfg.defaults.theme) || 'carbon';
   } catch { key = key || 'carbon'; }
   return { key, value: (cfg.palette || {})[key] || null };
 }
@@ -80,7 +79,7 @@ function renderHash(card) {
   try { tplLayout = require('../templateLayouts').get(card.template, theme.key); } catch {}
   const tplBumpers = templateBumpersFor(card);
   const src = {
-    v: 46, // subir al cambiar el diseño/render de las plantillas en código (46: fix autofit/marquesina)
+    v: 47, // 47: un único estilo cromático por plantilla; los theme antiguos no mandan
     design: 'v2', // v1 retirado (F3); constante para no invalidar los vídeos ya generados con v2
     template: card.template || '',
     agendaSceneDesign: card.template === 'agenda' ? 4 : null,

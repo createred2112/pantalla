@@ -69,7 +69,6 @@ function normalize(card) {
     // type: generated (se renderiza) | image (jpg/png ya listo) | video (mp4)
     type,
     template: card.template || cfg.defaults.template,
-    theme: card.theme || null,   // clave de paleta; null = la que trae la plantilla
     layout: card.layout || null, // diseño editado (elementos) de esta cartela; null = el de la plantilla
     video: card.video === true || forceVideo,  // si true, se genera MP4 animado en vez de JPG
     videoIntro: card.videoIntro || null, // MP4 opcional antes de la cartela animada

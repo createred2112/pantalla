@@ -1,6 +1,6 @@
 'use strict';
-// MATRIZ VISUAL CON UMBRAL (F1): compara las matrices de plantillas
-// (output/qa-template-matrix-v1|v2/<paleta>.png) contra una línea base
+// REFERENCIA VISUAL CON UMBRAL (F1): compara el estilo único de cada plantilla
+// (output/qa-template-matrix-v2/styles.png) contra una línea base
 // aprobada, píxel a píxel. Si algo cambia más del umbral, FALLA y deja un
 // PNG de diferencias para mirar con los ojos.
 //

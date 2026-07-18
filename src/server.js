@@ -272,7 +272,7 @@ app.post('/api/tanda/rollback', async (req, res) => {
 app.get('/api/takeover', (req, res) => res.json(require('./takeover').state()));
 app.post('/api/takeover', (req, res) => {
   const b = req.body || {};
-  const r = require('./takeover').activate({ title: b.title, body: b.body, theme: b.theme, minutes: b.minutes, mode: b.mode });
+  const r = require('./takeover').activate({ title: b.title, body: b.body, minutes: b.minutes, mode: b.mode });
   if (!r.ok) return res.status(400).json(r);
   res.json(r);
 });
@@ -306,7 +306,6 @@ app.get('/api/config', (req, res) => {
     brand: cfg.brand,
     defaults: cfg.defaults,
     templates: templates.list(),
-    palette: cfg.palette || {},
     templateBumpers: cfg.templateBumpers || {},
     safety: renderGuard.safetyInfo(),
   });
@@ -398,7 +397,6 @@ app.get('/api/settings', (req, res) => {
   delete effectiveFtp.password;
   res.json({
     brand: cfg.brand,
-    palette: cfg.palette || {},
     screen: cfg.screen,
     screenProfile: cfg.screenProfile || {},
     naming: cfg.naming || {},
@@ -415,7 +413,6 @@ app.put('/api/settings', (req, res) => {
   const body = req.body || {};
   const partial = {};
   if (body.brand) partial.brand = body.brand;
-  if (body.palette) partial.palette = body.palette;
   if (body.screen) partial.screen = body.screen;
   if (body.screenProfile) partial.screenProfile = body.screenProfile;
   if (body.naming) partial.naming = body.naming;
@@ -429,7 +426,7 @@ app.put('/api/settings', (req, res) => {
   }
   saveConfig(partial);
   log.info('settings', 'Ajustes de diseño actualizados', Object.keys(partial));
-  res.json({ ok: true, brand: cfg.brand, palette: cfg.palette, screen: cfg.screen, screenProfile: cfg.screenProfile, naming: cfg.naming, templateBumpers: cfg.templateBumpers, ftp: { ...cfg.ftp, password: '' } });
+  res.json({ ok: true, brand: cfg.brand, screen: cfg.screen, screenProfile: cfg.screenProfile, naming: cfg.naming, templateBumpers: cfg.templateBumpers, ftp: { ...cfg.ftp, password: '' } });
 });
 
 // --- Fotos de la web (WordPress) para el banco "Fotos GasteizBerri" ---
@@ -627,7 +624,7 @@ app.get('/api/agenda/web', async (req, res) => {
 app.post('/api/agenda/quick', (req, res) => {
   try {
     const b = req.body || {};
-    const r = rundown.quickAgendaSave(b.date, b.text, { theme: b.theme, hideExpired: b.hideExpired !== false, previewToday: b.previewToday === undefined ? undefined : b.previewToday === true });
+    const r = rundown.quickAgendaSave(b.date, b.text, { hideExpired: b.hideExpired !== false, previewToday: b.previewToday === undefined ? undefined : b.previewToday === true });
     try { rundown.materialize({ date: r.date }); } catch (e) { log.warn('agenda', 'Exprés guardado pero no se pudo materializar: ' + e.message); }
     log.info('agenda', `Agenda exprés del ${r.date}: ${r.count} evento(s)`);
     res.json(r);
@@ -665,7 +662,7 @@ app.put('/api/cards/:id/layout', (req, res) => {
 // PLANTILLAS PROPIAS: guardar la composición del editor como plantilla nueva.
 app.post('/api/templates/custom', (req, res) => {
   const b = req.body || {};
-  const r = require('./userTemplates').create({ label: b.label, base: b.baseTemplate, layout: b.layout, theme: b.theme });
+  const r = require('./userTemplates').create({ label: b.label, base: b.baseTemplate, layout: b.layout });
   if (!r.ok) return res.status(400).json(r);
   log.info('editor', `Plantilla propia creada: ${r.label} (${r.id})`);
   res.json(r);
@@ -680,17 +677,14 @@ app.delete('/api/templates/custom/:id', (req, res) => {
 
 // Guardar un layout como PREDETERMINADO de una plantilla (afecta a todas sus cartelas).
 app.put('/api/templates/:id/layout', (req, res) => {
-  const theme = String((req.body && req.body.theme) || req.query.theme || '').trim();
-  const clearThemes = !theme && req.body && req.body.clearThemes === true;
-  require('./templateLayouts').set(req.params.id, theme, req.body && req.body.layout ? req.body.layout : null, { clearThemes });
-  log.info('editor', `Layout predeterminado guardado en plantilla ${req.params.id}${theme ? ' / tema ' + theme : ''}${clearThemes ? ' / sin excepciones de color' : ''}`);
+  require('./templateLayouts').set(req.params.id, '', req.body && req.body.layout ? req.body.layout : null, { clearThemes: true });
+  log.info('editor', `Layout predeterminado guardado en plantilla ${req.params.id}`);
   res.json({ ok: true });
 });
 
 app.delete('/api/templates/:id/layout', (req, res) => {
-  const theme = String(req.query.theme || '').trim();
-  require('./templateLayouts').set(req.params.id, theme, null);
-  log.info('editor', `Layout predeterminado restablecido en plantilla ${req.params.id}${theme ? ' / tema ' + theme : ''}`);
+  require('./templateLayouts').set(req.params.id, '', null, { clearThemes: true });
+  log.info('editor', `Layout predeterminado restablecido en plantilla ${req.params.id}`);
   res.json({ ok: true });
 });
 
@@ -831,7 +825,7 @@ app.post('/api/font', fontUpload.single('font'), (req, res) => {
 
 // --- Muestras de plantillas (galería) ---
 // Se generan UNA vez y quedan en output/samples/. Solo caducan si cambia el
-// diseño global (marca, paleta, pantalla) o la lista de plantillas.
+// diseño global (marca, estilos, pantalla) o la lista de plantillas.
 const SAMPLE_DATA = {
   titular: { title: 'Vitoria, capital verde de Europa', subtitle: 'Ciudad', date: 'Hoy' },
   noticia: { title: 'El tranvía llega al centro', subtitle: 'Movilidad', body: 'La nueva línea conecta el centro con los barrios del sur.', date: '24 jun' },
@@ -874,73 +868,54 @@ const SAMPLE_DATA = {
 const SAMPLES_DIR = path.join(paths.output, 'samples');
 const SAMPLES_META = path.join(SAMPLES_DIR, 'meta.json');
 
-function samplesHash(matrix = false) {
+function samplesHash() {
   const crypto = require('crypto');
   return crypto.createHash('sha1').update(JSON.stringify({
-    v: 14, // subir al cambiar el diseño de las plantillas en código (14: fix autofit/marquesina)
-    matrix,
+    v: 15, // 15: una muestra por plantilla, sin matriz de paletas
     brand: cfg.brand, palette: cfg.palette, screen: cfg.screen,
     tpls: templates.list().map((t) => t.id), data: SAMPLE_DATA,
   })).digest('hex');
 }
 
-function sampleName(templateId, theme) {
-  return theme ? `${templateId}__${theme}` : templateId;
+function sampleItems() {
+  return templates.list().map((t) => ({ id: t.id, label: t.label, template: t.id }));
 }
 
-function sampleMetaFile(matrix = false) {
-  return matrix ? path.join(SAMPLES_DIR, 'meta-matrix.json') : SAMPLES_META;
-}
-
-function sampleItems(matrix = false) {
-  const tpls = templates.list();
-  if (!matrix) return tpls.map((t) => ({ id: t.id, label: t.label, template: t.id, theme: '' }));
-  const themes = Object.keys(cfg.palette || {});
-  return tpls.flatMap((t) => themes.map((theme) => ({
-    id: sampleName(t.id, theme),
-    label: t.label,
-    template: t.id,
-    theme,
-  })));
-}
-
-function samplesState(matrix = false) {
+function samplesState() {
   let meta = null;
-  try { meta = JSON.parse(fs.readFileSync(sampleMetaFile(matrix), 'utf8')); } catch {}
-  const fresh = Boolean(meta && meta.hash === samplesHash(matrix));
-  const items = sampleItems(matrix).map((t) => {
+  try { meta = JSON.parse(fs.readFileSync(SAMPLES_META, 'utf8')); } catch {}
+  const fresh = Boolean(meta && meta.hash === samplesHash());
+  const items = sampleItems().map((t) => {
     const file = path.join(SAMPLES_DIR, `${t.id}.jpg`);
     const exists = fs.existsSync(file);
     const v = exists ? Math.round(fs.statSync(file).mtimeMs) : 0;
     return { ...t, url: exists ? `/media/output/samples/${t.id}.jpg?v=${v}` : null, fresh: exists && fresh };
   });
-  return { matrix, items, fresh: fresh && items.every((i) => i.url), generatedAt: meta ? meta.at : null };
+  return { items, fresh: fresh && items.every((i) => i.url), generatedAt: meta ? meta.at : null };
 }
 
 // Estado de las muestras: la galería pinta AL INSTANTE desde disco.
-app.get('/api/template-samples', (req, res) => res.json(samplesState(req.query.matrix === '1')));
+app.get('/api/template-samples', (req, res) => res.json(samplesState()));
 
 // (Re)generar las muestras: única acción que renderiza, y solo bajo demanda.
 app.post('/api/template-samples', async (req, res) => {
-  const matrix = req.query.matrix === '1';
   try {
     renderGuard.assertCanUseChrome('render');
     fs.mkdirSync(SAMPLES_DIR, { recursive: true });
-    for (const t of sampleItems(matrix)) {
+    for (const t of sampleItems()) {
       const card = store.normalize({
         id: `sample_${t.id}`,
         template: t.template,
         ...(SAMPLE_DATA[t.template] || { title: 'Ejemplo · ' + t.label }),
-        ...(t.theme ? { theme: t.theme } : {}),
       });
       const { buffer } = await renderToBuffer(card);
       const small = await sharp(buffer).resize(720).jpeg({ quality: 82 }).toBuffer();
       fs.writeFileSync(path.join(SAMPLES_DIR, `${t.id}.jpg`), small);
     }
     try { await require('./generator/htmlRender').close(); } catch {}
-    require('./util/atomicWrite').writeJsonAtomic(sampleMetaFile(matrix), { hash: samplesHash(matrix), at: new Date().toISOString() });
-    log.info('samples', `Muestras de plantillas regeneradas (${sampleItems(matrix).length})`);
-    res.json({ ok: true, ...samplesState(matrix) });
+    require('./util/atomicWrite').writeJsonAtomic(SAMPLES_META, { hash: samplesHash(), at: new Date().toISOString() });
+    log.info('samples', `Muestras de plantillas regeneradas (${sampleItems().length})`);
+    res.json({ ok: true, ...samplesState() });
   } catch (e) {
     try { await require('./generator/htmlRender').close(); } catch {}
     log.error('samples', e.message);
@@ -1031,7 +1006,7 @@ app.post('/api/breaking', async (req, res) => {
     }
     if (!data.title) return res.status(400).json({ error: 'falta el titular' });
     const card = store.add({
-      type: 'generated', template: 'alerta', theme: 'rojo',
+      type: 'generated', template: 'alerta',
       title: data.title, subtitle: 'ÚLTIMA HORA', body: data.body.slice(0, 140),
       date: 'AHORA', photo: data.photo, duration: 9, enabled: true, source: 'manual',
     });

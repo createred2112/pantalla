@@ -13,49 +13,49 @@ const LIBRARY_FILE = path.join(DATA_DIR, 'content-library.json');
 const DEFAULT_LIBRARY = {
   days: {},
   datosUtiles: [
-    { title: '112', subtitle: 'Emergencias', body: 'Guarda este número para cualquier urgencia.', template: 'dato', theme: 'lima' },
-    { title: '010', subtitle: 'Atención ciudadana', body: 'Información municipal y trámites en Vitoria-Gasteiz.', template: 'dato', theme: 'azul' },
+    { title: '112', subtitle: 'Emergencias', body: 'Guarda este número para cualquier urgencia.', template: 'dato' },
+    { title: '010', subtitle: 'Atención ciudadana', body: 'Información municipal y trámites en Vitoria-Gasteiz.', template: 'dato' },
   ],
   citasHistoricas: [
-    { title: 'La información es poder.', subtitle: 'Francis Bacon', template: 'cita', theme: 'carbon' },
-    { title: 'La ciudad también se escribe en sus pequeñas noticias.', subtitle: 'Archivo local', template: 'cita', theme: 'carbon' },
+    { title: 'La información es poder.', subtitle: 'Francis Bacon', template: 'cita' },
+    { title: 'La ciudad también se escribe en sus pequeñas noticias.', subtitle: 'Archivo local', template: 'cita' },
   ],
   datosCuriosos: [
-    { title: 'Vitoria-Gasteiz tiene más de 40 m2 de zona verde por habitante.', subtitle: 'Dato curioso', template: 'datocurioso', theme: 'lima' },
-    { title: 'El anillo verde suma más de 30 kilómetros de recorrido.', subtitle: 'Dato curioso', template: 'datocurioso', theme: 'azul' },
+    { title: 'Vitoria-Gasteiz tiene más de 40 m2 de zona verde por habitante.', subtitle: 'Dato curioso', template: 'datocurioso' },
+    { title: 'El anillo verde suma más de 30 kilómetros de recorrido.', subtitle: 'Dato curioso', template: 'datocurioso' },
   ],
   efemerides: [
-    { title: 'Hoy también pasó algo que merece memoria.', subtitle: 'Efeméride', body: 'Añade aquí efemérides locales o históricas.', template: 'noticia', theme: 'carbon' },
+    { title: 'Hoy también pasó algo que merece memoria.', subtitle: 'Efeméride', body: 'Añade aquí efemérides locales o históricas.', template: 'noticia' },
   ],
   consejosInformaticos: [
-    { title: 'Actualiza antes de apagar', subtitle: 'Consejo · por Fast2Computer', body: 'Un sistema actualizado evita sustos y pérdidas de tiempo.', template: 'noticia', theme: 'azul' },
-    { title: 'Activa la verificación en dos pasos', subtitle: 'Consejo · por Fast2Computer', body: 'Es la barrera más sencilla contra robos de cuentas.', template: 'noticia', theme: 'lima' },
+    { title: 'Actualiza antes de apagar', subtitle: 'Consejo · por Fast2Computer', body: 'Un sistema actualizado evita sustos y pérdidas de tiempo.', template: 'noticia' },
+    { title: 'Activa la verificación en dos pasos', subtitle: 'Consejo · por Fast2Computer', body: 'Es la barrera más sencilla contra robos de cuentas.', template: 'noticia' },
   ],
   comentariosSemana: [
-    { title: 'La conversación también es ciudad.', subtitle: 'Comentario de la semana', body: 'Selecciona aquí un comentario destacado de GasteizBerri.', template: 'cita', theme: 'carbon' },
+    { title: 'La conversación también es ciudad.', subtitle: 'Comentario de la semana', body: 'Selecciona aquí un comentario destacado de GasteizBerri.', template: 'cita' },
   ],
   agendaBanco: [],
   agendaEventos: [
-    { title: 'Agenda', subtitle: 'Hoy', body: '19:30 | Actividad pendiente | Lugar\n20:00 | Añade eventos | Vitoria-Gasteiz', template: 'agenda', theme: 'blanco' },
+    { title: 'Agenda', subtitle: 'Hoy', body: '19:30 | Actividad pendiente | Lugar\n20:00 | Añade eventos | Vitoria-Gasteiz', template: 'agenda' },
   ],
   fotosGasteizberri: [],
   avisosMeteorologicos: [],
   consejosMeteorologicos: [
-    { title: 'Cuida la hidratación', subtitle: 'Consejo por calor', body: 'Bebe agua aunque no tengas sed y evita el sol en las horas centrales.', template: 'meteoaviso', theme: 'naranja', enabled: false },
+    { title: 'Cuida la hidratación', subtitle: 'Consejo por calor', body: 'Bebe agua aunque no tengas sed y evita el sol en las horas centrales.', template: 'meteoaviso', enabled: false },
   ],
 };
 
 const LIBRARY_KEYS = [
-  { key: 'datosUtiles', label: 'Datos útiles', template: 'dato', theme: 'lima' },
-  { key: 'citasHistoricas', label: 'Citas históricas', template: 'cita', theme: 'carbon' },
-  { key: 'datosCuriosos', label: 'Datos curiosos', template: 'datocurioso', theme: 'lima' },
-  { key: 'efemerides', label: 'Efemérides', template: 'noticia', theme: 'carbon' },
-  { key: 'consejosInformaticos', label: 'Consejos informáticos', template: 'noticia', theme: 'azul' },
-  { key: 'comentariosSemana', label: 'Comentarios de la semana', template: 'cita', theme: 'carbon' },
-  { key: 'agendaEventos', label: 'Agenda viva', template: 'agenda', theme: 'blanco' },
-  { key: 'avisosMeteorologicos', label: 'Avisos meteorológicos', template: 'meteoaviso', theme: 'naranja' },
-  { key: 'consejosMeteorologicos', label: 'Consejos meteorológicos', template: 'meteoaviso', theme: 'naranja' },
-  { key: 'fotosGasteizberri', label: 'Fotos GasteizBerri', template: 'foto', theme: 'carbon' },
+  { key: 'datosUtiles', label: 'Datos útiles', template: 'dato' },
+  { key: 'citasHistoricas', label: 'Citas históricas', template: 'cita' },
+  { key: 'datosCuriosos', label: 'Datos curiosos', template: 'datocurioso' },
+  { key: 'efemerides', label: 'Efemérides', template: 'noticia' },
+  { key: 'consejosInformaticos', label: 'Consejos informáticos', template: 'noticia' },
+  { key: 'comentariosSemana', label: 'Comentarios de la semana', template: 'cita' },
+  { key: 'agendaEventos', label: 'Agenda viva', template: 'agenda' },
+  { key: 'avisosMeteorologicos', label: 'Avisos meteorológicos', template: 'meteoaviso' },
+  { key: 'consejosMeteorologicos', label: 'Consejos meteorológicos', template: 'meteoaviso' },
+  { key: 'fotosGasteizberri', label: 'Fotos GasteizBerri', template: 'foto' },
 ];
 
 const DEFAULT_HOURLY_LIBRARY_KEYS = new Set(['avisosMeteorologicos', 'consejosMeteorologicos', 'fotosGasteizberri']);
@@ -86,7 +86,7 @@ const DEFAULT_RUNDOWN = {
 };
 
 function fixed(id, label, template, theme, title, subtitle, body, duration, video) {
-  return { id, label, enabled: true, source: 'fixed', template, theme, title, subtitle, body, duration, video: video === true };
+  return { id, label, enabled: true, source: 'fixed', template, title, subtitle, body, duration, video: video === true };
 }
 
 function library(id, label, libraryKey) {
@@ -94,7 +94,7 @@ function library(id, label, libraryKey) {
 }
 
 function worker(id, label, template, theme, workerKey, title, subtitle, body) {
-  return { id, label, enabled: true, source: 'worker', workerKey, template, theme, title, subtitle, body, duration: 8, video: false };
+  return { id, label, enabled: true, source: 'worker', workerKey, template, title, subtitle, body, duration: 8, video: false };
 }
 
 function ensureFiles() {
@@ -140,7 +140,6 @@ function normalizeLibraryItem(item, defaults) {
     subtitle: String((item && item.subtitle) || ''),
     body: String((item && item.body) || ''),
     template,
-    theme: String((item && item.theme) || defaults.theme || ''),
     photo: String((item && item.photo) || ''),
     date: String((item && item.date) || ''),
     enabled: !item || item.enabled !== false,
@@ -219,18 +218,10 @@ function dayNumber(date) {
   return jsDay === 0 ? 7 : jsDay;
 }
 
-// Sugerencia histórica por día. Ya no se aplica automáticamente: "Auto"
-// significa usar el color propio de la pieza o de su plantilla.
-const DAY_THEMES = ['azul', 'lima', 'carbon', 'rojo', 'azul', 'lima', 'carbon'];
-function autoDayTheme(date) {
-  return DAY_THEMES[(dayNumber(date || todayKey()) - 1) % DAY_THEMES.length];
-}
-function dayTheme(date, rundown) {
-  const day = String(date || todayKey()).slice(0, 10);
-  const rec = rundown && rundown.days && rundown.days[day];
-  const chosen = rec && String(rec.theme || '').trim();
-  return chosen || '';
-}
+// Compatibilidad de API con clientes antiguos. El color del día fue retirado:
+// cada plantilla conserva siempre su único estilo propio.
+function autoDayTheme() { return ''; }
+function dayTheme() { return ''; }
 
 function itemApplies(item, date) {
   const d = String(date || todayKey()).slice(0, 10);
@@ -362,7 +353,7 @@ function upgradeRundown(rundown) {
       slot.source = 'library';
       slot.libraryKey = 'agendaEventos';
       slot.template = '';
-      slot.theme = '';
+      delete slot.theme;
     }
   }
   rundown.slots = rundown.slots.map(normalizeSlot);
@@ -375,7 +366,6 @@ function cleanDays(days) {
   const out = {};
   for (const [d, v] of Object.entries(days && typeof days === 'object' ? days : {})) {
     const skip = Array.isArray(v && v.skip) ? [...new Set(v.skip.map(String).filter(Boolean))] : [];
-    const theme = String((v && v.theme) || '').trim();
     const pick = {};
     const autoPick = {};
     for (const [slotId, idx] of Object.entries((v && v.pick && typeof v.pick === 'object') ? v.pick : {})) {
@@ -389,10 +379,9 @@ function cleanDays(days) {
         autoPick[String(slotId)] = { index: n, step };
       }
     }
-    if (skip.length || Object.keys(pick).length || Object.keys(autoPick).length || theme) {
+    if (skip.length || Object.keys(pick).length || Object.keys(autoPick).length) {
       out[String(d).slice(0, 10)] = {
         skip,
-        ...(theme ? { theme } : {}),
         ...(Object.keys(pick).length ? { pick } : {}),
         ...(Object.keys(autoPick).length ? { autoPick } : {}),
       };
@@ -489,7 +478,7 @@ function sameValue(a, b) {
 
 function cardNeedsPatch(card, next) {
   const keys = [
-    'enabled', 'type', 'template', 'theme', 'layout', 'video', 'videoIntro', 'videoOutro',
+    'enabled', 'type', 'template', 'layout', 'video', 'videoIntro', 'videoOutro',
     'title', 'subtitle', 'body', 'date', 'data', 'photo', 'file', 'duration',
     'bumperKey', 'rundownLibraryKey', 'rundownWorkerKey',
   ];
@@ -504,14 +493,13 @@ function refreshMaterializedLibraryCards(library, options = {}) {
   upgradeRundown(rundown);
   const pick = pickMapFor(rundown, date);
   const autoPick = autoPickMapFor(rundown, date);
-  const theme = dayTheme(date, rundown);
   let updated = 0;
   for (const slot of rundown.slots || []) {
     const s = normalizeSlot(slot);
     if (s.source !== 'library') continue;
     const current = store.list().find((card) => card.source === 'rundown' && card.rundownSlot === s.id);
     if (!current || !shouldMaterialize(s, library, date, pick, autoPick)) continue;
-    const next = toCard(s, library, current.order || 999, date, pick, theme, autoPick);
+    const next = toCard(s, library, current.order || 999, date, pick, '', autoPick);
     if (!cardNeedsPatch(current, next)) continue;
     store.update(current.id, { ...next, id: current.id, order: current.order || next.order });
     updated++;
@@ -538,7 +526,6 @@ function normalizeSlot(slot) {
     libraryKey: slot.libraryKey || '',
     workerKey: slot.workerKey || '',
     template: slot.template || '',
-    theme: slot.theme || '',
     title: slot.title || '',
     subtitle: slot.subtitle || '',
     body: slot.body || '',
@@ -608,7 +595,6 @@ function libraryPlanForSlot(slot, library, date, pickIndex, autoPick) {
     title: item.title || item.body || '(sin titulo)',
     subtitle: item.subtitle || '',
     template: item.template || '',
-    theme: item.theme || '',
     chosen: index === chosenIndex,
   }));
   return { items, chosen, chosenIndex, next };
@@ -624,7 +610,6 @@ function slotPayload(slot, library, date, options = {}) {
       date: s.date || '',
       file: s.file || '',
       template: s.template || 'noticia',
-      theme: s.theme || '',
       missing: !s.file,
     };
   }
@@ -638,7 +623,6 @@ function slotPayload(slot, library, date, options = {}) {
       subtitle: 'Pendiente',
       body: `Añade piezas en Escaleta → Contenido programado (${s.libraryKey})`,
       template: 'noticia',
-      theme: 'rojo',
       missing: true,
     };
   }
@@ -659,7 +643,6 @@ function slotPayload(slot, library, date, options = {}) {
         date: s.date || rec.data.date || '',
         // El worker sabe cuál es su mejor presentación (luz→curva, fuel→lista).
         template: workerTemplate,
-        theme: s.theme || '',
         data: rec.data.extra || null,
         missing: false,
       };
@@ -667,14 +650,13 @@ function slotPayload(slot, library, date, options = {}) {
     // Worker MANUAL (p. ej. aforo piscinas): lo que escribas en el bloque
     // ES el contenido real, no un pendiente.
     if (require('./workers').isManual(s.workerKey) && s.title) {
-      return { title: s.title, subtitle: s.subtitle || '', body: s.body || '', date: s.date || '', template: s.template || 'dato', theme: s.theme || '', missing: false };
+      return { title: s.title, subtitle: s.subtitle || '', body: s.body || '', date: s.date || '', template: s.template || 'dato', missing: false };
     }
     return {
       title: s.title || s.label,
       subtitle: s.subtitle || 'Dato automático pendiente',
       body: s.body || `Sin datos recientes de "${s.workerKey}"`,
       template: s.template || 'noticia',
-      theme: s.theme || 'azul',
       missing: true,
     };
   }
@@ -706,17 +688,16 @@ function bumperForSlot(slot, payload = {}) {
   return { intro: '', outro: '', key: '' };
 }
 
-function toCard(slot, library, order, date, pickMap = {}, dayThemeKey = '', autoPickMap = {}) {
+function toCard(slot, library, order, date, pickMap = {}, _legacyDayTheme = '', autoPickMap = {}) {
   const s = normalizeSlot(slot);
   const p = slotPayload(s, library, date, { pickIndex: pickMap[s.id], autoPick: autoPickMap[s.id] });
   const cleanPhoto = s.source === 'library' && s.libraryKey === 'fotosGasteizberri' && Boolean(p.photo);
   const semanticBumperKey = s.bumperKey || defaultBumperKeyForSlot(s);
   const bumper = bumperForSlot(s, p);
   const wantsVideo = s.video === true || Boolean(s.videoIntro || s.videoOutro || bumper.intro || bumper.outro);
-  // La plantilla/tema fijados EN EL BLOQUE mandan sobre piezas manuales.
+  // La plantilla fijada EN EL BLOQUE manda sobre piezas manuales.
   // En workers con plantilla propia (luz, aire, combustible), manda el dato.
   const tplOverride = s.source === 'worker' && p.template ? '' : s.template;
-  const themeOverride = s.theme;
   if (s.source === 'file') {
     return store.normalize({
       id: `rd_${s.id}`,
@@ -740,9 +721,6 @@ function toCard(slot, library, order, date, pickMap = {}, dayThemeKey = '', auto
     enabled: s.enabled,
     type: 'generated',
     template: tplOverride ? s.template : (p.template || s.template || 'noticia'),
-    // Auto significa el color de la pieza/plantilla. El color del día solo se
-    // aplica cuando el usuario lo ha elegido expresamente.
-    theme: themeOverride ? s.theme : (p.theme || dayThemeKey || null),
     // Una foto puede emitirse limpia. Antes el fallback a la etiqueta del
     // bloque obligaba a escribir un punto para impedir que apareciera
     // "Foto GasteizBerri" encima de la imagen.
@@ -800,7 +778,6 @@ function quickAgenda(date) {
   const previewCard = store.list().find((c) => c.slug === 'agenda-manana');
   return {
     ok: true, date: day, lines: events.map(quickLineOf), count: events.length,
-    theme: dayTheme(day, data),
     hideExpired: quickPass ? quickPass.hideExpired === true : true,
     previewToday: Boolean(previewCard && previewCard.enabled !== false),
   };
@@ -825,7 +802,6 @@ function quickAgendaSave(date, text, options = {}) {
       title: 'Agenda',
       subtitle: label.charAt(0).toUpperCase() + label.slice(1),
       template: 'agenda',
-      theme: 'blanco',
       dates: [day],
       startAt: `${day}T00:00`,
       endAt: `${day}T23:59`,
@@ -833,21 +809,9 @@ function quickAgendaSave(date, text, options = {}) {
       notes: QUICK_NOTES,
       showEventDates: false,
       hideExpired: options.hideExpired !== false,
-    }, { key: 'agendaEventos', template: 'agenda', theme: 'blanco' }));
+    }, { key: 'agendaEventos', template: 'agenda' }));
   }
   writeJson(LIBRARY_FILE, library);
-  // Color del día, si se ha tocado en el mismo formulario.
-  if (options.theme !== undefined) {
-    const data = readJson(RUNDOWN_FILE, DEFAULT_RUNDOWN);
-    upgradeRundown(data);
-    if (!data.days || typeof data.days !== 'object') data.days = {};
-    const rec = data.days[day] && typeof data.days[day] === 'object' ? data.days[day] : {};
-    if (options.theme) rec.theme = String(options.theme); else delete rec.theme;
-    data.days[day] = rec;
-    data.days = cleanDays(data.days);
-    data.updatedAt = new Date().toISOString();
-    writeJson(RUNDOWN_FILE, data);
-  }
   // CARTELA «AGENDA DE MAÑANA» visible HOY: cartela manual con caducidad
   // esta noche (23:59). Al expirar sale sola de la emisión (vigilante de
   // franjas) y, si vuelves a guardar la agenda de mañana, se actualiza.
@@ -859,7 +823,7 @@ function quickAgendaSave(date, text, options = {}) {
         .map((ev) => agendaEventLine({ ...ev, date: '' }))
         .join('\n');
       const patch = {
-        type: 'generated', template: 'agenda', theme: 'blanco',
+        type: 'generated', template: 'agenda',
         title: 'AGENDA', subtitle: 'MAÑANA', body: lines,
         enabled: true, source: 'manual', slug: 'agenda-manana', duration: 10,
         schedule: { startAt: '', endAt: `${todayKey()}T23:59`, dailyFrom: '', dailyTo: '' },
@@ -890,10 +854,9 @@ function convertCard(cardId, spec = {}) {
   upgradeRundown(data);
   const day = todayKey();
   const library = normalizeLibrary(readJson(LIBRARY_FILE, DEFAULT_LIBRARY));
-  const theme = dayTheme(day, data);
 
   const refreshFromSlot = (s) => {
-    const next = toCard(s, library, card.order || 999, day, {}, theme, {});
+    const next = toCard(s, library, card.order || 999, day, {}, '', {});
     store.update(card.id, { ...next, id: card.id, order: card.order || next.order });
   };
 
@@ -935,7 +898,6 @@ function convertCard(cardId, spec = {}) {
     source: to,
     workerKey: to === 'worker' ? String(spec.workerKey) : '',
     libraryKey: to === 'library' ? String(spec.libraryKey) : '',
-    theme: card.theme || '',
     duration: Number(card.duration) || 8,
     video: card.video === true,
     rotation: spec.rotation === 'dia' ? 'dia' : (spec.rotation === 'hora' ? 'hora' : undefined),
@@ -963,7 +925,6 @@ function rememberCardEdit(card, patch = {}) {
 
   setIfPresent('enabled', card.enabled !== false);
   setIfPresent('template', card.template || '');
-  setIfPresent('theme', card.theme || '');
   setIfPresent('photo', card.photo || '');
   setIfPresent('layout', card.layout || null);
   setIfPresent('duration', Number(card.duration) || 8);
@@ -1134,8 +1095,7 @@ function materialize(options = {}) {
   const omitted = limit && eligible.length > limit
     ? eligible.slice(limit).map((s) => ({ id: String(s.id), label: String(s.label || s.id || '') }))
     : [];
-  const theme = dayTheme(activeDate, rundown);
-  const generated = active.map((slot, i) => toCard(slot, library, i + 1, activeDate, pick, theme, autoPick));
+  const generated = active.map((slot, i) => toCard(slot, library, i + 1, activeDate, pick, '', autoPick));
   const composed = composeLineupCards(generated, store.list());
   store.save({ cards: composed.cards });
   return { ok: true, count: generated.length, requiredCount: limit || undefined, omitted, archived: composed.archived, cards: generated, report: rep };

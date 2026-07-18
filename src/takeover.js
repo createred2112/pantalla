@@ -82,7 +82,7 @@ async function publishNow(reason) {
 
 // Activa el takeover: crea la cartela de alerta (apagada: solo existe para la
 // capa), guarda la ventana y publica YA.
-function activate({ title, body, theme, minutes, mode } = {}) {
+function activate({ title, body, minutes, mode } = {}) {
   const store = require('./store');
   const clean = String(title || '').trim();
   if (!clean) return { ok: false, error: 'Falta el titular de la alerta' };
@@ -91,7 +91,6 @@ function activate({ title, body, theme, minutes, mode } = {}) {
     enabled: false, // fuera de la emisión normal: la inyecta la capa takeover
     type: 'generated',
     template: 'alerta',
-    theme: String(theme || 'rojo'),
     title: clean,
     subtitle: 'ÚLTIMA HORA',
     body: String(body || ''),

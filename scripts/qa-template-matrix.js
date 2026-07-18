@@ -82,7 +82,6 @@ function stripLegacyMetadata(frame) {
 }
 
 function staticAudit() {
-  const themes = Object.keys(cfg.palette || {});
   const list = templates.list();
   const clima = templates.get('clima');
   assert.strictEqual(clima.keyForCard({ subtitle: 'Despejado', data: { isDay: false } }), 'luna', 'clima: despejado nocturno debe usar luna');
@@ -95,12 +94,11 @@ function staticAudit() {
     if (tpl.hint.date !== '—') assertContains(frame, MARK.date, label);
   };
   for (const tpl of list) {
-    for (const theme of themes) {
-      const card = cardFor(tpl.id, theme);
-      const frame = renderer.resolveForEditor(card);
-      assert(frame && frame.elements && frame.elements.length, `${tpl.id}/${theme}: frame vacio`);
-      assertExpectedFields(tpl, frame, `${tpl.id}/${theme}`);
-    }
+    const style = tpl.defaultTheme || 'carbon';
+    const card = cardFor(tpl.id, style);
+    const frame = renderer.resolveForEditor(card);
+    assert(frame && frame.elements && frame.elements.length, `${tpl.id}: frame vacio`);
+    assertExpectedFields(tpl, frame, tpl.id);
 
     const oldCard = {
       ...cardFor(tpl.id, 'blanco'),
@@ -122,7 +120,7 @@ function staticAudit() {
   });
   assertContains(fixedMeteo, MARK.subtitle, 'meteoaviso/layout antiguo');
   assertContains(fixedMeteo, MARK.body, 'meteoaviso/layout antiguo');
-  assert.strictEqual(fixedMeteo.background.color.toLowerCase(), cfg.palette.azul.bg.toLowerCase(), 'meteoaviso: el fondo antiguo no siguio la paleta');
+  assert.strictEqual(fixedMeteo.background.color.toLowerCase(), cfg.palette.naranja.bg.toLowerCase(), 'meteoaviso: no conservo su estilo propio');
 
   const oldAgenda = renderer.resolveForEditor({
     ...cardFor('agenda', 'blanco'),
@@ -134,7 +132,7 @@ function staticAudit() {
   });
   assertContains(fixedAgenda, MARK.body, 'agenda/layout antiguo');
   assert(!textOf(fixedAgenda).includes('EVENTO ANTIGUO'), 'agenda: el layout congelo el evento anterior');
-  assert.strictEqual(fixedAgenda.background.color.toLowerCase(), cfg.palette.carbon.bg.toLowerCase(), 'agenda: no respeto la paleta');
+  assert.strictEqual(fixedAgenda.background.color.toLowerCase(), cfg.palette.blanco.bg.toLowerCase(), 'agenda: no conservo su estilo propio');
 
   const weatherCard = {
     ...cardFor('clima', 'carbon'),
@@ -162,7 +160,7 @@ function staticAudit() {
   assert.strictEqual(fixedWeatherText.color.toLowerCase(), '#000000', 'clima: se perdio el color fijo del texto de la franja');
   assert.strictEqual(fixedWeatherBand.color.toLowerCase(), '#ccff22', 'clima: se perdio el color fijo de la franja');
 
-  return { templates: list.length, themes: themes.length, combinations: list.length * themes.length };
+  return { templates: list.length, styles: list.length };
 }
 
 function labelSvg(label, width, height) {
@@ -172,26 +170,25 @@ function labelSvg(label, width, height) {
 
 async function renderMatrix(version = '') {
   const out = path.join(paths.output, version ? `qa-template-matrix-${version}` : 'qa-template-matrix');
+  if (!process.argv.includes('--resume')) fs.rmSync(out, { recursive: true, force: true });
   fs.mkdirSync(out, { recursive: true });
   const cellW = 320, imageH = 180, labelH = 22, cellH = imageH + labelH, cols = 4;
-  for (const theme of Object.keys(cfg.palette || {})) {
-    // --resume: no repetir hojas ya generadas (reintentos baratos si una
-    // pasada anterior se cortó a medias).
-    if (process.argv.includes('--resume') && fs.existsSync(path.join(out, `${theme}.png`))) continue;
-    const cells = [];
-    for (const tpl of templates.list()) {
-      const result = await renderer.renderToBuffer(cardFor(tpl.id, theme));
-      const thumb = await sharp(result.buffer).resize(cellW, imageH, { fit: 'fill' }).png().toBuffer();
-      const cell = await sharp({ create: { width: cellW, height: cellH, channels: 3, background: '#07162a' } })
-        .composite([{ input: thumb, top: 0, left: 0 }, { input: labelSvg(tpl.id, cellW, labelH), top: imageH, left: 0 }])
-        .png().toBuffer();
-      cells.push(cell);
-    }
-    const rows = Math.ceil(cells.length / cols);
-    const sheet = sharp({ create: { width: cellW * cols, height: cellH * rows, channels: 3, background: '#07162a' } });
-    await sheet.composite(cells.map((input, i) => ({ input, left: (i % cols) * cellW, top: Math.floor(i / cols) * cellH })))
-      .png().toFile(path.join(out, `${theme}.png`));
+  const file = path.join(out, 'styles.png');
+  if (process.argv.includes('--resume') && fs.existsSync(file)) return out;
+  const cells = [];
+  for (const tpl of templates.list()) {
+    const style = tpl.defaultTheme || 'carbon';
+    const result = await renderer.renderToBuffer(cardFor(tpl.id, style));
+    const thumb = await sharp(result.buffer).resize(cellW, imageH, { fit: 'fill' }).png().toBuffer();
+    const cell = await sharp({ create: { width: cellW, height: cellH, channels: 3, background: '#07162a' } })
+      .composite([{ input: thumb, top: 0, left: 0 }, { input: labelSvg(tpl.id, cellW, labelH), top: imageH, left: 0 }])
+      .png().toBuffer();
+    cells.push(cell);
   }
+  const rows = Math.ceil(cells.length / cols);
+  const sheet = sharp({ create: { width: cellW * cols, height: cellH * rows, channels: 3, background: '#07162a' } });
+  await sheet.composite(cells.map((input, i) => ({ input, left: (i % cols) * cellW, top: Math.floor(i / cols) * cellH })))
+    .png().toFile(file);
   return out;
 }
 
@@ -200,7 +197,7 @@ async function renderMatrix(version = '') {
   // directorio de la matriz conserva el sufijo -v2 para no invalidar las
   // líneas base visuales ya aprobadas.
   const result = staticAudit();
-  console.log(`OK [diseño v2]: ${result.templates} plantillas x ${result.themes} paletas = ${result.combinations} combinaciones`);
+  console.log(`OK [diseño v2]: ${result.styles} estilos únicos (${result.templates} plantillas, sin paletas)`);
   if (process.argv.includes('--render')) console.log(`Matriz visual: ${await renderMatrix('v2')}`);
 })().catch((error) => {
   console.error(error.stack || error.message || error);

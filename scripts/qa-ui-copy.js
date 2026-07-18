@@ -32,6 +32,10 @@ const forbidden = [
   'Rollback a la tanda anterior',
   'Layout guardado',
   'Render manual',
+  'Tema de color',
+  'Color del día',
+  'Paleta del día',
+  'Todos los colores',
 ];
 
 for (const phrase of forbidden) {

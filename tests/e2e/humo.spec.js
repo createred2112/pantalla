@@ -183,7 +183,7 @@ test('plantilla ★: al guardarla aparece inmediatamente en el selector del edit
   // "guardé la plantilla y el selector no la enseñaba".
   const frame = { elements: [{ id: 'title', type: 'text', x: 6, y: 40, w: 88, h: 20, size: 9, align: 'left' }] };
   const r = await page.request.post('/api/templates/custom', {
-    data: { label: `Prueba ${MARK}`, baseTemplate: 'mensaje', layout: frame, theme: 'lima' },
+    data: { label: `Prueba ${MARK}`, baseTemplate: 'mensaje', layout: frame },
   });
   expect(r.ok()).toBeTruthy();
   const created = await r.json();

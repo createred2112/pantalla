@@ -31,7 +31,6 @@ function toast(msg) {
 
 let cards = [];
 let TEMPLATES = [];
-let PALETTE = {};
 let SAFETY = {};
 let CONFIG = {};
 let RUNDOWN = null;
@@ -55,12 +54,8 @@ async function loadConfig() {
     const cfg = await api('/config');
     CONFIG = cfg || {};
     TEMPLATES = cfg.templates || [];
-    PALETTE = cfg.palette || {};
     SAFETY = cfg.safety || {};
     $('#edTemplate').innerHTML = TEMPLATES.map((t) => `<option value="${t.id}">${t.label}</option>`).join('');
-    $('#edTheme').innerHTML = '<option value="">Auto (según plantilla)</option>' +
-      Object.keys(PALETTE).map((k) => `<option value="${k}">${k}</option>`).join('');
-    if ($('#rundownTheme')) $('#rundownTheme').innerHTML = dayThemeOptions('');
     if (SAFETY.safeMode) {
       $('#btnGallery').textContent = 'Galería desactivada en modo seguro';
       $('#btnGallery').disabled = true;
@@ -69,12 +64,6 @@ async function loadConfig() {
     }
     await loadVideoLibrary();
   } catch {}
-}
-
-function dayThemeOptions(selected) {
-  const auto = selected ? '' : ' selected';
-  return `<option value=""${auto}>Auto: color de cada plantilla</option>` +
-    Object.keys(PALETTE || {}).map((k) => `<option value="${esc(k)}" ${k === selected ? 'selected' : ''}>${esc(k)}</option>`).join('');
 }
 
 async function loadVideoLibrary() {
@@ -209,15 +198,6 @@ function fmtClock(ts) {
   try { return new Date(ts).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', timeZone: DISPLAY_TIME_ZONE }); }
   catch { return String(ts); }
 }
-function renderSwatches() {
-  const cont = $('#themeSwatches');
-  const sel = $('#edTheme').value || (TEMPLATES.find((t) => t.id === $('#edTemplate').value) || {}).defaultTheme;
-  cont.innerHTML = Object.entries(PALETTE).map(([k, p]) => {
-    const on = k === sel;
-    return `<button type="button" data-theme="${k}" title="${k}" style="width:34px;height:34px;border-radius:8px;border:${on ? '3px solid #fff' : '2px solid #244170'};background:linear-gradient(135deg,${p.bg},${p.bg2});position:relative">` +
-      `<span style="position:absolute;right:3px;bottom:3px;width:9px;height:9px;border-radius:50%;background:${p.accent}"></span></button>`;
-  }).join('');
-}
 function applyHints() {
   const t = TEMPLATES.find((x) => x.id === $('#edTemplate').value);
   const h = (t && t.hint) || {};
@@ -231,7 +211,6 @@ function applyHints() {
   $('#hSubtitle').textContent = h.subtitle ? '· ' + h.subtitle : '';
   $('#hBody').textContent = h.body && h.body !== '—' ? '· ' + h.body : '';
   $('#hDate').textContent = h.date ? '· ' + h.date : '';
-  renderSwatches();
   if (galleryOpen) highlightTpl();
 }
 
@@ -291,7 +270,6 @@ async function openSettings() {
   $('#setFtpHint').textContent = `${ftp.hasPassword ? 'Hay contraseña guardada. ' : ''}FTP activo: ${eff.host || 'sin servidor'}:${eff.port || 21} · carpeta ${eff.remoteDir || '/'}`;
   $('#setFtpTest').style.display = 'none';
   buildBumperEditor();
-  buildColorEditor();
   $('#setPreview').style.display = 'none';
   settingsDlg.showModal();
 }
@@ -303,18 +281,6 @@ function showLogoPrev(id, path) {
   if (path) { el.src = '/media/' + path.replace('data/uploads/', 'uploads/').replace('data/worker-inbox/', 'inbox/'); el.style.display = 'inline-block'; }
   else el.style.display = 'none';
 }
-function buildColorEditor() {
-  const p = SETTINGS.palette || {};
-  $('#setColors').innerHTML = Object.entries(p).map(([k, t]) => `
-    <div style="display:flex;align-items:center;gap:8px;margin:6px 0">
-      <b style="width:64px;font-size:12px">${k}</b>
-      <label style="margin:0;font-size:11px">fondo <input type="color" data-th="${k}" data-key="bg" value="${t.bg}"></label>
-      <label style="margin:0;font-size:11px">texto <input type="color" data-th="${k}" data-key="text" value="${hex(t.text)}"></label>
-      <label style="margin:0;font-size:11px">acento <input type="color" data-th="${k}" data-key="accent" value="${hex(t.accent)}"></label>
-    </div>`).join('');
-}
-function hex(c) { return (c && c[0] === '#') ? c.slice(0, 7) : '#000000'; }
-
 function buildBumperEditor() {
   const bumpers = SETTINGS.templateBumpers || {};
   const chosen = ['clima', 'prevision', 'meteoaviso', 'agenda', 'luz', 'aire', 'gasolina', 'dato', 'alerta', 'noticia', 'mensaje'];
@@ -444,10 +410,6 @@ function collectSettings() {
   b.fontDisplay = $('#setFontDisplay').value;
   b.fontFamily = $('#setFontText').value;
   b.climaIcon = { scale: Number($('#setClimaScale').value) || 100, dx: Number($('#setClimaDx').value) || 0, dy: Number($('#setClimaDy').value) || 0 };
-  const palette = SETTINGS.palette;
-  $('#setColors').querySelectorAll('input[type=color]').forEach((inp) => {
-    palette[inp.dataset.th][inp.dataset.key] = inp.value;
-  });
   const ftp = {
     host: $('#setFtpHost').value.trim(),
     port: Number($('#setFtpPort').value) || 21,
@@ -461,7 +423,6 @@ function collectSettings() {
   const screenFormat = $('#setScreenFormat').value || 'jpg';
   return {
     brand: b,
-    palette,
     screen: {
       ...(SETTINGS.screen || {}),
       width: Number($('#setScreenW').value) || 1920,
@@ -505,7 +466,7 @@ $('#btnSetPreview').addEventListener('click', async () => {
   SETTINGS.templateBumpers = next.templateBumpers;
   CONFIG.templateBumpers = next.templateBumpers;
   DV = Date.now();
-  const r = await fetch('/api/preview', { method: 'POST', headers: H, body: JSON.stringify({ template: 'mensaje', title: 'Vitoria en verde.', theme: 'lima' }) });
+  const r = await fetch('/api/preview', { method: 'POST', headers: H, body: JSON.stringify({ template: 'mensaje', title: 'Vitoria en verde.' }) });
   const img = $('#setPreview'); img.src = URL.createObjectURL(await r.blob()); img.style.display = 'block';
   toast('Aplicado');
 });
@@ -641,7 +602,6 @@ function futureCardFromItem(item, key) {
   return {
     type: 'generated',
     template: item.template || meta.template || 'noticia',
-    theme: item.theme || meta.theme || null,
     title: item.title || '',
     subtitle: item.subtitle || '',
     body: key === 'agendaEventos' ? agendaResolvedBody(item) : (item.body || ''),
@@ -710,7 +670,6 @@ function rotationPlanFor(card) {
     card: futureCardFromItem(next.item, key),
     when: activationFor(next.item, slot.rotation, 1),
     title: next.item.title || next.item.body || 'Siguiente pieza',
-    theme: next.item.theme || '',
     more: Math.max(0, candidates.length - 1),
   };
 }
@@ -723,9 +682,9 @@ function rotationSideHtml(plan, previewId) {
   return `<aside class="rotation-branch">
     <span class="rotation-arrow">›</span>
     <div>
-      <button type="button" class="rotation-future" data-rotation-key="${esc(plan.key)}" data-rotation-index="${plan.index}" title="Editar texto, plantilla y color">
+      <button type="button" class="rotation-future" data-rotation-key="${esc(plan.key)}" data-rotation-index="${plan.index}" title="Editar texto y plantilla">
         <div class="rotation-future-thumb" data-rotation-preview="${esc(previewId)}"><span class="rotation-future-loading">Preparando vista...</span><span class="rotation-when">${esc(plan.when)}</span></div>
-        <span class="rotation-future-meta"><b>${esc(plan.title)}</b><small class="rotation-mobile-when">${esc(plan.when)}</small><small>Editar texto, plantilla y color${plan.theme ? ` · ${esc(plan.theme)}` : ''}</small></span>
+        <span class="rotation-future-meta"><b>${esc(plan.title)}</b><small class="rotation-mobile-when">${esc(plan.when)}</small><small>Editar texto y plantilla</small></span>
       </button>
       ${plan.more ? `<span class="rotation-more">+ ${plan.more} cambio(s) después</span>` : ''}
     </div>
@@ -733,7 +692,7 @@ function rotationSideHtml(plan, previewId) {
 }
 
 function rotationPreviewKey(card) {
-  return JSON.stringify([card.template, card.theme, card.title, card.subtitle, card.body, card.date]);
+  return JSON.stringify([card.template, card.title, card.subtitle, card.body, card.date]);
 }
 
 async function loadRotationPreviews(queue, token) {
@@ -1175,7 +1134,7 @@ async function loadEditorRundown(card) {
     if (card.layout && !ED_SLOT.layout) ED_SLOT.layout = card.layout;
     box.style.display = '';
     if (slot.source === 'library') {
-      // Plantilla y tema quedan editables (se guardan en el bloque, persisten);
+      // La plantilla queda editable (se guarda en el bloque y persiste);
       // en datos curiosos tambien se puede editar aqui la pieza elegida.
       const keys = RUNDOWN.libraryKeys || [];
       const catLabel = (keys.find((k) => k.key === slot.libraryKey) || {}).label || slot.libraryKey;
@@ -1206,11 +1165,9 @@ async function loadEditorRundown(card) {
         $('#edTemplate').insertAdjacentHTML('afterbegin', '<option value="">Auto (cada pieza con la suya)</option>');
       }
       $('#edTemplate').value = slot.template || '';
-      $('#edTheme').value = slot.theme || '';
-      renderSwatches();
       box.innerHTML = `
         <div class="status">Producida por el bloque <b>«${esc(slot.label)}»</b> · carrusel: <b>${esc(catLabel)}</b>.
-          ${editablePiece ? 'Puedes editar aquí la pieza elegida; el texto superior es el campo "Texto superior".' : 'La plantilla, el tema y el diseño se mantienen en este bloque aunque rote la pieza (vacío = cada pieza con el suyo).'}</div>
+          ${editablePiece ? 'Puedes editar aquí la pieza elegida; el texto superior es el campo "Texto superior".' : 'La plantilla y el diseño se mantienen en este bloque aunque rote la pieza (vacío = cada pieza con la suya).'}</div>
         ${isAgendaLib ? '<div class="status"><b>Agenda programada:</b> cambia únicamente al comenzar la siguiente franja.</div>' : `<label>Cambia de pieza<select id="edSlotRotation">
           <option value="dia" ${slot.rotation !== 'hora' ? 'selected' : ''}>Cada día</option>
           <option value="hora" ${slot.rotation === 'hora' ? 'selected' : ''}>Cada hora</option>
@@ -1239,11 +1196,9 @@ async function loadEditorRundown(card) {
       });
     } else {
       $('#edTemplate').value = slot.template || card.template || $('#edTemplate').value;
-      $('#edTheme').value = slot.theme || '';
-      renderSwatches();
       box.innerHTML = `
         <div class="status">Producida por el bloque <b>«${esc(slot.label)}»</b> del guion${slot.source === 'worker' ? ' (dato automático)' : ''}.
-          La plantilla, el tema, el diseño, la duración y la animación se guardan en el bloque para que no los pise el próximo pase.</div>
+          La plantilla, el diseño, la duración y la animación se guardan en el bloque para que no los pise el próximo pase.</div>
         <button type="button" class="ghost" id="edOpenRundown" style="margin-top:8px;width:100%">Abrir el guion (modo avanzado)</button>`;
     }
     $('#edOpenRundown').addEventListener('click', async () => {
@@ -1297,7 +1252,7 @@ function cardSourceValue(card) {
 }
 function cardSourceHint(v) {
   if (v === 'manual') return 'El contenido es tuyo: no cambia solo.';
-  if (v && v.startsWith('worker:')) return 'Se rellena sola con datos reales cada pase. La plantilla, el tema y el diseño los sigues mandando tú.';
+  if (v && v.startsWith('worker:')) return 'Se rellena sola con datos reales cada pase. La plantilla y el diseño los sigues mandando tú.';
   if (v === 'lib:agendaEventos') return 'Muestra la agenda programada por franjas horarias.';
   if (v && v.startsWith('lib:')) return 'Rota piezas de un banco (cada hora o cada día). Al convertirla, el lápiz te enseña las piezas para elegir y editar.';
   return '';
@@ -1378,7 +1333,6 @@ function openEditor(card) {
   $('#edId').value = card?.id || '';
   $('#edType').value = card?.type || 'generated';
   $('#edTemplate').value = card?.template || (TEMPLATES[0] && TEMPLATES[0].id) || 'noticia';
-  $('#edTheme').value = card?.theme || '';
   $('#edTitleField').value = card?.title || '';
   $('#edSubtitle').value = card?.subtitle || '';
   $('#edBody').value = card?.body || '';
@@ -1421,16 +1375,10 @@ function toggleType() {
 $('#edType').addEventListener('change', toggleType);
 $('#edVideo').addEventListener('change', toggleType);
 $('#edTemplate').addEventListener('change', applyHints);
-$('#edTheme').addEventListener('change', renderSwatches);
-$('#themeSwatches').addEventListener('click', (e) => {
-  const b = e.target.closest('button'); if (!b) return;
-  $('#edTheme').value = b.dataset.theme; renderSwatches();
-  if (galleryOpen) renderTemplateGallery(); // refleja el tema elegido en las miniaturas
-});
 
 // ===== Galería visual de plantillas =====
 function tplDataKey(d) {
-  return [d.title, d.subtitle, d.body, d.date, d.photo, d.theme].join('|');
+  return [d.title, d.subtitle, d.body, d.date, d.photo].join('|');
 }
 function highlightTpl() {
   const cur = $('#edTemplate').value;
@@ -1491,7 +1439,6 @@ function collect() {
   return {
     type: $('#edType').value,
     template: $('#edTemplate').value,
-    theme: $('#edTheme').value || null,
     title: $('#edTitleField').value,
     subtitle: $('#edSubtitle').value,
     body: $('#edBody').value,
@@ -1618,9 +1565,8 @@ async function saveEditor({ renderAfter = false } = {}) {
       ED_SLOT.video = $('#edVideo').checked;
       ED_SLOT.videoIntro = data.videoIntro || '';
       ED_SLOT.videoOutro = data.videoOutro || '';
-      // Plantilla y tema del BLOQUE: mandan sobre los de cada pieza (vacío = auto).
+      // La plantilla del BLOQUE manda sobre la de cada pieza (vacío = auto).
       ED_SLOT.template = $('#edTemplate').value || '';
-      ED_SLOT.theme = $('#edTheme').value || '';
       document.querySelectorAll('#edRundownBox [data-ed-lib]').forEach((el) => {
         const arr = RUNDOWN.library && RUNDOWN.library[ED_SLOT.libraryKey];
         const it = arr && arr[Number(el.dataset.edLib)];
@@ -1664,7 +1610,6 @@ async function saveEditor({ renderAfter = false } = {}) {
   if (ED_SLOT && ED_SLOT.source !== 'library') {
     try {
       ED_SLOT.template = data.template || ED_SLOT.template || 'noticia';
-      ED_SLOT.theme = data.theme || '';
       ED_SLOT.duration = data.duration || ED_SLOT.duration || 8;
       ED_SLOT.enabled = data.enabled !== false;
       ED_SLOT.video = data.video === true;
@@ -2275,8 +2220,8 @@ const PLAN_TYPES = [
   { id: 'tiempo', label: 'Tiempo ahora · automático', def: true, slot: { source: 'worker', workerKey: 'weather', template: 'clima', label: 'Tiempo ahora', rotation: 'hora' } },
   { id: 'prevision', label: 'Previsión 3 días · automático', def: true, slot: { source: 'worker', workerKey: 'forecast', template: 'prevision', label: 'Previsión' } },
   { id: 'agenda', label: 'Agenda viva · programable', def: true, duration: 10, slot: { source: 'library', libraryKey: 'agendaEventos', label: 'Agenda' } },
-  { id: 'meteoaviso', label: 'Aviso meteorológico · programable', slot: { source: 'library', libraryKey: 'avisosMeteorologicos', label: 'Aviso meteorológico', template: 'meteoaviso', theme: 'naranja', rotation: 'hora' } },
-  { id: 'meteoconsejo', label: 'Consejo meteorológico · programable', slot: { source: 'library', libraryKey: 'consejosMeteorologicos', label: 'Consejo meteorológico', template: 'meteoaviso', theme: 'naranja', rotation: 'hora' } },
+  { id: 'meteoaviso', label: 'Aviso meteorológico · programable', slot: { source: 'library', libraryKey: 'avisosMeteorologicos', label: 'Aviso meteorológico', template: 'meteoaviso', rotation: 'hora' } },
+  { id: 'meteoconsejo', label: 'Consejo meteorológico · programable', slot: { source: 'library', libraryKey: 'consejosMeteorologicos', label: 'Consejo meteorológico', template: 'meteoaviso', rotation: 'hora' } },
   { id: 'curioso', label: 'Dato curioso · carrusel', def: true, slot: { source: 'library', libraryKey: 'datosCuriosos', label: 'Dato curioso' } },
   { id: 'fotogb', label: 'Foto GasteizBerri · cambia cada hora', slot: { source: 'library', libraryKey: 'fotosGasteizberri', label: 'Foto GasteizBerri', rotation: 'hora' } },
   { id: 'utiles', label: 'Aviso útil · carrusel', def: true, slot: { source: 'library', libraryKey: 'datosUtiles', label: 'Aviso útil' } },
@@ -2440,9 +2385,6 @@ function renderRundown() {
   if (RUNDOWN_SELECTED >= slots.length) RUNDOWN_SELECTED = -1;
   $('#rundownTitle').value = rd.title || 'Escaleta';
   $('#rundownDate').value = RUNDOWN.activeDate || localDatePart();
-  const dayRec = ((rd.days || {})[RUNDOWN.activeDate] || {});
-  const visibleDayTheme = dayRec.theme || RUNDOWN.dayTheme || '';
-  if ($('#rundownTheme')) $('#rundownTheme').innerHTML = dayThemeOptions(dayRec.theme || '');
   const rep = RUNDOWN.report || [];
   const emits = (s, i) => s.enabled !== false && !(rep[i] && (rep[i].skippedToday || rep[i].autoSkipped));
   const active = slots.filter(emits).length;
@@ -2457,8 +2399,7 @@ function renderRundown() {
   $('#rundownSummary').innerHTML =
     `La pantalla dará una vuelta de <b>${secs}s</b> con <b>${active}</b> bloques` +
     countMsg +
-    (missing ? ` · <b style="color:#e0a106">⚠ ${missing} sin contenido</b>` : ' · <b style="color:#bff0d5">todo listo ✓</b>') +
-    (visibleDayTheme ? ` · color del día: <b>${esc(visibleDayTheme)}</b>` : '');
+    (missing ? ` · <b style="color:#e0a106">⚠ ${missing} sin contenido</b>` : ' · <b style="color:#bff0d5">todo listo ✓</b>');
   $('#slotList').innerHTML = slots.length
     ? slots.map((s, i) => sbCardHtml(s, i)).join('')
     : '<div class="empty" style="grid-column:1/-1">Añade un bloque para empezar.</div>';
@@ -2615,15 +2556,15 @@ function slotEditHtml(s, i) {
 
 function currentLibraryMeta() {
   const keys = RUNDOWN.libraryKeys || [];
-  return keys.find((x) => x.key === LIBRARY_CATEGORY) || keys[0] || { key: LIBRARY_CATEGORY, label: 'Contenido', template: 'noticia', theme: '' };
+  return keys.find((x) => x.key === LIBRARY_CATEGORY) || keys[0] || { key: LIBRARY_CATEGORY, label: 'Contenido', template: 'noticia' };
 }
 
 function blankLibraryItem(meta) {
-  return { title: '', subtitle: '', body: '', photo: '', template: meta.template || 'noticia', theme: meta.theme || '', enabled: true, start: '', end: '', startAt: '', endAt: '', dates: [], weekdays: [] };
+  return { title: '', subtitle: '', body: '', photo: '', template: meta.template || 'noticia', enabled: true, start: '', end: '', startAt: '', endAt: '', dates: [], weekdays: [] };
 }
 
 function blankAgendaLibraryItem(afterItem = null) {
-  const meta = (RUNDOWN.libraryKeys || []).find((k) => k.key === 'agendaEventos') || { template: 'agenda', theme: 'blanco' };
+  const meta = (RUNDOWN.libraryKeys || []).find((k) => k.key === 'agendaEventos') || { template: 'agenda' };
   const startAt = String(afterItem && afterItem.endAt || localDateTimePart());
   return {
     ...blankLibraryItem(meta),
@@ -2631,7 +2572,6 @@ function blankAgendaLibraryItem(afterItem = null) {
     subtitle: 'Hoy',
     body: '',
     template: 'agenda',
-    theme: 'blanco',
     startAt,
     endAt: addMinutesLocal(startAt, 120),
     eventIds: [],
@@ -3238,15 +3178,9 @@ function libraryItemHtml(meta, item, i) {
         <label>Solo fechas concretas<input data-lib-field="dates" value="${esc((item.dates || []).join(', '))}" placeholder="2026-07-15, 2026-08-04"></label>
         <div class="hint">Con fechas concretas, la pieza sale SOLO esos días y desplaza al resto del carrusel.</div>
       </div>
-      <div class="mini">
-        <label>Plantilla<select data-lib-field="template">
-          ${TEMPLATES.map((t) => `<option value="${esc(t.id)}" ${t.id === (item.template || meta.template) ? 'selected' : ''}>${esc(t.label)}</option>`).join('')}
-        </select></label>
-        <label>Tema de color<select data-lib-field="theme">
-          <option value="" ${!(item.theme || meta.theme) ? 'selected' : ''}>Auto</option>
-          ${Object.keys(PALETTE).map((k) => `<option value="${esc(k)}" ${k === (item.theme || meta.theme) ? 'selected' : ''}>${esc(k)}</option>`).join('')}
-        </select></label>
-      </div>
+      <label>Plantilla<select data-lib-field="template">
+        ${TEMPLATES.map((t) => `<option value="${esc(t.id)}" ${t.id === (item.template || meta.template) ? 'selected' : ''}>${esc(t.label)}</option>`).join('')}
+      </select></label>
       <label>Notas internas<input data-lib-field="notes" value="${esc(item.notes || '')}"></label>
       <div class="slot-tools">
         <label style="margin:0"><input type="checkbox" data-lib-field="enabled" ${item.enabled !== false ? 'checked' : ''} style="width:auto;margin-right:6px">Activa</label>
@@ -3261,15 +3195,6 @@ function libraryItemHtml(meta, item, i) {
 function collectRundown() {
   const rd = RUNDOWN.rundown || { slots: [] };
   rd.title = $('#rundownTitle').value.trim() || 'Escaleta';
-  const themeSel = $('#rundownTheme');
-  if (themeSel) {
-    const d = RUNDOWN.activeDate || localDatePart();
-    if (!rd.days || typeof rd.days !== 'object') rd.days = {};
-    const rec = rd.days[d] && typeof rd.days[d] === 'object' ? rd.days[d] : {};
-    const theme = themeSel.value || '';
-    if (theme) rec.theme = theme; else delete rec.theme;
-    rd.days[d] = rec;
-  }
   const slot = selectedSlot();
   const wrap = slot && !$('#slotEditor').hidden ? $('#slotEditor') : null;
   if (slot && wrap) {
@@ -3332,7 +3257,6 @@ function collectAgendaPasses() {
     }).filter(Boolean);
     item.body = agendaResolvedBody(item);
     item.template = item.template || 'agenda';
-    item.theme = item.theme || 'blanco';
   });
 }
 
@@ -3433,7 +3357,7 @@ async function saveAllRundown(opts = {}) {
     await api('/rundown?date=' + encodeURIComponent(date), { method: 'PUT', body: JSON.stringify(rd) });
   }
   RUNDOWN = await api('/rundown/library?date=' + encodeURIComponent(date), { method: 'PUT', body: JSON.stringify(lib) });
-  // Re-materializa las cartelas del día visible para que los cambios de tema/
+  // Re-materializa las cartelas del día visible para que los cambios de
   // plantilla/contenido se reflejen: la cartela afectada queda marcada como
   // "cambios sin aplicar" (⟳) en el panel. Si se está planificando otro día,
   // NO se tocan las cartelas en emisión (para eso está "Aplicar escaleta").
@@ -3497,7 +3421,6 @@ function wizardSlotFromManualCard(card) {
     libraryKey: '',
     workerKey: '',
     template: (card && card.template) || '',
-    theme: (card && card.theme) || '',
     title: (card && card.title) || '',
     subtitle: (card && card.subtitle) || '',
     body: (card && card.body) || '',
@@ -3622,7 +3545,6 @@ async function openWizard() {
   WZ = {
     step: 1,
     date,
-    theme: rec.theme || '',
     days: 3,
     items,
     manual: initialWizardManual(items),
@@ -3764,7 +3686,7 @@ function wizardErrorHtml() {
 }
 
 function libraryMetaForKey(key) {
-  return (RUNDOWN.libraryKeys || []).find((k) => k.key === key) || { key, label: key, template: 'noticia', theme: '' };
+  return (RUNDOWN.libraryKeys || []).find((k) => k.key === key) || { key, label: key, template: 'noticia' };
 }
 
 function wizardChosenLibraryIndex(t, items) {
@@ -3842,15 +3764,9 @@ function wizardLibraryHtml(t, options = {}) {
       <label>${esc(labels.body)}<textarea data-wz-lib-field="${esc(key)}:${selected}:body">${esc(item.body || '')}</textarea></label>
       <details class="adv wz-piece-options">
         <summary>Diseño y fechas de esta pieza (opcional)</summary>
-        <div class="mini">
-          <label>Plantilla<select data-wz-lib-field="${esc(key)}:${selected}:template">
-            ${TEMPLATES.map((tpl) => `<option value="${esc(tpl.id)}" ${tpl.id === (item.template || meta.template) ? 'selected' : ''}>${esc(tpl.label)}</option>`).join('')}
-          </select></label>
-          <label>Color<select data-wz-lib-field="${esc(key)}:${selected}:theme">
-            <option value="" ${!(item.theme || meta.theme) ? 'selected' : ''}>Auto</option>
-            ${Object.keys(PALETTE).map((name) => `<option value="${esc(name)}" ${name === (item.theme || meta.theme) ? 'selected' : ''}>${esc(name)}</option>`).join('')}
-          </select></label>
-        </div>
+        <label>Plantilla<select data-wz-lib-field="${esc(key)}:${selected}:template">
+          ${TEMPLATES.map((tpl) => `<option value="${esc(tpl.id)}" ${tpl.id === (item.template || meta.template) ? 'selected' : ''}>${esc(tpl.label)}</option>`).join('')}
+        </select></label>
         <div class="slot-tools">
           <button type="button" class="ghost" data-wz-lib-quick="${esc(key)}:${selected}:now">Sale desde ahora</button>
           <button type="button" class="ghost" data-wz-lib-quick="${esc(key)}:${selected}:midnight">Hasta las 23:59</button>
@@ -3946,9 +3862,6 @@ function renderWizard() {
           <button type="button" class="ghost" data-wz-date="${today}">Hoy</button>
           <button type="button" class="ghost" data-wz-date="${tomorrow}">Mañana</button>
         </div>
-        <label>Paleta del día</label>
-        <select id="wzTheme">${dayThemeOptions(WZ.theme || '')}</select>
-        <div class="hint" style="margin:5px 0 10px">Auto usa el color propio de cada plantilla. Esta paleta solo se aplica porque tú la eliges aquí.</div>
         <label>Días que quieres revisar en la vista previa</label>
         <input id="wzDays" type="number" min="1" max="14" value="${WZ.days}">
       </details>`;
@@ -4027,7 +3940,6 @@ function renderWizard() {
     <div class="status" style="line-height:1.7">
       Guion de <b>${chosen.length}</b> cartelas: ${chosen.map((t) => esc(t.slot.label)).join(' → ')}<br>
       ${wizardCountHtml()}
-      Paleta del día: <b>${esc(WZ.theme || 'Color propio de cada plantilla')}</b><br>
       Vista previa: <b>${WZ.days}</b> día(s); los carruseles siguen rotando automáticamente<br>
       ${hasWizardType('agenda') ? `Agenda: <b>${agendaMoments}</b> pase(s) guardado(s); se editan desde la portada<br>` : ''}
       ${newPieces ? `Se incorporan <b>${newPieces}</b> pieza(s) nuevas al carrusel<br>` : ''}
@@ -4041,8 +3953,6 @@ function renderWizard() {
 function wzCollect() {
   const dateInput = $('#wzDate');
   if (dateInput) WZ.date = dateInput.value || localDatePart();
-  const themeInput = $('#wzTheme');
-  if (themeInput) WZ.theme = themeInput.value || '';
   const d = $('#wzDays');
   if (d) WZ.days = Math.max(1, Math.min(14, Number(d.value) || 3));
   const agendaBoxes = [...$('#wzBody').querySelectorAll('[data-wz-agenda]')];
@@ -4094,7 +4004,7 @@ async function wizardFinish() {
       const totalKey = t.typeId === 'saved' ? t.id : t.typeId;
       const suffix = totals[totalKey] > 1 ? ` ${t.instanceNumber}` : '';
       const preservedId = t.preserved && t.slot && t.slot.id ? String(t.slot.id) : '';
-      const s = { id: preservedId || `plan_${t.typeId}_${t.id}_${stamp}`, enabled: t.enabled !== false, duration: t.duration || 8, video: false, theme: '', title: '', subtitle: '', body: '', date: '', template: '', libraryKey: '', workerKey: '', ...t.slot };
+      const s = { id: preservedId || `plan_${t.typeId}_${t.id}_${stamp}`, enabled: t.enabled !== false, duration: t.duration || 8, video: false, title: '', subtitle: '', body: '', date: '', template: '', libraryKey: '', workerKey: '', ...t.slot };
       if (!preservedId) s.label = `${s.label || t.label}${suffix}`;
       Object.assign(s, WZ.manual[t.id] || {});
       if (s.source === 'library' && s.libraryKey !== 'agendaEventos') s.rotation = wizardRotationValue(t);
@@ -4105,7 +4015,7 @@ async function wizardFinish() {
     const lib = RUNDOWN.library || {};
     const activeDate = (WZ && WZ.date) || (RUNDOWN && RUNDOWN.activeDate) || localDatePart();
     for (const [key, text] of Object.entries(WZ.adds || {})) {
-      const meta = (RUNDOWN.libraryKeys || []).find((k) => k.key === key) || { key, template: 'noticia', theme: '' };
+      const meta = (RUNDOWN.libraryKeys || []).find((k) => k.key === key) || { key, template: 'noticia' };
       const items = parseBulkItems(text || '', meta);
       if (items.length) { if (!Array.isArray(lib[key])) lib[key] = []; lib[key].push(...items); }
     }
@@ -4128,7 +4038,6 @@ async function wizardFinish() {
     const dayPack = {
       ...(Object.keys(pick).length ? { pick } : {}),
       ...(Object.keys(autoPick).length ? { autoPick } : {}),
-      ...(WZ.theme ? { theme: WZ.theme } : {}),
     };
     const days = { ...oldDays };
     if (Object.keys(dayPack).length) days[activeDate] = dayPack;
@@ -4221,8 +4130,6 @@ async function openAgendaQuick(date) {
     const isTomorrow = AQ_DATE === addDays(localDatePart(), 1);
     $('#aqPreviewRow').style.display = isTomorrow ? '' : 'none';
     $('#aqPreview').checked = isTomorrow && r.previewToday === true;
-    $('#aqTheme').innerHTML = `<option value="">Auto</option>` +
-      Object.keys(PALETTE).map((k) => `<option value="${esc(k)}" ${k === (r.theme || '') ? 'selected' : ''}>${esc(k)}</option>`).join('');
     aqMarkDate();
     aqRefreshPreview();
     if (openOnSuccess && !aqDlg.open) aqDlg.showModal();
@@ -4286,7 +4193,7 @@ $('#aqSave').addEventListener('click', async () => {
   btn.textContent = 'Guardando…';
   try {
     const isTomorrow = AQ_DATE === addDays(localDatePart(), 1);
-    const r = await api('/agenda/quick', { method: 'POST', body: JSON.stringify({ date: AQ_DATE, text: $('#aqText').value, theme: $('#aqTheme').value, hideExpired: $('#aqHide').checked, previewToday: isTomorrow ? $('#aqPreview').checked : undefined }) });
+    const r = await api('/agenda/quick', { method: 'POST', body: JSON.stringify({ date: AQ_DATE, text: $('#aqText').value, hideExpired: $('#aqHide').checked, previewToday: isTomorrow ? $('#aqPreview').checked : undefined }) });
     toast(`Agenda del ${r.date}: ${r.count} evento(s) ✓`);
     AQ_LOAD_SEQ++; // invalida cualquier carga Hoy/Mañana que aún esté llegando
     aqDlg.close();
@@ -4597,7 +4504,6 @@ $('#btnRundownAdd').addEventListener('click', () => {
     enabled: true,
     source: 'fixed',
     template: 'noticia',
-    theme: '',
     title: '',
     subtitle: '',
     body: '',
@@ -4627,12 +4533,6 @@ $('#rundownDate').addEventListener('change', async () => {
   RUNDOWN = await api('/rundown?date=' + encodeURIComponent($('#rundownDate').value));
   LIB_OPEN = -1;
   rdSetDirty(false);
-  renderRundown();
-});
-$('#rundownTheme').addEventListener('change', () => {
-  if (!RUNDOWN) return;
-  collectRundown();
-  rdSetDirty(true);
   renderRundown();
 });
 // Storyboard: tocar una miniatura selecciona el bloque y abre su editor.
@@ -5230,7 +5130,7 @@ async function loadStatus(full) {
 }
 
 // El panel puede volver del editor restaurado de caché (PWA/iOS) sin recargar
-// el JS: se refresca la config (plantillas ★ nuevas, paleta...) y la lista
+// el JS: se refresca la config (plantillas ★ nuevas, ajustes...) y la lista
 // cada vez que vuelve a estar a la vista. Coste: una llamada ligera.
 window.addEventListener('pageshow', (e) => { if (e.persisted) { loadConfig(); load(); } });
 document.addEventListener('visibilitychange', () => { if (!document.hidden) { loadConfig(); } });

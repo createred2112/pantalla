@@ -99,7 +99,7 @@ function applyFrame(frame) {
   HIST = []; REDO = []; lastSnapKey = '';
   undoButtons();
   $('#hint').textContent = FRAME.template + ' · ' + FRAME.W + '×' + FRAME.H + (FRAME.designVersion ? ' · diseño ' + FRAME.designVersion : '');
-  $('#scope').innerHTML = `Editando <b>${FRAME.hasOwnLayout ? 'esta cartela' : 'plantilla base'}</b> · tema <b>${FRAME.theme && FRAME.theme.key ? FRAME.theme.key : 'auto'}</b>`;
+  $('#scope').innerHTML = `Editando <b>${FRAME.hasOwnLayout ? 'esta cartela' : 'plantilla base'}</b>`;
   fit(); build(); layers(); panel();
   // Reajuste único cuando las fuentes están listas: el tamaño que ves es el
   // definitivo y ya no cambia al hacer clic.
@@ -432,7 +432,7 @@ function num(label, val, on) { return `<label>${label}</label><input type="numbe
 function colorInput(label, val, key) { return `<label>${label}</label><input type="color" data-k="${key}" value="${hex(val)}">`; }
 function roleOptions(selected, fixed) {
   const current = fixed ? '' : selected;
-  const labels = { bg: 'Fondo del tema', bg2: 'Fondo 2', text: 'Texto', textMuted: 'Texto suave', accent: 'Acento', accentText: 'Texto sobre acento', logoAccent: 'Logo/acento' };
+  const labels = { bg: 'Fondo base', bg2: 'Fondo 2', text: 'Texto', textMuted: 'Texto suave', accent: 'Acento', accentText: 'Texto sobre acento', logoAccent: 'Logo/acento' };
   return `<select class="role-select" data-k="colorRole">
     <option value="" ${!current ? 'selected' : ''}>Color fijo</option>
     ${Object.keys(labels).map((key) => `<option value="${key}" ${current === key ? 'selected' : ''}>${labels[key]}</option>`).join('')}
@@ -442,7 +442,7 @@ function bgRoleOptions(selected, fixed) {
   const current = fixed ? '' : selected;
   return `<select class="role-select" data-k="backgroundRole">
     <option value="" ${!current ? 'selected' : ''}>Color fijo</option>
-    <option value="bg" ${current === 'bg' ? 'selected' : ''}>Fondo del tema</option>
+    <option value="bg" ${current === 'bg' ? 'selected' : ''}>Fondo base</option>
     <option value="bg2" ${current === 'bg2' ? 'selected' : ''}>Fondo 2</option>
     <option value="accent" ${current === 'accent' ? 'selected' : ''}>Acento</option>
   </select>`;
@@ -498,7 +498,7 @@ function panel() {
   if (SEL < 0) {
     const bg = FRAME.background || {};
     p.innerHTML = `<h2>Fondo de la cartela</h2>${colorInput('Color de fondo', bg.color || '#000000', 'backgroundColor')}${bgRoleOptions(bg.colorTheme, bg.colorFixed)}
-      <div class="hint2" style="margin-top:8px">“Rol del tema” = el color sigue a la paleta si cambias el tema de la cartela. “Color fijo” = se queda tal cual.</div>
+      <div class="hint2" style="margin-top:8px">Un “rol de estilo” mantiene coherentes fondo, texto y acento dentro de esta plantilla. “Color fijo” conserva exactamente el color elegido.</div>
       <div class="empty">Selecciona un elemento en el lienzo o en la lista de arriba.</div>`;
     wire(p);
     return;
@@ -745,20 +745,6 @@ $('#btnSave').addEventListener('click', async () => {
     toast(e.message || 'Error al guardar o generar');
   }
 });
-$('#btnDefault').addEventListener('click', async () => {
-  const theme = FRAME.theme && FRAME.theme.key ? FRAME.theme.key : '';
-  if (!confirm('¿Aplicar este diseño como PREDETERMINADO de la plantilla "' + FRAME.template + '" SOLO para el tema "' + theme + '"?')) return;
-  const btn = $('#btnDefault');
-  try {
-    await withBusy(btn, 'Guardando y generando...', async () => {
-      const layout = layoutPayload();
-      await requestJson('/api/templates/' + FRAME.template + '/layout', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ theme, layout }) });
-      await requestJson('/api/cards/' + ID + '/layout', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ layout }) });
-      await renderSavedCard();
-    });
-    toast('Plantilla, cartela y MP4 actualizados');
-  } catch (e) { toast(e.message || 'Error al guardar o generar'); }
-});
 // PLANTILLA PROPIA: esta composición pasa a ser una plantilla nueva con
 // nombre Y SE APLICA a esta cartela en el acto (plantilla nueva, sin layout
 // propio que la tape, y MP4 regenerado). Antes solo la creaba en la galería
@@ -773,7 +759,7 @@ $('#btnSaveAsNew').addEventListener('click', async () => {
       const r = await requestJson('/api/templates/custom', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ label: name.trim(), baseTemplate: base, layout: layoutPayload(), theme: FRAME.theme && FRAME.theme.key }),
+        body: JSON.stringify({ label: name.trim(), baseTemplate: base, layout: layoutPayload() }),
       });
       // Aplicar a ESTA cartela: la plantilla nueva ya lleva la composición
       // dentro, así que fuera el layout propio (dejaría de verse la plantilla).
@@ -787,24 +773,17 @@ $('#btnSaveAsNew').addEventListener('click', async () => {
 });
 
 $('#btnDefaultAll').addEventListener('click', async () => {
-  if (!confirm('¿Aplicar esta composición como PLANTILLA BASE para todos los colores de "' + FRAME.template + '"? Se borran excepciones de color de esa plantilla y los colores vinculados seguirán cambiando con cada tema.')) return;
+  if (!confirm('¿Aplicar esta composición como diseño de la plantilla "' + FRAME.template + '"? Afectará a todas sus cartelas.')) return;
   const btn = $('#btnDefaultAll');
   try {
     await withBusy(btn, 'Guardando y generando...', async () => {
       const layout = layoutPayload();
-      await requestJson('/api/templates/' + FRAME.template + '/layout', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ theme: '', layout, clearThemes: true }) });
+      await requestJson('/api/templates/' + FRAME.template + '/layout', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ layout }) });
       await requestJson('/api/cards/' + ID + '/layout', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ layout }) });
       await renderSavedCard();
     });
     toast('Plantilla, cartela y MP4 actualizados');
   } catch (e) { toast(e.message || 'Error al guardar o generar'); }
-});
-$('#btnResetDefault').addEventListener('click', async () => {
-  const theme = FRAME.theme && FRAME.theme.key ? FRAME.theme.key : '';
-  if (!confirm('¿Borrar el diseño PREDETERMINADO de la plantilla "' + FRAME.template + '" SOLO para el tema "' + theme + '"? Las cartelas volverán al diseño sano de código.')) return;
-  const r = await fetch('/api/templates/' + FRAME.template + '/layout?theme=' + encodeURIComponent(theme), { method: 'DELETE' });
-  toast(r.ok ? 'Plantilla + color restablecida ✓' : 'Error');
-  if (r.ok) setTimeout(() => location.reload(), 450);
 });
 $('#btnReset').addEventListener('click', async () => {
   if (!confirm('¿Volver al diseño por defecto de la plantilla? Se perderán los cambios de esta cartela.')) return;

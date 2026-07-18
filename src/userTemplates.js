@@ -28,7 +28,7 @@ function slug(text) {
     .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 24) || 'diseno';
 }
 
-function create({ label, base, layout, theme } = {}) {
+function create({ label, base, layout } = {}) {
   const name = String(label || '').trim();
   if (!name) return { ok: false, error: 'Ponle un nombre a la plantilla' };
   if (!layout || !Array.isArray(layout.elements) || !layout.elements.length) {
@@ -40,7 +40,6 @@ function create({ label, base, layout, theme } = {}) {
     id,
     label: name,
     base: String(base || 'noticia'),
-    theme: String(theme || '') || null,
     layout,
     createdAt: new Date().toISOString(),
   });

@@ -694,9 +694,6 @@
         <select id="edTemplate"></select>
         <button type="button" class="ghost" id="btnGallery" style="margin-top:6px;width:100%">🖼 Probar plantillas visualmente</button>
         <div id="tplGallery" class="tplgrid"></div>
-        <label>Tema de color</label>
-        <select id="edTheme"></select>
-        <div id="themeSwatches" style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap"></div>
         <div id="edContentFields">
           <label><span id="edTitleLabel">Título</span> <span class="hint" id="hTitle"></span></label><input id="edTitleField" placeholder="Titular">
           <label><span id="edSubtitleLabel">Subtítulo</span> <span class="hint" id="hSubtitle"></span></label><input id="edSubtitle" placeholder="Sección">
@@ -789,7 +786,6 @@
   </div>
   <label class="chk" style="margin:0 0 10px"><input type="checkbox" id="aqHide" checked> Ocultar cada evento 45 min después de su hora</label>
   <label class="chk" id="aqPreviewRow" style="margin:0 0 10px;display:none"><input type="checkbox" id="aqPreview"> 📌 Crear además la cartela <b>«AGENDA · MAÑANA»</b> visible HOY (caduca sola esta noche a las 23:59)</label>
-  <details class="adv"><summary>Color (opcional)</summary><select id="aqTheme"></select></details>
   <div class="dlg-f" style="margin-top:12px">
     <button class="ghost" type="button" id="aqAdvanced">Modo avanzado</button>
     <button class="ghost" onclick="aqDlg.close()">Cancelar</button>
@@ -873,9 +869,6 @@
     <h3 style="margin:16px 0 2px;font-size:14px">Cortinillas por plantilla</h3>
     <p class="hint" style="margin:0 0 6px">Elige una entrada y/o salida por tipo de cartela. Quedan guardadas para futuras escaletas y se unen al MP4 final.</p>
     <div id="setTemplateBumpers"></div>
-
-    <h3 style="margin:16px 0 2px;font-size:14px">Colores (temas)</h3>
-    <div id="setColors"></div>
 
     <h3 style="margin:16px 0 2px;font-size:14px">Perfil de pantalla</h3>
     <label>Nombre del perfil</label>
@@ -1018,9 +1011,8 @@
   <div class="dlg-b">
     <section id="rdTabSeq">
       <input type="hidden" id="rundownTitle" value="Escaleta">
-      <div class="rundown-top" style="grid-template-columns:190px 190px 1fr;align-items:end">
+      <div class="rundown-top" style="grid-template-columns:190px 1fr;align-items:end">
         <label>Día<input id="rundownDate" type="date"></label>
-        <label>Color del día<select id="rundownTheme"></select></label>
         <div class="status" id="rundownSummary" style="margin:0"></div>
       </div>
       <div class="hint" style="margin:8px 2px 0">✍️ manual &nbsp;·&nbsp; 🔁 carrusel &nbsp;·&nbsp; ⚙️ dato automático &nbsp;·&nbsp; seleccione una miniatura para editar</div>

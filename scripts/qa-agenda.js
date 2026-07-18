@@ -71,7 +71,7 @@ if (process.argv.includes('--render')) {
   const high = path.join(output, 'qa-agenda-led.jpg');
   const led = path.join(output, 'qa-agenda-led-300x169.png');
   renderToBuffer({
-    id: 'qa-agenda-led', type: 'generated', template: 'agenda', theme: 'blanco',
+    id: 'qa-agenda-led', type: 'generated', template: 'agenda',
     title: 'AGENDA', subtitle: 'HOY', body: scenes[0].body,
     _agendaSceneIndex: 0, _agendaSceneCount: scenes.length,
   }).then(async ({ buffer }) => {

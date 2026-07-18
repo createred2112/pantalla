@@ -11,14 +11,14 @@ const templates = require('../src/generator/templates');
 const { cfg } = require('../src/config');
 
 const card = {
-  id: 'qa_autofit', type: 'generated', template: 'mensaje', theme: 'rojo',
+  id: 'qa_autofit', type: 'generated', template: 'mensaje',
   title: 'El Sacamantecas, la película rodada en Vitoria, ya tiene cartel y fecha de estreno',
   subtitle: 'ÚLTIMA HORA',
 };
 
 (async () => {
   const tpl = templates.get(card.template);
-  const themeKey = card.theme;
+  const themeKey = tpl.defaultTheme || 'carbon';
   const W = cfg.screen.width || 1920, H = cfg.screen.height || 1080;
   const ctx = {
     W, H,

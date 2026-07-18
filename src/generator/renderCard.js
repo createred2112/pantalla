@@ -52,10 +52,12 @@ function designVersion() {
   return templates.designVersion();
 }
 
-// Resuelve el tema de color: el de la cartela, si no el de la plantilla, si no el por defecto.
+// Cada plantilla tiene un único estilo cromático. Los `theme` que aún puedan
+// existir en datos antiguos se ignoran deliberadamente: ya no hay una matriz
+// plantilla × paleta ni recoloreados accidentales desde la escaleta.
 function resolveTheme(card, tpl) {
   const palette = cfg.palette || {};
-  const key = card.theme || tpl.defaultTheme || (cfg.defaults && cfg.defaults.theme) || 'carbon';
+  const key = tpl.defaultTheme || (cfg.defaults && cfg.defaults.theme) || 'carbon';
   const t = palette[key] || palette.carbon || FALLBACK_THEME;
   return Object.assign({ key }, FALLBACK_THEME, t);
 }

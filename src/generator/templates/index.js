@@ -57,7 +57,7 @@ function userModule(rec) {
     ...base,
     id: rec.id,
     label: '★ ' + rec.label,
-    defaultTheme: rec.theme || base.defaultTheme || null,
+    defaultTheme: base.defaultTheme || null,
     userLayout: rec.layout,
     userBase: rec.base,
   };

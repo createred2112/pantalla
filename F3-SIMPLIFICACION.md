@@ -64,11 +64,12 @@ Entorno: Windows, Node 22.18.0, Chrome de Playwright/Puppeteer, FTP anulado.
 - orden de escaleta: OK;
 - backup → desastre → restauración y retención: OK;
 - candados huérfanos y reintento de alerta exclusiva: OK;
-- 16 plantillas × 6 paletas: 96 combinaciones OK;
+- 16 plantillas = 16 estilos únicos, sin paletas ni combinatoria cromática: OK;
 - titular largo / autoajuste: OK, 4 líneas y sin desborde fantasma;
 - interfaz sin jerga interna conocida: OK;
-- humo Playwright: 11/11;
-- matriz visual: 6 hojas, diferencia máxima 0,001% (umbral 0,1%).
+- humo Playwright: 13/13;
+- referencia visual: 1 hoja con las 16 plantillas, 0,000% de diferencia
+  (umbral 0,1%).
 
 La verificación usa los datos locales protegidos por snapshot. El titular del
 fallo y la copia del VPS se inspeccionaron en `vps-data/`; las pruebas no se
