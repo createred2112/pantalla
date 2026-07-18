@@ -20,7 +20,8 @@
 - [ ] Medir en el iPhone real: Agenda, retoque de estilo y publicar/verificar.
 - [ ] Confirmar que Safari/PWA muestra `0.153.0` tras desplegar sin limpiar caché.
 - [ ] Validar el manual con la persona que opera la pantalla.
-- [ ] Ejecutar y comprobar un backup final de producción.
+- [x] Ejecutar y comprobar un backup final de producción
+  (`pantalla-datos-2026-07-18.tgz`, 166,2 MB).
 - [x] Desplegar la candidata con healthcheck verde (`0.153.0`, puerto 3037).
 - [ ] Crear el tag `v1.0.0` únicamente después de esas comprobaciones.
 
