@@ -1,228 +1,251 @@
-# LA PANTALLA — motor de cartelería digital (gasteizberri)
+# LA PANTALLA
 
-Motor en Node.js que:
+Motor de cartelería digital de GasteizBerri. Genera la programación de un panel
+LED urbano, la presenta como una vuelta de ocho vídeos y la publica por FTP.
+El panel de administración es una PWA móvil pensada para una sola persona.
 
-1. **Genera** MP4 con texto + foto variables (plantillas ampliables).
-2. **Importa** JPGs/MP4s que deja otro worker (el de codex) en `data/worker-inbox/`.
-3. **Secuencia y renombra** las cartelas activas a `publish/` como ocho vídeos fijos:
-   `berri-1.mp4` ... `berri-8.mp4`. Si no hay ocho piezas válidas, no se toca `publish/`.
-4. **Sube por FTP** el contenido de `publish/`, sobreescribiendo lo anterior.
-5. **Panel móvil** de admin para editar noticias y subir fotos desde la calle.
-6. **Logs** (`logs/pantalla.log`, JSON-lines) y **status** (`logs/status.json`).
+Versión actual: **0.152.0, candidata a 1.0**.
 
-## Pipeline
+## Contrato de emisión
 
-```
-import  →  generate  →  sequence  →  upload
-(worker)  (JPG texto)   (NN_slug)    (FTP overwrite)
+La pantalla recibe exactamente estos archivos:
+
+```text
+berri-1.mp4  berri-2.mp4  berri-3.mp4  berri-4.mp4
+berri-5.mp4  berri-6.mp4  berri-7.mp4  berri-8.mp4
 ```
 
-## Puesta en marcha (local)
+La secuencia se valida completa antes de tocar `publish/`. Si falta una pieza,
+un archivo no es MP4 o una generación falla, no se sube una tanda parcial y la
+pantalla conserva la última válida. La tanda anterior queda disponible para
+restauración.
+
+## Uso diario
+
+El manual está dividido en cuatro páginas:
+
+1. [Agenda del día](docs/manual/01-agenda.md)
+2. [Preparar la próxima tanda](docs/manual/02-proxima-tanda.md)
+3. [Retocar el estilo](docs/manual/03-retocar-estilo.md)
+4. [Preparar, revisar y subir](docs/manual/04-publicar.md)
+
+El panel separa deliberadamente las acciones:
+
+- **Preparar archivos** genera o reutiliza los ocho MP4.
+- **Vista previa** enseña la vuelta completa.
+- **Subir** es la única acción que cambia la emisión real.
+
+## Puesta en marcha local
+
+Requisitos: Node.js 22. Las fuentes y Chromium del render forman parte de las
+dependencias del proyecto; no hay que instalar tipografías del sistema.
 
 ```bash
-cd pantalla
 npm install
-cp .env.example .env     # rellena FTP_* y PORT
-npm run demo             # crea 2 cartelas de ejemplo y hace un dry-run
-npm start                # arranca el panel en http://localhost:8080
+cp .env.example .env
+npm start
 ```
 
-El panel es **móvil-first**: añadir/editar/ordenar cartelas, subir foto con la
-cámara, previsualizar el vídeo en vivo, y botón **Publicar** (con modo "Probar"
-que no sube nada).
+Panel: `http://localhost:8080` salvo que `PORT` indique otro puerto.
 
-## Contrato de pantalla en producción
-
-La pantalla espera **exactamente ocho MP4** y siempre con los mismos nombres:
-`berri-1.mp4`, `berri-2.mp4`, `berri-3.mp4`, `berri-4.mp4`, `berri-5.mp4`,
-`berri-6.mp4`, `berri-7.mp4`, `berri-8.mp4`.
-
-El sistema fuerza la salida a MP4, no sube `playlist.json` y no limpia la carpeta
-remota antes de subir. La etapa `sequence` valida la tanda completa antes de
-tocar `publish/`: con menos de ocho cartelas activas o con algún archivo que no
-sea MP4, la publicación se detiene y el FTP no recibe una tanda parcial.
-
-Los MP4 generados se cachean por firma de contenido: textos, datos, plantilla,
-tema, diseño, duración, marca, resolución y cortinillas. Si nada cambia, la
-vista previa y la publicación reutilizan el mismo archivo; si cambia una sola
-cartela, solo se regenera esa pieza.
-
-En **Ajustes → Cortinillas por plantilla** se pueden subir entradas y salidas
-MP4 por tipo de cartela (`clima`, `luz`, `agenda`, etc.). El resultado final de
-cada posición sigue siendo un único `berri-N.mp4`, con intro + cartela + outro
-unidos en el mismo archivo.
-
-En los **bancos de contenido** de la Escaleta (datos útiles, citas, datos
-curiosos, efemérides…), la plantilla elegida EN CADA PIEZA manda: el banco solo
-decide la plantilla cuando la pieza no trae una propia. (Antes el banco la
-machacaba en silencio y ninguna pieza salía con la plantilla elegida.)
-
-La **Agenda viva** permite programar piezas por momento: una pieza puede salir
-desde ahora, desaparecer a una hora concreta o quedar preparada para mañana a
-una hora exacta. Así un concierto de las 21:00 deja de verse a las 22:00 y se
-puede dejar preparado otro mensaje para mañana sin tocar la pantalla a última
-hora.
-
-### Crear una cartela desde una URL
-
-En el editor, pega una URL (noticia de WordPress o cualquier web con Open Graph
-/ JSON-LD) y pulsa **Extraer**: la herramienta rellena **título, subtítulo,
-texto, fecha y foto** automáticamente. Después puedes:
-
-- **Probar plantillas visualmente**: la galería muestra una miniatura de cada
-  plantilla renderizada con tus datos; toca una para elegirla.
-- **Ajustar el detalle**: cambia textos, foto y duración antes de guardar. Cada
-  plantilla tiene un único estilo cromático estable; si quieres retocarlo,
-  hazlo una vez desde el editor visual de esa plantilla.
-
-## Acceso de administradores
-
-El panel está **protegido**: sin sesión, toda navegación redirige a `/login` y
-la API responde `401`. Crea administradores desde el servidor:
+Crear el primer administrador:
 
 ```bash
-npm run admin:add -- usuario contraseña   # crea un admin
-npm run admin:list                         # lista admins
-npm run admin:remove -- usuario            # elimina un admin
+npm run admin:add -- usuario contraseña
+npm run admin:list
 ```
 
-- Contraseñas con **scrypt** (nunca se guardan en claro) en `config/admins.json` (gitignored).
-- Sesión por **cookie HttpOnly firmada con HMAC** (7 días); `Secure` automático bajo HTTPS.
-- **Throttling**: 5 intentos fallidos bloquean esa IP 5 minutos.
-- `PANEL_TOKEN` (opcional, en `.env`) permite acceso de **máquinas** a `/api/*`
-  con la cabecera `x-panel-token` —pensado para automatizaciones (cron, worker)—,
-  no para personas.
+Las contraseñas usan scrypt y nunca se guardan en claro. Las sesiones viajan en
+cookie `HttpOnly`, con `Secure` automático bajo HTTPS. Cinco intentos fallidos
+bloquean temporalmente la IP.
 
-## CLI
+## Cómo se forma una tanda
+
+```text
+escaleta + bancos + datos automáticos
+                 ↓
+             8 cartelas
+                 ↓
+      generar o reutilizar MP4
+                 ↓
+       validar y numerar 1…8
+                 ↓
+       vista previa → subir FTP
+```
+
+- La **escaleta** decide las ocho posiciones y su orden.
+- Los **bancos** guardan piezas reutilizables y su rotación.
+- Los **datos automáticos** obtienen tiempo, previsión, aire, luz y combustible;
+  cada fuente conserva última comprobación y último dato válido.
+- `cards.json` es la vista materializada que usa el generador.
+- Una cartela editada recuerda el cambio en el bloque que la produce.
+
+Los vídeos se reutilizan por una firma de contenido: datos, plantilla, diseño,
+duración, marca, resolución y entradas/salidas. Si cambia una sola cartela, solo
+esa pieza necesita regenerarse.
+
+## Agenda
+
+Agenda exprés acepta un evento por línea:
+
+```text
+19:30 Concierto de jazz | Teatro Principal
+EXPO Mirar el agua | Montehermoso
+```
+
+También ofrece sugerencias de Kulturklik. Una exposición sin hora conserva su
+tipo `EXPO`; no recibe una hora inventada. En el vídeo, cada evento es una
+escena independiente con hora/tipo, título y lugar a tamaño de panel LED.
+
+## Plantillas y editor
+
+Hay 16 plantillas de serie, cada una con un único estilo cromático:
+
+`noticia`, `titular`, `dato`, `datocurioso`, `aire`, `luz`, `gasolina`,
+`alerta`, `meteoaviso`, `evento`, `cita`, `clima`, `prevision`, `foto`,
+`agenda` y `mensaje`.
+
+El diseño **GIGANTE** es la única vía activa. Está pensado para la baja
+resolución efectiva del panel: información corta, tipografía grande y
+contraste fuerte. Los módulos viven en `src/generator/templates/v2/`; los del
+directorio superior aportan metadatos o compatibilidad interna, no una segunda
+versión seleccionable.
+
+Orden de resolución del diseño:
+
+1. diseño propio de la cartela;
+2. plantilla propia ★ o diseño predeterminado de la plantilla;
+3. plantilla GIGANTE incluida en el código.
+
+Los metadatos antiguos `design: "v2"` y `theme` se toleran al leer datos para
+no romper históricos, pero no ofrecen otra vía de render ni una paleta
+seleccionable.
+
+Archivos:
+
+- `data/template-layouts.v2.json`: diseños predeterminados;
+- `data/user-templates.json`: plantillas propias ★;
+- `data/cards.json`: cartelas materializadas;
+- `data/rundown.json`: escaleta y bancos.
+
+El editor visual funciona con ratón o táctil, en vertical y horizontal. Permite
+mover/redimensionar, alinear, ocultar, cambiar tipografía/colores y deshacer.
+
+## Fotos, URL y vídeos propios
+
+Una cartela puede extraer título, texto, fecha y foto desde una URL con
+WordPress, Open Graph o JSON-LD. El panel también puede usar fotos de la
+mediateca de GasteizBerri, archivos subidos y vídeos MP4 ya terminados.
+
+Las entradas y salidas MP4 opcionales se configuran por tipo de plantilla. El
+resultado de cada posición sigue siendo un único `berri-N.mp4`.
+
+## Archivos y configuración
+
+- `config/pantalla.config.json`: pantalla, marca, FTP y opciones operativas.
+- `.env`: secretos y sobrescrituras de entorno.
+- `data/`: contenido editable y estado de producto.
+- `output/`: render intermedio y caché de MP4.
+- `publish/`: tanda validada que se puede subir.
+- `publish-anterior/`: última tanda reemplazada.
+- `logs/`: registro y estado operativo.
+- `backups/`: copias diarias de datos/configuración.
+
+Variables principales de `.env`:
+
+```text
+PORT=8080
+SESSION_SECRET=...
+FTP_HOST=...
+FTP_PORT=21
+FTP_USER=...
+FTP_PASSWORD=...
+FTP_SECURE=false
+PANEL_TOKEN=...
+```
+
+La configuración guardada desde el panel tiene prioridad sobre las variables
+FTP cuando contiene valores explícitos. `PANEL_TOKEN` es solo para procesos,
+no sustituye el acceso de administradores.
+
+## Comandos
 
 ```bash
-node src/cli.js import            # registra lo que dejó el worker
-node src/cli.js generate          # renderiza los MP4
-node src/cli.js sequence          # ordena + renombra los 8 MP4 a publish/
-node src/cli.js upload            # sube por FTP (dry-run si no hay credenciales)
-node src/cli.js publish           # pipeline completo
-node src/cli.js publish --dry-run # todo menos la subida real
+npm start                         # panel
+npm run generate                  # generar/reutilizar MP4
+npm run sequence                  # validar y numerar los ocho archivos
+npm run upload                    # subir; sin credenciales hace comprobación
+npm run publish                   # ciclo completo
+npm run demo                      # datos de demostración
+npm run backup                    # copia manual
+npm run backup:restore -- ARCHIVO # restauración protegida
 ```
 
-## Temas de color (diseño BOLD, editable)
+## Red de seguridad
 
-Los colores NO están dentro de las plantillas: viven en `config/pantalla.config.json`
-bajo `palette`. Cambiar ahí un tema restila TODAS las cartelas que lo usan. Cada
-tema define `bg`, `bg2` (degradado), `text`, `textMuted`, `accent` y `accentText`.
-
-Paleta CERRADA del Display System: **carbon** `#0E0E0E`, **blanco** roto `#F2F1ED`,
-**lima** `#D6FF00`, **rojo** `#FF2D2D`, **azul** `#0066FF`, gris `#BEBEBE`.
-Temas: `azul, rojo, lima, carbon, blanco`. Fondos PLANOS, tipografía pesada en
-MAYÚSCULAS, 2-5 palabras. Cada plantilla trae un tema por defecto, y cada cartela
-puede **forzar otro** con `theme` (en el panel: selector + muestras de color).
-
-El logo es el **wordmark "GasteizBerri"** (texto), color según tema.
-
-### Tipografía (empaquetada, no depende del sistema)
-
-Las fuentes viven en `assets/fonts/` (TTF libres) y se activan vía fontconfig:
-`config.js` genera `assets/fonts/fonts.conf` y exporta `FONTCONFIG_FILE` ANTES de
-cargar sharp/librsvg. Así se ven igual en local y en el VPS sin instalar nada.
-
-Sistema de **dos fuentes** (config `brand`):
-- **`fontDisplay`** = **Anton** → titulares/cifras gigantes (ultra-bold display).
-- **`fontFamily`** = **Oswald** → textos, etiquetas, horas, lugares, wordmark (condensada).
-
-También está **Archivo** (400-900) empaquetada por si se quiere un look grotesco
-de ancho normal. Cambiar de fuente = editar esas dos líneas de `config`. Para
-añadir otra: deja el TTF en `assets/fonts/` y referénciala por su nombre de familia.
-
-## Plantillas (diseño de impacto)
-
-Filosofía: **cero palabras pequeñas, mínima info, máximo impacto, total comprensión.**
-Cada plantilla agranda la tipografía hasta llenar el espacio disponible. Se elige
-con el campo `template` y los campos `title / subtitle / body / date` se reinterpretan
-según la plantilla (el panel muestra una pista por campo). El color lo pone el **tema**.
-
-| Plantilla | Para qué | title | subtitle | body | date |
-|---|---|---|---|---|---|
-| `noticia`  | Informativa con foto | Titular | Sección (chip) | Entradilla | Fecha |
-| `titular`  | Foto a sangre + frase ENORME | La frase | Sección (chip) | — | Fecha |
-| `dato`     | Cifra gigante (aforos, %, ºC) | La cifra | Qué mide | Contexto | Actualizado |
-| `datocurioso` | Frase breve/mediana con banda superior | El dato | Texto superior | Detalle | Fuente |
-| `alerta`   | Avisos (tráfico, meteo) máx. contraste | El aviso | Tipo (AVISO…) | Detalle | Cuándo |
-| `meteoaviso` | Aviso meteorológico / consejo | El mensaje | Etiqueta superior | Detalle/consejo | Vigencia |
-| `evento`   | Evento con fecha protagonista | Nombre | Tipo (chip) | Lugar | Fecha/hora |
-| `cita`     | Frase entrecomillada editorial | La frase | Autor | — | Fecha |
-| `clima`    | Tiempo ahora + icono | Temperatura actual | Condición actual (define el icono) | Nota secundaria | Momento: AHORA |
-| `prevision` | Tiempo 3 días (worker `forecast`) | (worker) | Etiqueta (chip) | — | Fuente |
-| `aire`     | Calidad del aire (worker `airQuality`) | Estado (BUENA…) | Etiqueta | Peor indicador | Fuente |
-| `luz`      | Precio de la luz (worker `powerPrice`) | Precio ahora | Etiqueta | Consejo | Fuente |
-| `gasolina` | Estaciones más baratas (worker `fuel`) | (worker) | Etiqueta | — | Fuente |
-| `foto`     | Foto a sangre, casi sin texto | Pie (opcional) | Etiqueta (chip) | — | Hora |
-| `agenda`   | Lista del día con bandas (hasta 3) | Etiqueta banda | Periodo | `FECHA \| HORA \| Nombre \| Lugar` por línea | — |
-| `mensaje`  | Lema/impacto a pantalla | El mensaje | Etiqueta | — | — |
-
-> `clima` deduce el icono (sol, nube, lluvia, nieve, tormenta, niebla, viento)
-> de la palabra escrita en el subtítulo: "Soleado", "Lluvia", "Nieve"…
-
-Añadir una plantilla nueva: crear `src/generator/templates/mi-plantilla.js`
-(exporta `{ id, label, hint, frame(card, ctx) }`) y listarla en
-`src/generator/templates/index.js`. Las plantillas pueden usar foto a sangre o
-fondo sólido/degradado, y colocar el logo en cualquier esquina (`logoPos`).
-
-## Diseño de cartelas
-
-El diseño **GIGANTE** es el único diseño del producto. Está pensado para
-pantallas de poca resolución: ningún texto por debajo de ~5,5% del alto
-(≈59 px a 1080p), etiquetas convertidas en bandas a sangre y titulares al
-límite del lienzo. Sus implementaciones viven en
-`src/generator/templates/v2/`; los módulos del directorio superior son bases
-internas y respaldos, no una versión seleccionable.
-
-- Diseños predeterminados: `data/template-layouts.v2.json`.
-- Diseños propios: `data/user-templates.json`.
-- Diseños por cartela: se guardan con `design: "v2"`.
-- `data/template-layouts.json` y los diseños de cartela antiguos se conservan
-  en disco como datos históricos, pero ya no se aplican.
-
-`npm run qa:templates` audita los 16 estilos únicos, uno por plantilla; con
-`--render` genera una sola hoja en `output/qa-template-matrix-v2/styles.png`.
-
-## Configuración
-
-- **`config/pantalla.config.json`** — resolución de pantalla, calidad, marca
-  (logo/colores), esquema de renombrado (`fixedFiles`, `padStart`, `separator`, `prefixWithOrder`),
-  rutas y opciones de FTP (`remoteDir`, `clearRemoteFirst`).
-- **`.env`** — credenciales FTP, puerto del panel y token opcional.
-
-## Modelo de cartela (card)
-
-```jsonc
-{
-  "type": "generated",   // generated | image | video
-  "order": 1,
-  "enabled": true,
-  "template": "noticia",
-  "title": "Titular",
-  "subtitle": "Sección",
-  "body": "Cuerpo de la noticia",
-  "photo": "data/uploads/up_123.jpg",  // fondo (solo generated)
-  "file": "data/worker-inbox/x.mp4",   // archivo listo (image/video)
-  "duration": 10,
-  "source": "manual"     // manual | worker
-}
+```bash
+npm test
 ```
 
-## Pendiente de tus datos
+La cadena ejecuta:
 
-- **Resolución real** de la pantalla (ahora 1920×1080).
-- **Esquema exacto** de nombres que espera el reproductor (ahora `NN_slug.ext`).
-- **Credenciales y carpeta FTP** de destino.
-- Formato/carpeta de salida del **worker de codex**.
+- orden y contrato de escaleta;
+- backup, desastre simulado, restauración y retención;
+- candados de operación y reintento de alerta exclusiva;
+- auditoría de las 16 plantillas;
+- autoajuste tipográfico y Agenda LED;
+- lenguaje visible sin jerga interna conocida;
+- 16 flujos end-to-end en viewport de iPhone;
+- comparación de píxeles de la matriz visual (umbral 0,1 %).
 
-## Despliegue en VPS (CloudPanel) — resumen
+Las pruebas arrancan el servidor con `PANTALLA_QA=1`, anulan FTP y tareas de
+fondo, fotografían `data/` y `config/` y los restauran al terminar.
 
-1. Crear sitio Node.js en CloudPanel apuntando a esta carpeta, `npm install`.
-2. Comando de arranque `node src/server.js` (o vía PM2).
-3. Definir variables FTP y `SESSION_SECRET` en `.env`, y crear los administradores
-   con `npm run admin:add -- usuario contraseña`.
-4. Acceso al panel por HTTPS (CloudPanel gestiona el certificado): así la cookie
-   de sesión viaja con flag `Secure`.
-5. Para fuentes consistentes en el JPG, instalar en el VPS:
-   `apt-get install -y fonts-liberation2` (Arial-compatible).
+Comandos específicos:
+
+```bash
+npm run qa:e2e
+npm run qa:agenda
+npm run qa:templates
+npm run qa:templates:visual
+npm run qa:visual:check
+npm run qa:visual:baseline       # solo ante un cambio visual intencionado
+npm run manual:capturas          # regenera las imágenes del manual
+```
+
+## PWA y actualizaciones
+
+Los JS/CSS se referencian con huella de contenido desde HTML no cacheable. Si el
+panel queda abierto durante un despliegue, compara su huella al volver a primer
+plano y muestra **Actualizar**. No hace falta borrar caché ni reinstalar la PWA.
+
+El panel respeta safe areas, objetivos táctiles de 44 px, teclado sobre diálogos
+y las dos orientaciones del iPhone.
+
+## Backup, despliegue y rollback
+
+El servidor crea un backup diario de `data/` y `config/`, conserva 14 días y no
+incluye cachés ni el histórico de emisiones.
+
+```bash
+bash scripts/update-server.sh               # actualizar y verificar
+bash scripts/update-server.sh --healthcheck # comprobar sin desplegar
+bash scripts/update-server.sh --rollback    # volver al despliegue anterior
+```
+
+El script espera a que vuelva el proceso y exige HTTP 200, versión correcta,
+huella de assets y páginas esenciales. Un fallo termina con código distinto de
+cero.
+
+Para incidencias, seguir [el runbook de diez pasos](docs/RUNBOOK.md).
+
+## Estado de la candidata 1.0
+
+- F0: diagnóstico — cerrado.
+- F1: red de seguridad — cerrada.
+- F2: entrega, caché, backup y rollback — cerrada.
+- F3: simplificación — cerrada.
+- F4: recorridos y ergonomía móvil — código cerrado; pendiente medición final
+  en el iPhone real.
+- F5: documentación preparada; pendientes validación, backup final, tag
+  `v1.0.0` y despliegue verificado.

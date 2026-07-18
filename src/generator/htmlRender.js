@@ -22,7 +22,10 @@ const MAX_PAGES_PER_BROWSER = Number(process.env.PANTALLA_CHROME_MAX_PAGES || 24
 
 function enqueue(task) {
   const run = _queue.catch(() => {}).then(task);
-  _queue = run.finally(() => {});
+  // La cola interna nunca debe conservar un rechazo. El llamador recibe
+  // `run` y ve el error; guardar `run.finally()` creaba una segunda promesa
+  // rechazada sin consumidor y Node la denunciaba como "sin capturar".
+  _queue = run.catch(() => {});
   return run;
 }
 
@@ -73,15 +76,19 @@ async function browser() {
 
 async function withPage(task) {
   return enqueue(async () => {
-    const b = await browser();
-    const page = await b.newPage();
+    // Contar el trabajo ANTES de esperar browser()/newPage(). En esa ventana
+    // close() podía ver cero páginas, cerrar Chromium y dejar setViewport()
+    // trabajando contra una sesión desaparecida.
     _activePages++;
+    let page = null;
     try {
+      const b = await browser();
+      page = await b.newPage();
       page.setDefaultTimeout(240000);
       page.setDefaultNavigationTimeout(240000);
       return await task(page);
     } finally {
-      try { await page.close(); } catch {}
+      if (page) try { await page.close(); } catch {}
       _activePages = Math.max(0, _activePages - 1);
       _pageUses++;
       if (_pageUses >= MAX_PAGES_PER_BROWSER) await close();
