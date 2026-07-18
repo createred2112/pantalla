@@ -36,11 +36,40 @@ async function toastVisible(re) {
   await expect(page.locator('#toast')).toHaveText(re, { timeout: 30000 });
 }
 
+async function setupPost(url, options) {
+  try {
+    return await page.request.post(url, options);
+  } catch (error) {
+    // La conexión keep-alive de APIRequestContext puede cerrarse justo entre
+    // dos pruebas largas en Windows. Solo se repite ese corte de transporte;
+    // una respuesta HTTP errónea se devuelve intacta y hace fallar el humo.
+    if (!/ECONNRESET/i.test(String(error && error.message))) throw error;
+    await page.waitForTimeout(100);
+    return page.request.post(url, options);
+  }
+}
+
+async function ensureDetailsOpen(selector) {
+  const details = page.locator(selector);
+  await expect(details).toBeVisible();
+  if (!(await details.evaluate((node) => node.open))) {
+    await details.locator('summary').first().click();
+  }
+}
+
 // ---------- 1. LOGIN ----------
 test('login: entrar con usuario y contraseña y ver el panel con su versión', async () => {
   // Salir primero: /login redirige solo si ya hay sesión (la del beforeAll).
   await page.request.post('/api/logout');
-  await page.goto('/login');
+  // El comprobador periódico del panel puede detectar la sesión cerrada y
+  // navegar a /login en el mismo instante. Si ambas navegaciones tienen el
+  // mismo destino no es un fallo: esperamos a que cualquiera de ellas llegue.
+  try {
+    await page.goto('/login');
+  } catch (error) {
+    if (!/interrupted by another navigation/i.test(String(error && error.message))) throw error;
+  }
+  await page.waitForURL('**/login');
   await page.fill('#u', USER);
   await page.fill('#p', PASS);
   await page.click('#f button[type="submit"], #f button');
@@ -80,35 +109,84 @@ test('agenda exprés: guardar hoy y mañana y releerlas', async () => {
   await page.locator('#aqDlg .ghost').first().click(); // cerrar
 });
 
-// ---------- 3. PRÓXIMA TANDA: PARTE DE LA ACTUAL ----------
-test('próxima tanda: abre con 8 posiciones y permite cambiar solo una', async () => {
+// ---------- 3. PRÓXIMA TANDA: OCHO POSICIONES Y PENDIENTES RESOLUBLES ----------
+test('preflight: Agenda y Foto vacías son 6/8 sin modificar la tanda', async () => {
+  const current = await (await page.request.get('/api/rundown')).json();
+  const cardsBefore = await (await page.request.get('/api/cards')).json();
+  const library = structuredClone(current.library);
+  library.agendaEventos = [];
+  library.agendaBanco = [];
+  library.fotosGasteizberri = [];
+  const response = await page.request.post('/api/rundown/preflight', {
+    data: { date: current.activeDate, rundown: current.rundown, library },
+  });
+  expect(response.ok()).toBeTruthy();
+  const result = await response.json();
+  expect(result.structuralCount).toBe(8);
+  expect(result.readyCount).toBe(6);
+  expect(result.blockers.map((item) => item.code)).toEqual(['agenda-empty', 'photo-empty']);
+
+  const rejected = await page.request.post('/api/rundown/prepare', {
+    data: { date: current.activeDate, rundown: current.rundown, library, agendaQuick: { text: '' } },
+  });
+  expect(rejected.status()).toBe(409);
+  const after = await (await page.request.get('/api/rundown')).json();
+  const cardsAfter = await (await page.request.get('/api/cards')).json();
+  expect(after.rundown.updatedAt).toBe(current.rundown.updatedAt);
+  expect(after.library.fotosGasteizberri).toEqual(current.library.fotosGasteizberri);
+  expect(cardsAfter.map((card) => card.id)).toEqual(cardsBefore.map((card) => card.id));
+});
+
+test('próxima tanda: muestra las 8 posiciones y resuelve varias fotos sin salir', async () => {
+  const state = await (await page.request.get('/api/rundown')).json();
+  state.library.fotosGasteizberri = [];
+  await page.request.put('/api/rundown/library', { data: state.library });
+  await page.route('**/api/wp-media?**', async (route) => route.fulfill({
+    contentType: 'application/json',
+    body: JSON.stringify({ ok: true, page: 1, totalPages: 1, items: [
+      { full: 'https://gasteizberri.com/qa-1.jpg', thumb: '/qa-1.jpg', title: 'Foto QA 1' },
+      { full: 'https://gasteizberri.com/qa-2.jpg', thumb: '/qa-2.jpg', title: 'Foto QA 2' },
+      { full: 'https://gasteizberri.com/qa-3.jpg', thumb: '/qa-3.jpg', title: 'Foto QA 3' },
+    ] }),
+  }));
+  await page.route('**/api/wp-media/import', async (route) => {
+    const body = route.request().postDataJSON();
+    const name = body.url.includes('qa-2') ? 'qa-2.jpg' : 'qa-1.jpg';
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ ok: true, photo: `data/uploads/${name}` }) });
+  });
   await page.goto('/');
   await page.click('#btnRundown');
   await expect(page.locator('#wizardDlg')).toBeVisible();
   await expect(page.locator('#wzTitle')).toContainText('Próxima tanda');
-  await expect(page.locator('#wzProgress')).toHaveText('8/8');
-  await expect(page.locator('[data-wz-item-type]')).toHaveCount(8);
-  await expect(page.locator('#wzBody')).toContainText('Partimos de la tanda actual');
+  await expect(page.locator('#wzProgress')).toHaveText('7/8 listas');
+  await expect(page.locator('.wz-lineup-card[data-wz-card-uid]')).toHaveCount(8);
+  await expect(page.locator('#wzBody')).toContainText('Foto GasteizBerri: Faltan fotos');
+  await expect(page.locator('[data-wz-issue]')).toHaveCount(1);
+  expect(await page.locator('[data-wz-rotation]:visible').count()).toBeGreaterThan(0);
 
-  await page.locator('[data-wz-item-type]').first().selectOption('tiempo');
-  await expect(page.locator('[data-wz-item-type]')).toHaveCount(8);
-  await expect(page.locator('#wzProgress')).toHaveText('8/8');
+  await page.locator('[data-wz-picker-open]').first().click();
+  await page.locator('[data-wz-choice-type="prevision"]').first().click();
+  await expect(page.locator('.wz-lineup-head b').first()).toHaveText('Previsión');
 
-  await page.click('#wzNext');
-  await expect(page.locator('#wzBody')).toContainText('7 sin cambios');
-  await expect(page.locator('#wzBody')).not.toContainText('Título | firma | texto');
-  expect(await page.locator('[data-wz-rotation]').count()).toBeGreaterThan(0);
-  await page.click('#wzBack');
-  await expect(page.locator('[data-wz-item-type]')).toHaveCount(8);
-  await expect(page.locator('[data-wz-item-type]').first()).toHaveValue('tiempo');
+  await page.click('[data-wz-photo-web]');
+  await expect(page.locator('#wpDlg')).toBeVisible();
+  await page.locator('[data-wp-full]').nth(0).click();
+  await page.locator('[data-wp-full]').nth(1).click();
+  await expect(page.locator('#wpAddSelected')).toHaveText('Añadir 2 foto(s)');
+  await page.click('#wpAddSelected');
+  await expect(page.locator('#wizardDlg')).toBeVisible();
+  await expect(page.locator('.wz-photo-thumb')).toHaveCount(2);
+  await expect(page.locator('#wzProgress')).toHaveText('8/8 listas');
+  await expect(page.locator('#wzNext')).toHaveText('Crear vista previa · 8/8');
 
   // Cerrar no pierde el trabajo: el borrador vuelve al abrir.
   await page.click('#wzClose');
   await page.click('#btnRundown');
   await expect(page.locator('#wzBody')).toContainText('Borrador recuperado');
-  await expect(page.locator('[data-wz-item-type]').first()).toHaveValue('tiempo');
+  await expect(page.locator('.wz-lineup-head b').first()).toHaveText('Previsión');
+  await expect(page.locator('.wz-photo-thumb')).toHaveCount(2);
   await page.click('[data-wz-discard]');
-  await expect(page.locator('[data-wz-item-type]').first()).toHaveValue('__keep__');
+  await expect(page.locator('.wz-lineup-head b').first()).toHaveText('Tiempo ahora');
   await page.click('#wzClose');
 });
 
@@ -131,26 +209,34 @@ test('editar cartela: crear una manual, cambiarle el titular y verlo en el panel
   await page.fill('#edSubtitle', 'Prueba');
   await page.click('#btnSave');
   await toastVisible(/guardad|creada|✓/i);
-  await expect(page.locator('#list .card', { hasText: MARK })).toBeVisible();
+  await ensureDetailsOpen('.home-saved');
+  await expect(page.locator('.home-saved-card', { hasText: MARK })).toBeVisible();
 
-  // Editarla con el lápiz y comprobar que el cambio SE VE en la lista.
-  const card = page.locator('#list .card', { hasText: `Titular inicial ${MARK}` });
-  await card.locator('[data-edit]').click();
+  // Editarla y comprobar que sigue claramente fuera de la tanda.
+  const card = page.locator('.home-saved-card', { hasText: `Titular inicial ${MARK}` });
+  await card.locator('[data-home-edit]').click();
   await expect(page.locator('#editor')).toBeVisible();
   await page.fill('#edTitleField', `Titular corregido ${MARK}`);
   await page.click('#btnSave');
   await toastVisible(/guardad|✓/i);
-  await expect(page.locator('#list .card', { hasText: `Titular corregido ${MARK}` })).toBeVisible();
+  const corrected = page.locator('.home-saved-card', { hasText: `Titular corregido ${MARK}` });
+  // El guardado lanza la recarga de portada en segundo plano: esperar primero
+  // al contenido nuevo evita abrir el <details> antiguo justo antes de que el
+  // DOM sea sustituido por el resultado actualizado.
+  await expect(corrected).toHaveCount(1);
+  await ensureDetailsOpen('.home-saved');
+  await expect(corrected).toBeVisible();
 });
 
 // ---------- 4. CONVERTIR manual ↔ worker ↔ carrusel ----------
 test('convertir: la misma cartela pasa a dato automático, a carrusel y vuelve a manual', async () => {
   // Cartela propia para el experimento (autosuficiente aunque se ejecute solo).
-  const seed = await page.request.post('/api/cards', {
+  const seed = await setupPost('/api/cards', {
     data: { type: 'generated', template: 'noticia', title: `Convertible ${MARK}`, subtitle: 'Prueba', enabled: true, source: 'manual', duration: 8 },
   });
   expect(seed.ok()).toBeTruthy();
   await page.goto('/');
+  await ensureDetailsOpen('.home-ops');
   const openEditorOf = async (text) => {
     await page.locator('#list .card', { hasText: text }).first().locator('[data-edit]').click();
     await expect(page.locator('#editor')).toBeVisible();
@@ -200,6 +286,29 @@ test('plantilla ★: al guardarla aparece inmediatamente en el selector del edit
 // ---------- 6. PUBLICACIÓN EN SECO (dry-run) ----------
 test('publicar en seco: la tanda completa se prepara y se anuncia 8/8', async () => {
   test.setTimeout(600000); // la primera vez puede tener que renderizar todo
+  // El recorrido anterior comprueba expresamente que «Descartar borrador» no
+  // altera el banco. Por tanto este humo completa su propia Foto y no depende
+  // de que producción ya tuviera una seleccionada.
+  const state = await (await page.request.get('/api/rundown')).json();
+  state.library.fotosGasteizberri = [{
+    title: `Foto de prueba ${MARK}`,
+    subtitle: '', body: '', template: 'foto', photo: 'assets/logo.png', date: '',
+    enabled: true, start: '', end: '', startAt: '', endAt: '', dates: [], weekdays: [],
+    notes: '', eventIds: [], showEventDates: true, hideExpired: false,
+  }];
+  const saved = await page.request.post('/api/rundown/prepare', { data: {
+    date: state.activeDate,
+    rundown: state.rundown,
+    library: state.library,
+    agendaQuick: { text: `19:30 | Concierto de prueba ${MARK} | Teatro Principal` },
+  } });
+  const savedBody = await saved.json();
+  expect(saved.ok(), JSON.stringify(savedBody)).toBeTruthy();
+  const inactive = await page.request.post('/api/cards', { data: {
+    type: 'generated', template: 'mensaje', title: `Guardada ${MARK}`,
+    enabled: false, source: 'manual', duration: 8,
+  } });
+  expect(inactive.ok()).toBeTruthy();
   await page.goto('/');
   await page.click('#btnDry');
   // Aserción visible: el aviso del panel confirma la prueba con sus archivos.
@@ -212,7 +321,8 @@ test('publicar en seco: la tanda completa se prepara y se anuncia 8/8', async ()
   // Las cartelas manuales creadas en pruebas anteriores se conservan, pero ya
   // no se suman a la tanda ni provocan el antiguo "sobran cartelas".
   await expect(page.locator('#listSummary')).toContainText('8 en la tanda');
-  await expect(page.locator('.saved-cards > summary')).toContainText('No salen en pantalla');
+  await expect(page.locator('.home-saved > summary')).toContainText('Fuera de la tanda');
+  await expect(page.locator('.home-saved-card', { hasText: `Guardada ${MARK}` })).toHaveCount(1);
 });
 
 // ---------- 7. TAKEOVER: encender ----------

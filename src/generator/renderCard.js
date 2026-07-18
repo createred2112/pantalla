@@ -72,6 +72,9 @@ function buildCtx(card, tpl) {
     W, H, brand: brandCtx(), theme,
     font: cfg.brand.fontFamily || 'Arial, sans-serif',
     fontDisplay: cfg.brand.fontDisplay || cfg.brand.fontFamily || 'Arial, sans-serif',
+    // Familia ancha de alta legibilidad para piezas que no admiten la
+    // condensación de Oswald/Anton (por ejemplo los eventos de Agenda).
+    fontWide: "'Archivo', 'Liberation Sans', Arial, sans-serif",
     lib: templates.lib,
     logo: {
       light: useImg ? logoDataUri(cfg.brand.logoLight || cfg.brand.logo) : null,
@@ -823,7 +826,7 @@ function resolveForEditor(card) {
   if (typeof tpl.build !== 'function') return null;
   const ctx = buildCtx(card, tpl);
   const frame = resolveFrame(card, ctx, tpl);
-  return { W: ctx.W, H: ctx.H, template: tpl.id, photo: card.photo || null, fontDisplay: ctx.fontDisplay, fontText: ctx.font, theme: ctx.theme, designVersion: designVersion(), hasOwnLayout: Boolean(cardLayoutFor(card)), background: frame.background || { type: 'solid', color: ctx.theme.bg }, elements: frame.elements };
+  return { W: ctx.W, H: ctx.H, template: tpl.id, photo: card.photo || null, fontDisplay: ctx.fontDisplay, fontText: ctx.font, fontWide: ctx.fontWide, theme: ctx.theme, designVersion: designVersion(), hasOwnLayout: Boolean(cardLayoutFor(card)), background: frame.background || { type: 'solid', color: ctx.theme.bg }, elements: frame.elements };
 }
 
 async function renderToBuffer(card) {

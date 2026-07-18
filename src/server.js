@@ -515,8 +515,31 @@ app.post('/api/rundown/reset', (req, res) => {
 
 app.post('/api/rundown/materialize', (req, res) => {
   const result = rundown.materialize({ date: (req.body && req.body.date) || req.query.date });
-  log.info('rundown', `Escaleta generada: ${result.count} cartela(s)`);
+  log.info('rundown', result.ok
+    ? `Escaleta generada: ${result.count} cartela(s)`
+    : `Escaleta no generada: ${result.count}/${result.requiredCount || '?'} listas; ${result.error || 'faltan contenidos'}`);
   res.json(result);
+});
+
+app.post('/api/rundown/preflight', (req, res) => {
+  const body = req.body || {};
+  res.json(rundown.planMaterialization({
+    date: body.date || req.query.date,
+    rundown: body.rundown,
+    library: body.library,
+  }));
+});
+
+app.post('/api/rundown/prepare', (req, res) => {
+  try {
+    const result = rundown.prepare(req.body || {}, { date: req.query.date });
+    if (!result.ok) return res.status(409).json({ ...result, error: result.error || 'La tanda no está completa' });
+    log.info('rundown', `Tanda guardada completa: ${result.count}/${result.requiredCount || result.count}`);
+    res.json(result);
+  } catch (e) {
+    log.warn('rundown', `No se pudo guardar la tanda completa: ${e.message}`);
+    res.status(500).json({ error: `No se ha guardado ningún cambio: ${e.message}` });
+  }
 });
 
 // "PROPONME PIEZAS": sugerencias para los bancos (frases, datos, efemérides).

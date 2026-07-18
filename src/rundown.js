@@ -423,13 +423,17 @@ function emissionLimit() {
   return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
 }
 
-function save(rundown, options = {}) {
-  const next = {
+function normalizedRundownForSave(rundown) {
+  return {
     title: rundown.title || 'Escaleta',
     updatedAt: new Date().toISOString(),
     slots: Array.isArray(rundown.slots) ? rundown.slots.map(normalizeSlot) : [],
     days: cleanDays(rundown.days),
   };
+}
+
+function save(rundown, options = {}) {
+  const next = normalizedRundownForSave(rundown);
   writeJson(RUNDOWN_FILE, next);
   return read(options);
 }
@@ -757,7 +761,12 @@ function parseQuickLine(line, day) {
   const expo = /^EXPO\s+/i.test(raw);
   const m = expo ? null : raw.match(/^(\d{1,2})[:.hH](\d{2})\s+(.*)$/);
   const time = m ? `${String(m[1]).padStart(2, '0')}:${m[2]}` : '';
-  const rest = (m ? m[3] : (expo ? raw.replace(/^EXPO\s+/i, '') : raw)).split('|').map((x) => x.trim());
+  // La interfaz y las sugerencias usan «19:30 | Título | Lugar» y
+  // «EXPO | Título | Lugar». Aceptar también la variante sin la primera
+  // barra, pero nunca interpretar esa barra como un título vacío.
+  const detail = (m ? m[3] : (expo ? raw.replace(/^EXPO\s*/i, '') : raw))
+    .replace(/^\s*(?:\||—|–)\s*/, '');
+  const rest = detail.split(/\s*\|\s*|\s+[—–]\s+/).map((x) => x.trim());
   return normalizeAgendaEvent({ date: day, time, type: expo ? 'Exposición' : '', title: rest[0] || '', place: rest[1] || '', subtitle: rest[2] || '' });
 }
 
@@ -783,17 +792,13 @@ function quickAgenda(date) {
   };
 }
 
-function quickAgendaSave(date, text, options = {}) {
-  ensureFiles();
+function applyQuickAgendaToLibrary(sourceLibrary, date, text, options = {}) {
   const day = String(date || todayKey()).slice(0, 10);
-  const library = normalizeLibrary(readJson(LIBRARY_FILE, DEFAULT_LIBRARY));
-  // Los eventos del día se sustituyen por lo escrito (el exprés manda ese día).
+  const library = normalizeLibrary(sourceLibrary || DEFAULT_LIBRARY);
   library.agendaBanco = (library.agendaBanco || []).filter((ev) => ev.date !== day);
   const events = String(text || '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
     .map((l) => parseQuickLine(l, day)).filter((ev) => ev.title);
   library.agendaBanco.push(...events);
-  // Un único pase exprés para ese día (los pases hechos a mano no se tocan y,
-  // si existen, ganan: empiezan más tarde que las 00:00 del exprés).
   library.agendaEventos = (library.agendaEventos || []).filter((it) => !(it.notes === QUICK_NOTES && (it.dates || []).includes(day)));
   if (events.length) {
     const tomorrow = new Date(Date.parse(`${todayKey()}T12:00:00`) + 86400000).toISOString().slice(0, 10);
@@ -811,6 +816,14 @@ function quickAgendaSave(date, text, options = {}) {
       hideExpired: options.hideExpired !== false,
     }, { key: 'agendaEventos', template: 'agenda' }));
   }
+  return { library, events, count: events.length, date: day };
+}
+
+function quickAgendaSave(date, text, options = {}) {
+  ensureFiles();
+  const day = String(date || todayKey()).slice(0, 10);
+  const applied = applyQuickAgendaToLibrary(readJson(LIBRARY_FILE, DEFAULT_LIBRARY), day, text, options);
+  const { library, events } = applied;
   writeJson(LIBRARY_FILE, library);
   // CARTELA «AGENDA DE MAÑANA» visible HOY: cartela manual con caducidad
   // esta noche (23:59). Al expirar sale sola de la emisión (vigilante de
@@ -1084,8 +1097,59 @@ function composeLineupCards(generated, currentCards) {
   return { cards: [...lineup, ...saved], archived };
 }
 
+// Una posición configurada no es necesariamente una posición lista. Este
+// preflight usa exactamente las mismas reglas que materialize(), pero no toca
+// ningún archivo. Lo consumen el asistente y el pipeline para cortar antes de
+// abrir Chromium/FFmpeg cuando Agenda, Fotos u otro bloque no tienen contenido.
+function planMaterialization(options = {}) {
+  const date = String(options.date || todayKey()).slice(0, 10);
+  let rundown = options.rundown;
+  let library = options.library;
+  if (!rundown || !library) {
+    const current = read({ date });
+    rundown = rundown || current.rundown;
+    library = library || current.library;
+  }
+  rundown = JSON.parse(JSON.stringify(rundown || DEFAULT_RUNDOWN));
+  upgradeRundown(rundown);
+  library = normalizeLibrary(library || DEFAULT_LIBRARY);
+  const rep = report(rundown, library, date);
+  const requiredCount = emissionLimit();
+  const structural = rep.filter((row) => row.enabled && !row.skippedToday);
+  const ready = rep.filter((row) => row.inEmission);
+  const blockers = structural
+    .filter((row) => row.autoSkipped || row.missing)
+    .map((row) => ({
+      slotId: String(row.id),
+      label: String(row.label || row.id || 'Posición'),
+      libraryKey: String(row.libraryKey || ''),
+      code: row.libraryKey === 'agendaEventos'
+        ? 'agenda-empty'
+        : (row.libraryKey === 'fotosGasteizberri' ? 'photo-empty' : (row.missing ? 'content-missing' : 'content-empty')),
+      note: row.libraryKey === 'agendaEventos'
+        ? 'Falta elegir eventos'
+        : (row.libraryKey === 'fotosGasteizberri' ? 'Falta elegir fotos' : String(row.note || 'Falta contenido')),
+    }));
+  if (requiredCount && structural.length < requiredCount) {
+    blockers.push({
+      slotId: '', label: 'Tanda', libraryKey: '', code: 'positions-missing',
+      note: `Faltan ${requiredCount - structural.length} posicion(es) en la tanda`,
+    });
+  }
+  return {
+    ok: !requiredCount || ready.length === requiredCount,
+    date,
+    requiredCount: requiredCount || undefined,
+    structuralCount: structural.length,
+    readyCount: ready.length,
+    blockers,
+    report: rep,
+  };
+}
+
 function materialize(options = {}) {
-  const { rundown, library, activeDate, report: rep } = read(options);
+  const { rundown, library, activeDate } = read(options);
+  const plan = planMaterialization({ rundown, library, date: activeDate });
   const skip = skipSetFor(rundown, activeDate);
   const pick = pickMapFor(rundown, activeDate);
   const autoPick = autoPickMapFor(rundown, activeDate);
@@ -1096,9 +1160,68 @@ function materialize(options = {}) {
     ? eligible.slice(limit).map((s) => ({ id: String(s.id), label: String(s.label || s.id || '') }))
     : [];
   const generated = active.map((slot, i) => toCard(slot, library, i + 1, activeDate, pick, '', autoPick));
+  if (!plan.ok) {
+    return {
+      ok: false,
+      count: generated.length,
+      readyCount: plan.readyCount,
+      structuralCount: plan.structuralCount,
+      requiredCount: plan.requiredCount,
+      blockers: plan.blockers,
+      omitted,
+      cards: generated,
+      report: plan.report,
+      error: plan.blockers.map((item) => `${item.label}: ${item.note}`).join('; ') || `Solo hay ${generated.length} posiciones listas`,
+    };
+  }
   const composed = composeLineupCards(generated, store.list());
   store.save({ cards: composed.cards });
-  return { ok: true, count: generated.length, requiredCount: limit || undefined, omitted, archived: composed.archived, cards: generated, report: rep };
+  return {
+    ok: true,
+    count: generated.length,
+    readyCount: plan.readyCount,
+    structuralCount: plan.structuralCount,
+    requiredCount: limit || undefined,
+    blockers: [],
+    omitted,
+    archived: composed.archived,
+    cards: generated,
+    report: plan.report,
+  };
+}
+
+// Guarda la estructura y su contenido como una sola operación editorial. Si
+// algo falla, restaura ambos JSON (y cards.json) para que nunca quede media
+// tanda nueva mezclada con media tanda anterior.
+function prepare(input = {}, options = {}) {
+  ensureFiles();
+  const date = String(input.date || options.date || todayKey()).slice(0, 10);
+  const nextRundown = normalizedRundownForSave(input.rundown || {});
+  let nextLibrary = normalizeLibrary(input.library || {});
+  let agendaCount;
+  if (input.agendaQuick && typeof input.agendaQuick === 'object') {
+    const applied = applyQuickAgendaToLibrary(nextLibrary, date, input.agendaQuick.text, input.agendaQuick);
+    nextLibrary = applied.library;
+    agendaCount = applied.count;
+  }
+  const plan = planMaterialization({ rundown: nextRundown, library: nextLibrary, date });
+  if (!plan.ok) return { ...plan, count: plan.readyCount, error: plan.blockers.map((item) => `${item.label}: ${item.note}`).join('; ') };
+
+  const oldRundown = readJson(RUNDOWN_FILE, DEFAULT_RUNDOWN);
+  const oldLibrary = readJson(LIBRARY_FILE, DEFAULT_LIBRARY);
+  const oldCards = store.list();
+  try {
+    writeJson(RUNDOWN_FILE, nextRundown);
+    writeJson(LIBRARY_FILE, nextLibrary);
+    const result = materialize({ date });
+    if (!result.ok) throw new Error(result.error || 'La tanda dejó de estar completa durante el guardado');
+    return { ...result, agendaCount };
+  } catch (error) {
+    try { writeJson(RUNDOWN_FILE, oldRundown); } catch {}
+    try { writeJson(LIBRARY_FILE, oldLibrary); } catch {}
+    try { store.save({ cards: oldCards }); } catch {}
+    throw error;
+  }
 }
 
 function pick(date, slotId, itemIndex, options = {}) {
@@ -1129,4 +1252,4 @@ function pick(date, slotId, itemIndex, options = {}) {
   return save(data, { date: day });
 }
 
-module.exports = { read, save, saveLibrary, reset, materialize, composeLineupCards, toCard, pick, reorderSlots, reorderFromCards, isEmptyManualNewsSlot, rememberCardEdit, rememberCardDelete, convertCard, quickAgenda, quickAgendaSave, dayTheme, RUNDOWN_FILE, LIBRARY_FILE };
+module.exports = { read, save, saveLibrary, reset, materialize, planMaterialization, prepare, composeLineupCards, toCard, pick, reorderSlots, reorderFromCards, isEmptyManualNewsSlot, rememberCardEdit, rememberCardDelete, convertCard, quickAgenda, quickAgendaSave, dayTheme, RUNDOWN_FILE, LIBRARY_FILE };

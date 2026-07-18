@@ -20,7 +20,7 @@ function stop(steps, stage, error, uploadSource, runId) {
   return { ok: false, steps };
 }
 
-async function publishLocked({ dryRun, skipImport, uploadSource = 'manual', runId } = {}) {
+async function publishLocked({ dryRun, skipImport, uploadSource = 'manual', runId, _deps = {} } = {}) {
   runId = runId || audit.runId(uploadSource);
   log.info('publish', '=== Inicio de publicación ===');
   audit.event('publish.start', dryRun ? 'Comprobacion de publicacion iniciada' : 'Publicacion iniciada', {
@@ -32,22 +32,32 @@ async function publishLocked({ dryRun, skipImport, uploadSource = 'manual', runI
     audit.event('publish.import', 'Archivos recibidos revisados', { runId, ok: steps.import.ok !== false, result: steps.import });
   }
   try {
-    const refresh = await require('../workers').refreshAll();
+    const refresh = await (_deps.refreshAll || require('../workers').refreshAll)();
     audit.event('publish.workers', 'Datos automaticos revisados antes de generar', { runId, ok: true, results: refresh.results });
   } catch (e) {
     audit.event('publish.workers', 'No se pudieron refrescar datos automaticos antes de generar', { runId, ok: false, error: e.message });
     log.warn('publish', `No se pudieron refrescar datos automáticos: ${e.message}`);
   }
-  steps.rundown = require('../rundown').materialize();
+  steps.rundown = (_deps.materialize || require('../rundown').materialize)();
   audit.event('publish.rundown', `Escaleta preparada: ${steps.rundown.count || 0} cartela(s)`, { runId, ok: steps.rundown.ok !== false, result: steps.rundown });
-  steps.generate = await generate();
+  const required = Number(steps.rundown.requiredCount) || 0;
+  const ready = Number(steps.rundown.readyCount == null ? steps.rundown.count : steps.rundown.readyCount) || 0;
+  if (steps.rundown.ok === false || (required && ready !== required)) {
+    const blockers = Array.isArray(steps.rundown.blockers) ? steps.rundown.blockers : [];
+    const detail = blockers.length
+      ? blockers.map((item) => `${item.label}: ${item.note}`).join('; ')
+      : `${ready}/${required} posiciones listas`;
+    steps.rundown.error = steps.rundown.error || detail;
+    return stop(steps, 'rundown', `la tanda está incompleta (${ready}/${required}): ${detail}`, uploadSource, runId);
+  }
+  steps.generate = await (_deps.generate || generate)();
   audit.event('publish.generate', `MP4 preparados: ${steps.generate.count || 0}; reutilizados: ${steps.generate.reused || 0}`, {
     runId, ok: steps.generate.ok !== false, count: steps.generate.count, reused: steps.generate.reused,
   });
   if (steps.generate.ok === false) {
     return stop(steps, 'generate', 'falló generate', uploadSource, runId);
   }
-  steps.sequence = sequence({ dryRun });
+  steps.sequence = (_deps.sequence || sequence)({ dryRun });
   audit.event('publish.sequence', `Secuencia final: ${steps.sequence.count || 0} archivo(s)`, {
     runId, ok: steps.sequence.ok !== false, dryRun: Boolean(dryRun),
     files: steps.sequence.files, requiredCount: steps.sequence.requiredCount,
@@ -57,7 +67,7 @@ async function publishLocked({ dryRun, skipImport, uploadSource = 'manual', runI
     return stop(steps, 'sequence', 'falló sequence', uploadSource, runId);
   }
   const plannedFiles = dryRun ? (steps.sequence.files || []) : undefined;
-  steps.upload = await upload({ dryRun, files: plannedFiles, source: uploadSource });
+  steps.upload = await (_deps.upload || upload)({ dryRun, files: plannedFiles, source: uploadSource });
   const automatic = /^automatic-/.test(String(uploadSource || ''));
   if (!dryRun && automatic && steps.upload.ok === true && steps.upload.dryRun !== true) {
     try {

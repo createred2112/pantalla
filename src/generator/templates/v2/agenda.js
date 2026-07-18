@@ -152,15 +152,17 @@ module.exports = {
     const hasVenue = Boolean(item.venue);
     els.push({
       type: 'text', x: textX, y: mainTop, w: textW, h: K.r(mainH * (hasVenue ? 0.65 : 1)),
-      text: item.name, font: 'display', weight: 800, color: dark,
-      align: 'left', valign: hasVenue ? 'top' : 'center', lineHeight: 0.91, letterSpacingEm: -0.018,
+      // Archivo semibold abre la letra y evita la mancha negra de la display
+      // condensada, manteniendo un trazo seguro para el panel LED.
+      text: item.name, font: 'wide', weight: 600, color: dark,
+      align: 'left', valign: hasVenue ? 'top' : 'center', lineHeight: 1.02, letterSpacingEm: 0.004,
       autofit: { min: K.r(H * 0.09), max: K.r(H * 0.17), lines: 2 },
     });
     if (hasVenue) {
       els.push({ type: 'rect', x: textX, y: K.r(mainTop + mainH * 0.68), w: K.r(textW * 0.16), h: K.r(H * 0.012), color: signalColor, colorFixed: item.kind === 'expo' });
       els.push({
         type: 'text', x: textX, y: K.r(mainTop + mainH * 0.75), w: textW, h: K.r(mainH * 0.25),
-        text: item.venue, font: 'text', weight: 900, color: dark,
+        text: item.venue, font: 'wide', weight: 600, color: dark,
         align: 'left', valign: 'bottom', lineHeight: 1,
         autofit: { min: K.r(H * 0.062), max: K.r(H * 0.088), lines: 1 },
       });

@@ -16,7 +16,12 @@ const ID = new URLSearchParams(location.search).get('id');
 const $ = (s) => document.querySelector(s);
 const canvas = $('#canvas'), wrap = $('#canvasWrap'), stage = $('#stage');
 let FRAME = null, ELS = [], SCALE = 1, SEL = -1;
-let FONT_DISPLAY = "'Anton',sans-serif", FONT_TEXT = "'Oswald',sans-serif";
+let FONT_DISPLAY = "'Anton',sans-serif", FONT_TEXT = "'Oswald',sans-serif", FONT_WIDE = "'Archivo',sans-serif";
+function fontFamilyFor(role) {
+  if (role === 'display') return FONT_DISPLAY;
+  if (role === 'wide') return FONT_WIDE;
+  return FONT_TEXT;
+}
 
 function toast(m) { const t = $('#toast'); t.textContent = m; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 1800); }
 function mediaUrl(p) { return p ? '/media/' + p.replace('data/uploads/', 'uploads/').replace('data/worker-inbox/', 'inbox/') : ''; }
@@ -96,6 +101,7 @@ function applyFrame(frame) {
   if (SEL >= ELS.length) SEL = -1;
   FONT_DISPLAY = FRAME.fontDisplay || FONT_DISPLAY;
   FONT_TEXT = FRAME.fontText || FONT_TEXT;
+  FONT_WIDE = FRAME.fontWide || FONT_WIDE;
   HIST = []; REDO = []; lastSnapKey = '';
   undoButtons();
   $('#hint').textContent = FRAME.template + ' · ' + FRAME.W + '×' + FRAME.H + (FRAME.designVersion ? ' · diseño ' + FRAME.designVersion : '');
@@ -165,7 +171,7 @@ function renderEl(el, i) {
     else {
       const span = document.createElement('div');
       span.textContent = el.text || '';
-      span.style.fontFamily = el.font === 'display' ? FONT_DISPLAY : FONT_TEXT;
+      span.style.fontFamily = fontFamilyFor(el.font);
       span.style.fontWeight = el.weight || 900;
       span.style.color = el.color || '#fff';
       span.style.fontSize = (el.size || Math.max(18, (el.h || 80) * 0.56)) + 'px';
@@ -204,7 +210,7 @@ function renderText(d, el) {
   const span = document.createElement('div');
   span.className = 'txt';
   span.textContent = el.transform === 'upper' ? (el.text || '').toUpperCase() : (el.text || '');
-  span.style.fontFamily = el.font === 'display' ? FONT_DISPLAY : FONT_TEXT;
+  span.style.fontFamily = fontFamilyFor(el.font);
   span.style.fontWeight = el.weight || 700;
   span.style.color = el.color || '#fff';
   span.style.lineHeight = el.lineHeight || 1.05;

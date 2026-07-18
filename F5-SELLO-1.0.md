@@ -7,13 +7,13 @@
 - `docs/manual/` contiene una página por recorrido y capturas reproducibles.
 - `docs/RUNBOOK.md` da diez pasos concretos ante una incidencia.
 - `npm run manual:capturas` regenera las imágenes sin tocar datos ni FTP.
-- La candidata es `0.152.0`; `npm test` incluye la carrera cierre/render y la
-  matriz visual tiene 0,000 % de diferencia.
+- La candidata es `0.153.0`; `npm test` incluye la comprobación previa 6/8,
+  la carrera cierre/render y la matriz visual.
 
 ## Puertas antes del tag
 
 - [ ] Medir en el iPhone real: Agenda, retoque de estilo y publicar/verificar.
-- [ ] Confirmar que Safari/PWA muestra `0.152.0` tras desplegar sin limpiar caché.
+- [ ] Confirmar que Safari/PWA muestra `0.153.0` tras desplegar sin limpiar caché.
 - [ ] Validar el manual con la persona que opera la pantalla.
 - [ ] Ejecutar y comprobar un backup final de producción.
 - [ ] Desplegar la candidata con healthcheck verde.

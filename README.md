@@ -4,7 +4,7 @@ Motor de cartelería digital de GasteizBerri. Genera la programación de un pane
 LED urbano, la presenta como una vuelta de ocho vídeos y la publica por FTP.
 El panel de administración es una PWA móvil pensada para una sola persona.
 
-Versión actual: **0.152.0, candidata a 1.0**.
+Versión actual: **0.153.0, candidata a 1.0**.
 
 ## Contrato de emisión
 
@@ -34,6 +34,12 @@ El panel separa deliberadamente las acciones:
 - **Preparar archivos** genera o reutiliza los ocho MP4.
 - **Vista previa** enseña la vuelta completa.
 - **Subir** es la única acción que cambia la emisión real.
+
+La portada enseña siempre los ocho huecos de la tanda actual. Cada hueco se
+puede editar o sustituir visualmente sin empezar de cero; las cartelas
+guardadas que no están en pantalla aparecen aparte y marcadas como
+**NO ACTIVA**. Agenda, Fotos y las rotaciones se resuelven dentro de esa misma
+vista.
 
 ## Puesta en marcha local
 
@@ -90,7 +96,9 @@ Agenda exprés acepta un evento por línea:
 
 ```text
 19:30 Concierto de jazz | Teatro Principal
+19:30 | Concierto de jazz | Teatro Principal
 EXPO Mirar el agua | Montehermoso
+EXPO | Mirar el agua | Montehermoso
 ```
 
 También ofrece sugerencias de Kulturklik. Una exposición sin hora conserva su
@@ -195,7 +203,7 @@ La cadena ejecuta:
 - auditoría de las 16 plantillas;
 - autoajuste tipográfico y Agenda LED;
 - lenguaje visible sin jerga interna conocida;
-- 16 flujos end-to-end en viewport de iPhone;
+- 17 flujos end-to-end en viewport de iPhone;
 - comparación de píxeles de la matriz visual (umbral 0,1 %).
 
 Las pruebas arrancan el servidor con `PANTALLA_QA=1`, anulan FTP y tareas de

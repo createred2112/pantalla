@@ -95,8 +95,8 @@ module.exports = {
         els.push({ type: 'text', x: pad, y: by, w: boxW, h: boxH, text: it.time, font: 'display', weight: 800, color: white, align: 'center', valign: 'center', autofit: { min: Math.round(H * 0.06), max: Math.round(boxH * 0.62), lines: 1 } });
       }
       const hasV = Boolean(it.venue);
-      els.push({ type: 'text', x: nameX, y: Math.round(cyy - rowH * (hasV ? 0.25 : 0.18)), w: nameW, h: Math.round(rowH * (hasV ? 0.26 : 0.36)), text: it.name, font: 'display', weight: 800, color: rowText, align: hasTime ? 'left' : 'center', valign: hasV ? 'bottom' : 'center', autofit: { min: Math.round(H * 0.04), max: Math.round(rowH * (n === 1 ? 0.2 : 0.26)), lines: hasTime ? 1 : 2 } });
-      if (hasV) els.push({ type: 'text', x: nameX, y: Math.round(cyy + rowH * 0.04), w: nameW, h: Math.round(rowH * 0.22), text: it.venue, font: 'display', weight: 800, color: rowText, align: 'left', valign: 'center', autofit: { min: Math.round(H * 0.04), max: Math.round(rowH * (n === 1 ? 0.18 : 0.22)), lines: 1 } });
+      els.push({ type: 'text', x: nameX, y: Math.round(cyy - rowH * (hasV ? 0.25 : 0.18)), w: nameW, h: Math.round(rowH * (hasV ? 0.26 : 0.36)), text: it.name, font: 'wide', weight: 600, color: rowText, align: hasTime ? 'left' : 'center', valign: hasV ? 'bottom' : 'center', lineHeight: 1.02, letterSpacingEm: 0.004, autofit: { min: Math.round(H * 0.04), max: Math.round(rowH * (n === 1 ? 0.2 : 0.26)), lines: hasTime ? 1 : 2 } });
+      if (hasV) els.push({ type: 'text', x: nameX, y: Math.round(cyy + rowH * 0.04), w: nameW, h: Math.round(rowH * 0.22), text: it.venue, font: 'wide', weight: 600, color: rowText, align: 'left', valign: 'center', autofit: { min: Math.round(H * 0.04), max: Math.round(rowH * (n === 1 ? 0.18 : 0.22)), lines: 1 } });
     });
 
     // Banda inferior: marca textual + chevrons.

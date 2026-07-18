@@ -50,6 +50,8 @@ const signalRect = frame.elements
 const eventNames = textElements.filter((el) => String(el.text || '').startsWith('NATURALEZA Y CULTURA'));
 assert.strictEqual(eventNames.length, 1, 'un frame no puede volver a apilar varios eventos');
 assert(eventNames[0].autofit.min >= 97 && eventNames[0].autofit.lines === 2, 'el titular debe ser gigante y admitir dos líneas');
+assert.strictEqual(eventNames[0].font, 'wide', 'el evento debe usar la familia ancha legible, no la display condensada');
+assert(eventNames[0].weight <= 600, 'el evento no puede volver a formar una mancha en peso extranegrita');
 const venue = textElements.find((el) => String(el.text || '').startsWith('ATARIA'));
 assert(venue && venue.autofit.min >= 66, 'el lugar debe seguir siendo legible en el panel LED');
 assert(signalRect && signalRect.y === eventNames[0].y, 'la caja EXPO/HORA debe empezar en la misma horizontal que el titular');

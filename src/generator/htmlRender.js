@@ -171,6 +171,7 @@ function effectiveBgFor(el, elements, solidBg) {
   return bg;
 }
 function famOf(font) {
+  if (font === 'wide') return "'Archivo', 'Liberation Sans', Arial, sans-serif";
   return font === 'display' ? (cfg.brand.fontDisplay || 'sans-serif') : (cfg.brand.fontFamily || 'sans-serif');
 }
 

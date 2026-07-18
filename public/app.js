@@ -739,10 +739,63 @@ async function loadRotationPreviews(queue, token) {
   }
 }
 
+function slotVisualIcon(slot, card) {
+  const key = String((slot && (slot.workerKey || slot.libraryKey || slot.template)) || (card && card.template) || '');
+  if (/weather|clima/i.test(key)) return '☀';
+  if (/forecast|prevision/i.test(key)) return '↗';
+  if (/agenda/i.test(key)) return '▣';
+  if (/foto|image/i.test(key)) return '▧';
+  if (/air|aire/i.test(key)) return '◉';
+  if (/power|luz/i.test(key)) return '⚡';
+  if (/video|promo/i.test(key) || (card && card.type === 'video')) return '▶';
+  if (/alert/i.test(key)) return '!';
+  if (/dato|consejo|cita|noticia/i.test(key)) return '≡';
+  return '◆';
+}
+
+function homeThumbHtml(card, slot) {
+  const rendered = card && card.rendered;
+  const source = rendered && (rendered.posterUrl || (rendered.type === 'image' ? rendered.url : ''));
+  const uploaded = card && card.type === 'image' ? mediaUrl(card.file) : '';
+  const image = source || uploaded;
+  return `<div class="home-slot-thumb">${image ? `<img src="${esc(image)}" alt="">` : esc(slotVisualIcon(slot, card))}</div>`;
+}
+
+function renderHomeSlots() {
+  const box = $('#homeSlots');
+  if (!box) return;
+  const required = requiredVideoCount();
+  const structural = currentWizardSlots(RUNDOWN || {}).slice(0, required);
+  const report = new Map((((RUNDOWN || {}).report) || []).map((row) => [String(row.id), row]));
+  const activeBySlot = new Map(cards.filter((card) => card.enabled !== false && card.rundownSlot).map((card) => [String(card.rundownSlot), card]));
+  const rows = Array.from({ length: required }, (_, index) => {
+    const slot = structural[index];
+    if (!slot) return `<article class="home-slot empty"><span class="home-slot-num">${index + 1}</span><div class="home-slot-thumb">＋</div><div class="home-slot-copy"><b>Hueco sin asignar</b><small>Elige una cartela para completar la tanda</small></div><div class="home-slot-actions"><button type="button" class="primary" data-home-empty>Elegir</button></div></article>`;
+    const row = report.get(String(slot.id)) || {};
+    const card = activeBySlot.get(String(slot.id));
+    const missing = row.autoSkipped || row.missing || !row.inEmission;
+    const title = (card && card.title) || row.title || slot.label || 'Cartela';
+    const subtitle = missing ? (row.note || 'Falta contenido') : ((card && card.subtitle) || slot.label || 'Lista');
+    return `<article class="home-slot ${missing ? 'missing' : ''}" data-home-slot="${esc(slot.id)}">
+      <span class="home-slot-num">${index + 1}</span>${homeThumbHtml(card, slot)}
+      <div class="home-slot-copy"><b>${esc(slot.label || title)}</b><small>${esc(title === slot.label ? subtitle : `${title} · ${subtitle}`)}</small></div>
+      <div class="home-slot-actions">
+        <span class="tag ${missing ? 'warn' : 'ok'}">${missing ? 'Por resolver' : 'Activa'}</span>
+        ${card && !missing ? `<button type="button" class="ghost" data-home-edit="${esc(card.id)}">Editar</button>` : ''}
+        <button type="button" class="ghost" data-home-replace="${esc(slot.id)}">${missing ? 'Resolver' : 'Sustituir'}</button>
+      </div>
+    </article>`;
+  }).join('');
+  const saved = cards.filter((card) => card.enabled === false && card.source !== 'rundown');
+  const savedHtml = saved.length ? `<details class="home-saved"><summary>Fuera de la tanda · ${saved.length} cartela(s)<small>Están guardadas, pero no salen en pantalla.</small></summary><div class="home-saved-grid">${saved.map((card) => `<article class="home-saved-card">${homeThumbHtml(card, null)}<div class="home-saved-card-copy"><b>${esc(card.title || card.subtitle || 'Cartela guardada')}</b><span>NO ACTIVA</span><div class="home-saved-actions"><button type="button" class="ghost" data-home-edit="${esc(card.id)}">Editar</button><button type="button" class="ghost" data-home-use-saved="${esc(card.id)}">Usar en un hueco</button></div></div></article>`).join('')}</div></details>` : '';
+  box.innerHTML = rows + savedHtml;
+}
+
 function render() {
   const el = $('#list');
   const sum = $('#listSummary');
   renderTodayPanel();
+  renderHomeSlots();
   if (!cards.length) {
     el.innerHTML = '<div class="empty">Aún no hay emisión preparada.<br>Empieza en Crear emisión.</div>';
     if (sum) sum.textContent = '';
@@ -1325,7 +1378,7 @@ $('#edSource').addEventListener('change', async () => {
   }
 });
 
-function openEditor(card) {
+function openEditor(card, options = {}) {
   ED_SLOT = null;
   ED_LIBRARY_INDEX = -1;
   $('#edRundownBox').style.display = 'none';
@@ -1348,7 +1401,7 @@ function openEditor(card) {
   if (autoOpt && !(card && card.source === 'rundown')) autoOpt.remove();
   $('#urlImport').style.display = card && card.source === 'rundown' ? 'none' : '';
   if (card && card.source === 'rundown' && card.rundownSlot) loadEditorRundown(card);
-  $('#edTitle').textContent = card ? 'Editar cartela' : 'Nueva cartela';
+  $('#edTitle').textContent = card ? 'Editar cartela' : (options.enabled === false ? 'Nueva cartela guardada' : 'Nueva cartela');
   $('#edId').value = card?.id || '';
   $('#edType').value = card?.type || 'generated';
   $('#edTemplate').value = card?.template || (TEMPLATES[0] && TEMPLATES[0].id) || 'noticia';
@@ -1359,7 +1412,7 @@ function openEditor(card) {
   $('#edPhoto').value = card?.photo || '';
   $('#edFile').value = card?.file || '';
   $('#edDuration').value = card?.duration || 10;
-  $('#edEnabled').checked = card?.enabled !== false;
+  $('#edEnabled').checked = card ? card.enabled !== false : options.enabled !== false;
   $('#edVideo').checked = card?.video === true;
   if (SAFETY.safeMode) $('#edVideo').checked = false;
   const adv = $('#advVideo'); if (adv) adv.open = $('#edVideo').checked;
@@ -1476,15 +1529,19 @@ function collect() {
   };
 }
 
-// Sube una foto y devuelve su ruta relativa.
-async function uploadFile(inputEl) {
-  const f = inputEl.files[0];
+// Sube un archivo y devuelve su ruta relativa.
+async function uploadBlob(f) {
   if (!f) return null;
   const fd = new FormData();
   fd.append('photo', f);
   const r = await fetch('/api/upload', { method: 'POST', headers: TOKEN ? { 'x-panel-token': TOKEN } : {}, body: fd });
   const j = await r.json();
+  if (!r.ok) throw new Error(j.error || 'No se pudo subir el archivo');
   return j.path;
+}
+
+async function uploadFile(inputEl) {
+  return uploadBlob(inputEl.files[0]);
 }
 
 $('#edPhotoFile').addEventListener('change', async (e) => {
@@ -1676,7 +1733,9 @@ async function saveEditor({ renderAfter = false } = {}) {
     }
     if ((saved && saved.type) === 'generated') await renderSavedCard(saved.id);
     editor.close();
-    toast(renderAfter && saved && saved.type === 'generated' ? 'Guardado y archivo generado' : 'Guardado sin generar');
+    toast(data.enabled === false
+      ? 'Cartela guardada fuera de la tanda · úsala cuando quieras'
+      : (renderAfter && saved && saved.type === 'generated' ? 'Guardado y archivo generado' : 'Guardado sin generar'));
     load();
   } catch (e) { toast('Error: ' + e.message); }
   finally { clearBusy(); }
@@ -1708,6 +1767,24 @@ $('#btnDuplicate').addEventListener('click', async () => {
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
 
 // --- Delegación de eventos de la lista ---
+$('#homeSlots').addEventListener('click', async (event) => {
+  const edit = event.target.closest('[data-home-edit]');
+  if (edit) {
+    const card = cards.find((item) => String(item.id) === String(edit.dataset.homeEdit));
+    if (!card) return;
+    const key = card.rundownLibraryKey;
+    const index = key ? currentLibraryIndexForCard(card) : -1;
+    if (key && index >= 0) await openBanks(key, { openIndex: index, agenda: key === 'agendaEventos' });
+    else openEditor(card);
+    return;
+  }
+  const replace = event.target.closest('[data-home-replace]');
+  if (replace) { openWizard(replace.dataset.homeReplace); return; }
+  const saved = event.target.closest('[data-home-use-saved]');
+  if (saved) { openWizard('', saved.dataset.homeUseSaved); return; }
+  if (event.target.closest('[data-home-empty]')) openWizard();
+});
+
 $('#list').addEventListener('click', async (e) => {
   const b = e.target.closest('button'); if (!b) return;
   if (b.dataset.rotationKey && b.dataset.rotationIndex != null) {
@@ -2122,7 +2199,7 @@ $('#pilotPlan').addEventListener('click', async (e) => {
 });
 
 // --- Barra de acciones ---
-$('#btnAdd').addEventListener('click', () => openEditor(null));
+$('#btnAdd').addEventListener('click', () => openEditor(null, { enabled: false }));
 $('#btnRefresh').addEventListener('click', load);
 $('#btnImport').addEventListener('click', async () => {
   const r = await api('/import', { method: 'POST' });
@@ -3419,14 +3496,11 @@ const wizardDlg = $('#wizardDlg');
 let WZ = null;
 
 function currentWizardSlots(data) {
+  // Enseña las posiciones configuradas aunque aún no sean emitibles. Antes,
+  // Agenda y Fotos desaparecían justo cuando había que completarlas.
   const slots = (((data || {}).rundown || {}).slots || []);
-  const byId = new Map(slots.map((slot) => [String(slot.id), slot]));
-  const report = Array.isArray(data && data.report) ? data.report : [];
-  return report
-    .filter((row) => row.inEmission)
-    .sort((a, b) => Number(a.emissionOrder || a.order || 0) - Number(b.emissionOrder || b.order || 0))
-    .map((row) => byId.get(String(row.id)))
-    .filter(Boolean)
+  return slots
+    .filter((slot) => slot && slot.enabled !== false)
     .slice(0, requiredVideoCount());
 }
 
@@ -3540,25 +3614,42 @@ function loadWizardDraft(data) {
   }
 }
 
-async function openWizard() {
+function applyWizardOpeningRequest(slotId, savedCardId) {
+  if (!WZ) return;
+  WZ.pendingSavedCardId = savedCardId || '';
+  if (slotId) {
+    const item = (WZ.items || []).find((record) => String(record.slotSnapshot && record.slotSnapshot.id) === String(slotId));
+    WZ.pickerUid = item ? item.uid : '';
+  }
+}
+
+function focusWizardRequest() {
+  const target = WZ && WZ.pickerUid ? $('#wzBody').querySelector(`[data-wz-card-uid="${CSS.escape(WZ.pickerUid)}"]`) : null;
+  if (target) setTimeout(() => target.scrollIntoView({ block: 'center' }), 50);
+}
+
+async function openWizard(slotId = '', savedCardId = '') {
   const date = localDatePart();
-  RUNDOWN = await api('/rundown?date=' + encodeURIComponent(date)); // trae almacén, workers y claves
+  const [data, quick] = await Promise.all([
+    api('/rundown?date=' + encodeURIComponent(date)),
+    api('/agenda/quick?date=' + encodeURIComponent(date)).catch(() => ({ lines: [], hideExpired: true })),
+  ]);
+  RUNDOWN = data; // trae almacén, workers y claves
   const rec = (((RUNDOWN.rundown || {}).days || {})[date] || {});
   const currentSlots = currentWizardSlots(RUNDOWN);
-  const missing = Math.max(0, requiredVideoCount() - currentSlots.length);
-  if (missing) {
-    currentSlots.push(...cards
-      .filter((card) => card.enabled !== false && card.source !== 'rundown')
-      .slice(0, missing)
-      .map(wizardSlotFromManualCard));
-  }
   const items = currentSlots.map(wizardItemFromSlot);
   const restored = loadWizardDraft(RUNDOWN);
   if (restored) {
     WZ = { ...restored.wz, _restored: true, _dirty: true };
+    if (typeof WZ.agendaText !== 'string') WZ.agendaText = (quick.lines || []).join('\n');
+    if (!Array.isArray(WZ.agendaSuggestions)) WZ.agendaSuggestions = [];
+    WZ.agendaSuggestionsLoading = true;
     if (restored.library && typeof restored.library === 'object') RUNDOWN.library = restored.library;
+    applyWizardOpeningRequest(slotId, savedCardId);
     renderWizard();
     wizardDlg.showModal();
+    focusWizardRequest();
+    loadWizardAgendaSuggestions();
     return;
   }
   WZ = {
@@ -3572,12 +3663,36 @@ async function openWizard() {
     rotations: initialWizardRotations(items),
     error: '',
     agenda: initialAgendaMoments(),
+    agendaText: (quick.lines || []).join('\n'),
+    agendaHideExpired: quick.hideExpired !== false,
+    agendaSuggestions: [],
+    agendaSuggestionsLoading: true,
     _baseUpdatedAt: ((RUNDOWN.rundown || {}).updatedAt || null),
     _dirty: false,
     _restored: false,
   };
+  applyWizardOpeningRequest(slotId, savedCardId);
   renderWizard();
   wizardDlg.showModal();
+  focusWizardRequest();
+  loadWizardAgendaSuggestions();
+}
+
+async function loadWizardAgendaSuggestions() {
+  const owner = WZ;
+  try {
+    const result = await api('/agenda/web?date=' + encodeURIComponent((WZ && WZ.date) || localDatePart()));
+    if (!WZ || WZ !== owner) return;
+    WZ.agendaSuggestions = result.items || [];
+  } catch {
+    if (!WZ || WZ !== owner) return;
+    WZ.agendaSuggestions = [];
+  } finally {
+    if (WZ && WZ === owner) {
+      WZ.agendaSuggestionsLoading = false;
+      if (wizardDlg.open) renderWizard();
+    }
+  }
 }
 
 function wzWorkerLine(key) {
@@ -3844,7 +3959,7 @@ function retargetAgendaMoments(items, fromDate, toDate) {
   });
 }
 
-function renderWizard() {
+function renderWizardLegacy() {
   const total = 3;
   const count = wizardCountState();
   $('#wzTitle').textContent = `Próxima tanda · paso ${WZ.step} de ${total}`;
@@ -3968,12 +4083,180 @@ function renderWizard() {
     </div>`;
 }
 
+function wizardIssue(t) {
+  const slot = t.slot || {};
+  const label = slot.label || t.label || 'Posición';
+  if (t.enabled === false || slot.enabled === false) return { code: 'disabled', label, reason: 'La posición está desactivada' };
+  if (slot.source === 'file' && !((WZ.manual[t.id] || {}).file || slot.file)) {
+    return { code: 'file-empty', label, reason: 'Falta elegir el vídeo' };
+  }
+  if (slot.source === 'fixed' && slot.template === 'noticia') {
+    const manual = WZ.manual[t.id] || {};
+    if (!String(manual.title || slot.title || '').trim()) return { code: 'text-empty', label, reason: 'Falta el titular' };
+  }
+  if (slot.source === 'library' && slot.libraryKey === 'agendaEventos') {
+    if (!aqParse(WZ.agendaText || '').length) return { code: 'agenda-empty', label, reason: 'Faltan eventos' };
+    return null;
+  }
+  if (slot.source === 'library' && slot.libraryKey === 'fotosGasteizberri') {
+    const photos = clientLibraryItems(RUNDOWN.library || {}, slot.libraryKey, WZ.date || localDatePart()).filter((item) => item.photo);
+    if (!photos.length) return { code: 'photo-empty', label, reason: 'Faltan fotos' };
+    return null;
+  }
+  if (slot.source === 'library') {
+    const items = clientLibraryItems(RUNDOWN.library || {}, slot.libraryKey, WZ.date || localDatePart());
+    if (!items.length) return { code: 'library-empty', label, reason: 'Falta contenido en el carrusel' };
+  }
+  return null;
+}
+
+function wizardReadyState() {
+  const required = requiredVideoCount();
+  const chosen = wizardChosenTypes();
+  const issues = chosen.map((type) => ({ type, issue: wizardIssue(type) })).filter((row) => row.issue);
+  const missingPositions = Math.max(0, required - chosen.length);
+  return {
+    required,
+    chosen,
+    issues,
+    missingPositions,
+    ready: Math.max(0, Math.min(required, chosen.length - issues.length)),
+    ok: chosen.length === required && issues.length === 0,
+  };
+}
+
+function wizardAgendaLine(event) {
+  const expo = /exposici|erakusketa/i.test(String(event.type || ''));
+  return `${event.time ? event.time + ' ' : (expo ? 'EXPO ' : '')}${event.title || ''}${event.place ? ' — ' + event.place : ''}`.trim();
+}
+
+function wizardAgendaHtml() {
+  const events = aqParse(WZ.agendaText || '');
+  const selectedTitles = new Set(events.map((event) => String(event.title || '').trim().toLocaleLowerCase('es')));
+  const suggestions = (WZ.agendaSuggestions || []).filter((event) => !selectedTitles.has(String(event.title || '').trim().toLocaleLowerCase('es'))).slice(0, 6);
+  return `<div class="wz-inline-editor">
+    <label>Eventos que saldrán hoy
+      <textarea data-wz-agenda-text rows="${Math.max(4, Math.min(8, events.length + 2))}" placeholder="19:30 Concierto de verano\nEXPO Mirar el agua">${esc(WZ.agendaText || '')}</textarea>
+    </label>
+    <div class="hint">${events.length ? `<b>${events.length} evento(s) elegidos.</b>` : 'Añade al menos un evento.'} Una línea por evento.</div>
+    <div class="wz-agenda-suggestions">
+      ${WZ.agendaSuggestionsLoading ? '<span class="hint">Buscando propuestas de Kulturklik…</span>' : suggestions.map((event, index) => `<button type="button" class="ghost" data-wz-agenda-suggestion="${index}" data-wz-agenda-line="${esc(wizardAgendaLine(event))}">+ ${esc(event.title || '')}${event.time ? ` · ${esc(event.time)}` : ''}</button>`).join('')}
+      ${!WZ.agendaSuggestionsLoading && !suggestions.length ? '<span class="hint">No quedan propuestas por añadir.</span>' : ''}
+    </div>
+  </div>`;
+}
+
+function wizardPhotosHtml(t) {
+  const key = t.slot.libraryKey;
+  const items = Array.isArray(RUNDOWN.library && RUNDOWN.library[key]) ? RUNDOWN.library[key] : [];
+  const photos = items.map((item, index) => ({ item, index })).filter((row) => row.item.photo);
+  return `<div class="wz-inline-editor">
+    ${wizardRotationHtml(t)}
+    <div class="wz-photo-grid">${photos.map(({ item, index }) => `<div class="wz-photo-thumb"><img src="${esc(item.photo)}" alt=""><button type="button" data-wz-photo-remove="${index}" aria-label="Quitar foto">×</button></div>`).join('') || '<div class="hint">Todavía no hay fotos elegidas.</div>'}</div>
+    <div class="wz-photo-actions">
+      <button type="button" class="ghost" data-wz-photo-web>Elegir varias de GasteizBerri</button>
+      <label class="ghost wz-file-button">Subir varias del móvil<input type="file" data-wz-photo-upload accept="image/*" multiple></label>
+    </div>
+    <div class="hint">${photos.length ? `${photos.length} foto(s) · salen limpias, sin texto encima.` : 'Elige una o varias; no hace falta crear piezas ni rellenar textos.'}</div>
+  </div>`;
+}
+
+function wizardCarouselSummary(t) {
+  const key = t.slot.libraryKey;
+  const items = clientLibraryItems(RUNDOWN.library || {}, key, WZ.date || localDatePart());
+  const titles = items.slice(0, 2).map((item) => item.title || item.body || '(sin título)');
+  return `<div class="wz-carousel-summary"><b>${items.length} pieza(s)</b>${titles.length ? `<span>Ahora: ${esc(titles[0])}${titles[1] ? ` → Después: ${esc(titles[1])}` : ''}</span>` : ''}</div>`;
+}
+
+function wizardSavedChoiceVisual(card) {
+  const rendered = card && card.rendered;
+  const image = rendered && (rendered.posterUrl || (rendered.type === 'image' ? rendered.url : ''));
+  return image ? `<img src="${esc(image)}" alt="">` : esc(slotVisualIcon(null, card));
+}
+
+function wizardPositionChangeHtml(t, index, total) {
+  const open = WZ.pickerUid === t.id;
+  const saved = cards.filter((card) => card.enabled === false && card.source !== 'rundown');
+  const picker = open ? `<div class="wz-visual-picker">
+    <div class="wz-visual-picker-head"><b>¿Qué quieres poner en el hueco ${index + 1}?</b><button type="button" class="ghost" data-wz-picker-close>✕</button></div>
+    <div class="wz-choice-grid">
+      ${PLAN_TYPES.filter((type) => type.enabled !== false).map((type) => `<button type="button" class="wz-choice" data-wz-choice-uid="${esc(t.id)}" data-wz-choice-type="${esc(type.id)}"><span class="wz-choice-icon">${esc(slotVisualIcon(type.slot))}</span><span>${esc(type.label.replace(/\s*·.*$/, ''))}</span></button>`).join('')}
+      ${saved.map((card) => `<button type="button" class="wz-choice saved" data-wz-choice-uid="${esc(t.id)}" data-wz-choice-saved="${esc(card.id)}"><span class="wz-choice-icon">${wizardSavedChoiceVisual(card)}</span><span>${esc(card.title || card.subtitle || 'Cartela guardada')} · no activa</span></button>`).join('')}
+    </div>
+  </div>` : '';
+  return `<div class="wz-position-actions">
+      <button type="button" class="ghost" data-wz-picker-open="${esc(t.id)}">Sustituir visualmente</button>
+      <button type="button" class="ghost" data-wz-item-move="${t.id}:-1" ${index === 0 ? 'disabled' : ''} title="Mover antes">↑</button>
+      <button type="button" class="ghost" data-wz-item-move="${t.id}:1" ${index === total - 1 ? 'disabled' : ''} title="Mover después">↓</button>
+    </div>${picker}`;
+}
+
+function wizardSingleSection(t, index, total) {
+  const issue = wizardIssue(t);
+  const slot = t.slot || {};
+  let content = '';
+  if (slot.source === 'library' && slot.libraryKey === 'agendaEventos') {
+    const count = aqParse(WZ.agendaText || '').length;
+    content = issue ? wizardAgendaHtml() : `<details class="wz-ready-editor"><summary>Editar ${count} evento(s)</summary>${wizardAgendaHtml()}</details>`;
+  } else if (slot.source === 'library' && slot.libraryKey === 'fotosGasteizberri') {
+    const count = clientLibraryItems(RUNDOWN.library || {}, slot.libraryKey, WZ.date || localDatePart()).filter((item) => item.photo).length;
+    content = issue ? wizardPhotosHtml(t) : `<details class="wz-ready-editor"><summary>Editar ${count} foto(s) · ${wizardRotationValue(t) === 'hora' ? 'cada hora' : 'cada día'}</summary>${wizardPhotosHtml(t)}</details>`;
+  }
+  else if (slot.source === 'library') content = `${wizardRotationHtml(t)}${wizardCarouselSummary(t)}${issue ? wizardLibraryHtml(t) : ''}`;
+  else if (slot.source === 'file') {
+    const current = WZ.manual[t.id] || {};
+    content = issue ? `<div class="wz-inline-editor"><input type="file" data-wz-upload="${t.id}" accept="video/mp4,video/*"><select data-wz-video-pick="${t.id}">${videoOptions(current.file || slot.file || '', 'Elegir vídeo guardado…')}</select></div>` : '<div class="hint">Vídeo elegido.</div>';
+  } else if (slot.source === 'fixed' && slot.template === 'noticia') {
+    const current = WZ.manual[t.id] || {};
+    content = issue ? `<div class="wz-inline-editor"><label>Titular<input data-wz-manual="${t.id}:title" value="${esc(current.title || slot.title || '')}"></label></div>` : '<div class="hint">Contenido manual listo.</div>';
+  } else if (slot.source === 'worker') {
+    const worker = (RUNDOWN.workers || []).find((item) => item.key === slot.workerKey);
+    content = `<div class="hint">${worker && worker.preview ? esc(worker.preview) : 'Dato automático'}</div>`;
+  }
+  const pendingSaved = WZ.pendingSavedCardId ? cards.find((card) => String(card.id) === String(WZ.pendingSavedCardId)) : null;
+  return `<section class="wz-lineup-card ${issue ? 'needs-attention' : 'ready'}" data-wz-card-uid="${esc(t.id)}" ${issue ? 'data-wz-issue' : ''}>
+    <div class="wz-lineup-head"><span class="wz-number">${index + 1}</span><b>${esc(slot.label || t.label)}</b><span class="tag ${issue ? 'warn' : 'ok'}">${esc(issue ? issue.reason : 'Lista')}</span></div>
+    ${content}
+    ${pendingSaved ? `<button type="button" class="ghost wz-use-here" data-wz-use-saved-here="${esc(t.id)}">Poner aquí «${esc(pendingSaved.title || pendingSaved.subtitle || 'cartela guardada')}»</button>` : ''}
+    ${wizardPositionChangeHtml(t, index, total)}
+  </section>`;
+}
+
+// Recorrido diario: una pantalla, ocho posiciones reales y solo se despliega
+// lo que falta. La antigua implementación de tres pasos queda arriba durante
+// la migración, pero todas las entradas usan ya este recorrido.
+function renderWizard() {
+  if (!WZ || !RUNDOWN) return;
+  const body = $('#wzBody');
+  const previousScroll = body.scrollTop;
+  const state = wizardReadyState();
+  const pending = state.issues.length + state.missingPositions;
+  $('#wzTitle').textContent = `Próxima tanda · ${state.ready} listas · ${pending} por resolver`;
+  $('#wzProgress').textContent = `${state.ready}/${state.required} listas`;
+  $('#wzProgress').className = `tag ${state.ok ? 'ok' : 'warn'}`;
+  $('#wzBack').hidden = true;
+  $('#wzNext').disabled = false;
+  $('#wzNext').textContent = state.ok
+    ? `Crear vista previa · ${state.required}/${state.required}`
+    : `Resolver ${pending} ${pending === 1 ? 'pendiente' : 'pendientes'}`;
+  const catalog = state.missingPositions ? `<section class="wz-lineup-card needs-attention" data-wz-issue><div class="wz-lineup-head"><b>Faltan ${state.missingPositions} posiciones</b></div><div class="wz-catalog">${PLAN_TYPES.map((type) => `<button type="button" class="ghost" data-wz-add-type="${type.id}">+ ${esc(type.label)}</button>`).join('')}</div></section>` : '';
+  const pendingSaved = WZ.pendingSavedCardId ? cards.find((card) => String(card.id) === String(WZ.pendingSavedCardId)) : null;
+  body.innerHTML = `${wizardErrorHtml()}
+    ${WZ._restored ? '<div class="status wz-draft-ok"><b>Borrador recuperado.</b><button type="button" class="ghost" data-wz-discard>Descartarlo</button></div>' : ''}
+    ${pendingSaved ? `<div class="status wz-error"><b>Elige el hueco que quieres sustituir por «${esc(pendingSaved.title || pendingSaved.subtitle || 'cartela guardada')}».</b></div>` : ''}
+    <div class="wz-one-summary ${state.ok ? 'ready' : ''}"><b>${state.ready}/${state.required} listas</b><span>${state.ok ? 'Todo preparado para crear la vista previa.' : state.issues.map((row) => `${row.issue.label}: ${row.issue.reason}`).join(' · ') || 'Completa las posiciones que faltan.'}</span></div>
+    <div class="wz-lineup">${state.chosen.map((type, index) => wizardSingleSection(type, index, state.chosen.length)).join('')}${catalog}</div>`;
+  body.scrollTop = previousScroll;
+}
+
 // Recoger lo tecleado antes de cambiar de paso
 function wzCollect() {
   const dateInput = $('#wzDate');
   if (dateInput) WZ.date = dateInput.value || localDatePart();
   const d = $('#wzDays');
   if (d) WZ.days = Math.max(1, Math.min(14, Number(d.value) || 3));
+  const agendaText = $('#wzBody').querySelector('[data-wz-agenda-text]');
+  if (agendaText) WZ.agendaText = agendaText.value;
   const agendaBoxes = [...$('#wzBody').querySelectorAll('[data-wz-agenda]')];
   if (agendaBoxes.length) {
     const prevAgenda = WZ.agenda || [];
@@ -4061,20 +4344,30 @@ async function wizardFinish() {
     const days = { ...oldDays };
     if (Object.keys(dayPack).length) days[activeDate] = dayPack;
     else delete days[activeDate];
-    await api('/rundown?date=' + encodeURIComponent(activeDate), { method: 'PUT', body: JSON.stringify({ title: `Guion (${WZ.days} días)`, slots, days }) });
-    await api('/rundown/library', { method: 'PUT', body: JSON.stringify(lib) });
     await api('/workers/refresh', { method: 'POST' }).catch(() => {});
-    const applied = await api('/rundown/materialize', { method: 'POST', body: JSON.stringify({ date: activeDate }) });
+    const applied = await api('/rundown/prepare', {
+      method: 'POST',
+      body: JSON.stringify({
+        date: activeDate,
+        rundown: { title: `Guion (${WZ.days} días)`, slots, days },
+        library: lib,
+        agendaQuick: { text: WZ.agendaText || '', hideExpired: WZ.agendaHideExpired !== false },
+      }),
+    });
+    if (!applied.ok || Number(applied.count) !== Number(applied.requiredCount || requiredVideoCount())) {
+      throw new Error(applied.error || `Solo hay ${applied.count || 0}/${applied.requiredCount || requiredVideoCount()} posiciones listas`);
+    }
     RD_PLAN_DAYS = WZ.days;
     WZ._dirty = false;
     clearWizardDraft();
     wizardDlg.close();
     toast(applied.archived
-      ? `Tanda de 8 preparada · ${applied.archived} cartela(s) antigua(s) quedan guardadas`
-      : 'Tanda de 8 preparada · abriendo la vista previa');
+      ? `Tanda de ${applied.count} preparada · ${applied.archived} cartela(s) antigua(s) quedan guardadas`
+      : `Tanda de ${applied.count} preparada · abriendo la vista previa`);
     load();
     window.open('/review.html', '_blank');
   } catch (e) {
+    WZ.error = e.message || 'No se pudo preparar la tanda';
     toast('Error: ' + e.message);
   } finally {
     btn.disabled = false;
@@ -4116,7 +4409,7 @@ function aqParse(text) {
     const expo = /^EXPO\s+/i.test(l);
     const m = expo ? null : l.match(/^(\d{1,2})[:.hH](\d{2})\s+(.*)$/);
     const time = m ? `${String(m[1]).padStart(2, '0')}:${m[2]}` : '';
-    const rest = (m ? m[3] : (expo ? l.replace(/^EXPO\s+/i, '') : l)).split('|').map((x) => x.trim());
+    const rest = (m ? m[3] : (expo ? l.replace(/^EXPO\s+/i, '') : l)).split(/\s*\|\s*|\s+[—–]\s+/).map((x) => x.trim());
     return { time, type: expo ? 'Exposición' : '', title: rest[0] || '', place: rest[1] || '' };
   }).filter((e) => e.title);
 }
@@ -4225,6 +4518,80 @@ $('#wzClose').addEventListener('click', () => { wzCollect(); saveWizardDraft(); 
 $('#wzAdvanced').addEventListener('click', () => { wzCollect(); saveWizardDraft(); wizardDlg.close(); openRundown(); });
 $('#wzBack').addEventListener('click', () => { wzCollect(); markWizardDirty(); WZ.step = Math.max(1, WZ.step - 1); renderWizard(); saveWizardDraft(); });
 $('#wzBody').addEventListener('click', (e) => {
+  const pickerOpen = e.target.closest('[data-wz-picker-open]');
+  if (pickerOpen) {
+    wzCollect();
+    WZ.pickerUid = pickerOpen.dataset.wzPickerOpen;
+    renderWizard();
+    const card = $('#wzBody').querySelector(`[data-wz-card-uid="${CSS.escape(WZ.pickerUid)}"]`);
+    if (card) card.scrollIntoView({ block: 'start' });
+    return;
+  }
+  if (e.target.closest('[data-wz-picker-close]')) {
+    WZ.pickerUid = '';
+    renderWizard();
+    return;
+  }
+  const typeChoice = e.target.closest('[data-wz-choice-type]');
+  if (typeChoice) {
+    wzCollect();
+    const uid = typeChoice.dataset.wzChoiceUid;
+    const item = WZ.items.find((record) => record.uid === uid);
+    if (!item) return;
+    item.typeId = typeChoice.dataset.wzChoiceType;
+    delete item.slotSnapshot;
+    delete WZ.manual[uid];
+    delete WZ.picks[uid];
+    if (WZ.rotations) delete WZ.rotations[uid];
+    WZ.pickerUid = '';
+    WZ.pendingSavedCardId = '';
+    markWizardDirty();
+    renderWizard();
+    return;
+  }
+  const savedChoice = e.target.closest('[data-wz-choice-saved]');
+  const savedHere = e.target.closest('[data-wz-use-saved-here]');
+  if (savedChoice || savedHere) {
+    wzCollect();
+    const uid = savedChoice ? savedChoice.dataset.wzChoiceUid : savedHere.dataset.wzUseSavedHere;
+    const cardId = savedChoice ? savedChoice.dataset.wzChoiceSaved : WZ.pendingSavedCardId;
+    const item = WZ.items.find((record) => record.uid === uid);
+    const card = cards.find((record) => String(record.id) === String(cardId));
+    if (!item || !card) return;
+    item.typeId = 'saved';
+    item.slotSnapshot = wizardSlotFromManualCard(card);
+    WZ.manual[uid] = { title: card.title || '', subtitle: card.subtitle || '', body: card.body || '', file: card.file || '' };
+    WZ.pickerUid = '';
+    WZ.pendingSavedCardId = '';
+    markWizardDirty();
+    renderWizard();
+    return;
+  }
+  const agendaSuggestion = e.target.closest('[data-wz-agenda-suggestion]');
+  if (agendaSuggestion) {
+    wzCollect();
+    const line = agendaSuggestion.dataset.wzAgendaLine || '';
+    const lines = String(WZ.agendaText || '').split(/\r?\n/).map((item) => item.trim()).filter(Boolean);
+    if (line && !lines.some((item) => item.toLocaleLowerCase('es') === line.toLocaleLowerCase('es'))) lines.push(line);
+    WZ.agendaText = lines.join('\n');
+    markWizardDirty();
+    renderWizard();
+    return;
+  }
+  const photoWeb = e.target.closest('[data-wz-photo-web]');
+  if (photoWeb) {
+    openWpPicker(-1, { scope: 'wizard', key: 'fotosGasteizberri' });
+    return;
+  }
+  const photoRemove = e.target.closest('[data-wz-photo-remove]');
+  if (photoRemove) {
+    wzCollect();
+    const photos = RUNDOWN.library && RUNDOWN.library.fotosGasteizberri;
+    if (Array.isArray(photos)) photos.splice(Number(photoRemove.dataset.wzPhotoRemove), 1);
+    markWizardDirty();
+    renderWizard();
+    return;
+  }
   const goPositions = e.target.closest('[data-wz-go-positions]');
   if (goPositions) {
     wzCollect();
@@ -4429,25 +4796,51 @@ $('#wzBody').addEventListener('change', async (e) => {
       toast('Error al subir: ' + err.message);
     }
   }
+  if (e.target && e.target.matches('[data-wz-photo-upload]') && e.target.files && e.target.files.length) {
+    const files = [...e.target.files];
+    try {
+      toast(`Subiendo ${files.length} foto(s)…`);
+      const meta = libraryMetaForKey('fotosGasteizberri');
+      if (!Array.isArray(RUNDOWN.library.fotosGasteizberri)) RUNDOWN.library.fotosGasteizberri = [];
+      for (const file of files) {
+        const photo = await uploadBlob(file);
+        RUNDOWN.library.fotosGasteizberri.push({ ...blankLibraryItem(meta), title: '', subtitle: '', body: '', photo, template: 'foto' });
+      }
+      markWizardDirty();
+      renderWizard();
+      toast(`${files.length} foto(s) listas`);
+    } catch (err) {
+      toast('Error al subir: ' + err.message);
+    }
+  }
 });
-$('#wzBody').addEventListener('input', () => markWizardDirty());
+$('#wzBody').addEventListener('input', (event) => {
+  if (event.target && event.target.matches('[data-wz-agenda-text]')) {
+    WZ.agendaText = event.target.value;
+    const state = wizardReadyState();
+    $('#wzTitle').textContent = `Próxima tanda · ${state.ready} listas · ${state.issues.length + state.missingPositions} por resolver`;
+    $('#wzProgress').textContent = `${state.ready}/${state.required} listas`;
+    $('#wzProgress').className = `tag ${state.ok ? 'ok' : 'warn'}`;
+    const pending = state.issues.length + state.missingPositions;
+    $('#wzNext').textContent = state.ok ? `Crear vista previa · ${state.required}/${state.required}` : `Resolver ${pending} ${pending === 1 ? 'pendiente' : 'pendientes'}`;
+  }
+  markWizardDirty();
+});
 $('#wzNext').addEventListener('click', () => {
   try {
     wzCollect();
     WZ.error = '';
-    if (WZ.step === 1 && !WZ.items.length) { WZ.error = 'Añade al menos una cartela.'; renderWizard(); toast(WZ.error); return; }
-    if (WZ.step === 1 && !wizardCountState().ok) {
-      WZ.error = wizardCountState().diff < 0 ? 'Faltan cartelas para llegar a 8.' : 'Sobran cartelas: deja exactamente 8.';
-      renderWizard(); toast(WZ.error); return;
+    const state = wizardReadyState();
+    if (!state.ok) {
+      WZ.error = state.missingPositions
+        ? `Faltan ${state.missingPositions} posiciones para llegar a ${state.required}.`
+        : state.issues.map((row) => `${row.issue.label}: ${row.issue.reason}`).join(' · ');
+      renderWizard();
+      const first = $('#wzBody').querySelector('[data-wz-issue]');
+      if (first) first.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      toast('Resuelve lo marcado antes de crear la vista previa');
+      return;
     }
-    if (WZ.step === 2) {
-      const missingFile = wizardChosenTypes().find((t) => t.slot.source === 'file' && !((WZ.manual[t.id] || {}).file || t.slot.file));
-      if (missingFile) {
-        WZ.error = `Falta elegir o subir el MP4 de "${missingFile.slot.label}". Puedes escoger uno guardado en la biblioteca o quitar esa cartela.`;
-        renderWizard(); toast('Falta el MP4'); return;
-      }
-    }
-    if (WZ.step < 3) { WZ.step++; renderWizard(); return; }
     wizardFinish();
   } catch (e) {
     WZ.error = e && e.message ? e.message : 'Ha fallado el asistente al leer este paso.';
@@ -4824,12 +5217,23 @@ $('#libraryList').addEventListener('click', (e) => {
 
 // ===== Selector de fotos de la web (WordPress) para "Fotos GasteizBerri" =====
 const wpDlg = $('#wpDlg');
-let WP_STATE = { page: 1, totalPages: 1, search: '', target: -1 };
+let WP_STATE = { page: 1, totalPages: 1, search: '', target: -1, key: '', scope: 'library', selected: [] };
 
-async function openWpPicker(itemIndex) {
-  collectLibraryCategory();
-  WP_STATE = { page: 1, totalPages: 1, search: '', target: itemIndex };
+async function openWpPicker(itemIndex, options = {}) {
+  const scope = options.scope === 'wizard' ? 'wizard' : 'library';
+  if (scope === 'library') collectLibraryCategory();
+  const key = options.key || (scope === 'library' ? currentLibraryMeta().key : 'fotosGasteizberri');
+  if (scope === 'wizard' && wizardDlg.open) {
+    wzCollect();
+    saveWizardDraft();
+    wizardDlg.close();
+  }
+  WP_STATE = { page: 1, totalPages: 1, search: '', target: itemIndex, key, scope, selected: [] };
   if ($('#wpSearch')) $('#wpSearch').value = '';
+  $('#wpTitle').textContent = scope === 'wizard' ? 'Elige varias fotos' : 'Elige una foto';
+  $('#wpAddSelected').hidden = scope !== 'wizard';
+  $('#wpAddSelected').disabled = true;
+  $('#wpAddSelected').textContent = 'Añadir seleccionadas';
   wpDlg.showModal();
   loadWpPage();
 }
@@ -4843,7 +5247,7 @@ async function loadWpPage() {
     $('#wpPrev').disabled = WP_STATE.page <= 1;
     $('#wpNext').disabled = WP_STATE.page >= WP_STATE.totalPages;
     $('#wpGrid').innerHTML = (r.items || []).map((m) => `
-      <button type="button" data-wp-full="${esc(m.full)}" title="${esc(m.title || '')}"
+      <button type="button" data-wp-full="${esc(m.full)}" data-wp-title="${esc(m.title || '')}" title="${esc(m.title || '')}" aria-pressed="${WP_STATE.selected.some((item) => item.url === m.full) ? 'true' : 'false'}"
         style="background:#0a1a30;border:1px solid var(--line);border-radius:10px;padding:0;overflow:hidden;cursor:pointer;text-align:left">
         <img src="${esc(m.thumb)}" loading="lazy" alt="" style="width:100%;aspect-ratio:4/3;object-fit:cover;display:block">
         <span style="display:block;font-size:11px;color:var(--muted);padding:6px 8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc((m.title || m.date || '').slice(0, 48))}</span>
@@ -4853,6 +5257,17 @@ async function loadWpPage() {
   }
 }
 if (wpDlg) {
+  const closePicker = () => { if (wpDlg.open) wpDlg.close(); };
+  $('#wpClose').addEventListener('click', closePicker);
+  $('#wpCancel').addEventListener('click', closePicker);
+  wpDlg.addEventListener('close', () => {
+    if (WP_STATE.scope === 'wizard' && WZ && !wizardDlg.open) {
+      renderWizard();
+      wizardDlg.showModal();
+      const photoCard = $('#wzBody').querySelector('[data-wz-photo-web]');
+      if (photoCard) setTimeout(() => photoCard.scrollIntoView({ block: 'center' }), 40);
+    }
+  });
   $('#wpPrev').addEventListener('click', () => { WP_STATE.page = Math.max(1, WP_STATE.page - 1); loadWpPage(); });
   $('#wpNext').addEventListener('click', () => { WP_STATE.page++; loadWpPage(); });
   $('#wpSearchBtn').addEventListener('click', () => { WP_STATE.search = $('#wpSearch').value.trim(); WP_STATE.page = 1; loadWpPage(); });
@@ -4860,18 +5275,48 @@ if (wpDlg) {
   $('#wpGrid').addEventListener('click', async (e) => {
     const cell = e.target.closest('[data-wp-full]');
     if (!cell) return;
+    if (WP_STATE.scope === 'wizard') {
+      const url = cell.dataset.wpFull;
+      const index = WP_STATE.selected.findIndex((item) => item.url === url);
+      if (index >= 0) WP_STATE.selected.splice(index, 1);
+      else WP_STATE.selected.push({ url, title: cell.dataset.wpTitle || '' });
+      cell.setAttribute('aria-pressed', index < 0 ? 'true' : 'false');
+      $('#wpAddSelected').disabled = WP_STATE.selected.length === 0;
+      $('#wpAddSelected').textContent = WP_STATE.selected.length ? `Añadir ${WP_STATE.selected.length} foto(s)` : 'Añadir seleccionadas';
+      return;
+    }
     cell.disabled = true;
     toast('Trayendo la foto…');
     try {
       const r = await api('/wp-media/import', { method: 'POST', body: JSON.stringify({ url: cell.dataset.wpFull }) });
-      const meta = currentLibraryMeta();
-      const it = RUNDOWN.library && RUNDOWN.library[meta.key] && RUNDOWN.library[meta.key][WP_STATE.target];
+      const it = RUNDOWN.library && RUNDOWN.library[WP_STATE.key] && RUNDOWN.library[WP_STATE.key][WP_STATE.target];
       if (it) { it.photo = r.photo; rdSetDirty(true); renderLibraryPanel(); }
       wpDlg.close();
       toast('Foto añadida ✓ (recuerda Guardar)');
     } catch (err) {
       toast(err.message || 'No se pudo traer la foto');
       cell.disabled = false;
+    }
+  });
+  $('#wpAddSelected').addEventListener('click', async () => {
+    if (WP_STATE.scope !== 'wizard' || !WP_STATE.selected.length) return;
+    const button = $('#wpAddSelected');
+    button.disabled = true;
+    button.textContent = `Trayendo ${WP_STATE.selected.length}…`;
+    try {
+      if (!Array.isArray(RUNDOWN.library[WP_STATE.key])) RUNDOWN.library[WP_STATE.key] = [];
+      const meta = libraryMetaForKey(WP_STATE.key);
+      for (const selected of WP_STATE.selected) {
+        const result = await api('/wp-media/import', { method: 'POST', body: JSON.stringify({ url: selected.url }) });
+        RUNDOWN.library[WP_STATE.key].push({ ...blankLibraryItem(meta), title: '', subtitle: '', body: '', photo: result.photo, template: 'foto' });
+      }
+      markWizardDirty();
+      toast(`${WP_STATE.selected.length} foto(s) añadidas`);
+      wpDlg.close();
+    } catch (error) {
+      toast(error.message || 'No se pudieron traer las fotos');
+      button.disabled = false;
+      button.textContent = `Reintentar ${WP_STATE.selected.length}`;
     }
   });
 }
@@ -4899,7 +5344,7 @@ let publishBusy = false;
 
 function publishError(r) {
   if (!r || !r.steps) return 'No se pudo preparar la publicación';
-  for (const k of ['generate', 'sequence', 'upload']) {
+  for (const k of ['rundown', 'generate', 'sequence', 'upload']) {
     if (r.steps[k] && r.steps[k].ok === false) return r.steps[k].error || `Falló ${k}`;
   }
   return 'Hubo errores, mira el log';

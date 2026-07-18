@@ -3,6 +3,21 @@
 Cambios relevantes desde la serie 0.100. Se agrupan por entregas de producto;
 las correcciones pequeñas intermedias quedan en el historial Git.
 
+## 0.153.0 — Tanda visual y cierre seguro
+
+- La portada pasa a ser la tanda: ocho huecos numerados, con miniatura real,
+  estado y acciones directas para editar o sustituir.
+- Sustitución visual sin desplegables; las cartelas reutilizables quedan en una
+  zona separada, desaturada y marcada como **NO ACTIVA**.
+- Asistente de una sola vista: conserva los ocho huecos actuales, permite
+  reordenar y resuelve Agenda, varias fotos y rotaciones en el propio hueco.
+- Comprobación previa atómica: si Agenda o Fotos están vacías se detiene antes
+  de renderizar y no altera ni la tanda guardada ni la pantalla.
+- Agenda acepta tanto `19:30 Título | Lugar` como `19:30 | Título | Lugar`, y
+  su texto principal usa una familia más abierta y legible.
+- Los estados operativos se desplazan debajo de la tanda para que no separen
+  las acciones de sus cartelas.
+
 ## 0.152.0 — Candidata F4
 
 - Panel y editor adaptados al iPhone real en vertical y horizontal.

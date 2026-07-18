@@ -1,6 +1,6 @@
 {
   "name": "pantalla",
-  "version": "0.152.0",
+  "version": "0.153.0",
   "description": "Motor de cartelería digital para LA PANTALLA (gasteizberri): genera MP4 con texto/foto variables, importa piezas de vídeo, prepara siempre ocho vídeos con nombres fijos y sube por FTP sobreescribiendo. Incluye panel móvil de admin, logs y status.",
   "type": "commonjs",
   "main": "src/server.js",
@@ -18,6 +18,7 @@
     "qa:templates": "node scripts/qa-template-matrix.js",
     "qa:templates:visual": "node scripts/qa-template-matrix.js --render",
     "qa:rundown-order": "node scripts/qa-rundown-order.js",
+    "qa:rundown-preflight": "node scripts/qa-rundown-preflight.js",
     "backup": "node src/cli.js backup",
     "backup:restore": "node src/cli.js backup:restore",
     "qa:backup": "node scripts/qa-backup.js",
@@ -32,7 +33,7 @@
     "qa:e2e": "playwright test",
     "qa:visual:baseline": "node scripts/qa-visual-diff.js --baseline",
     "qa:visual:check": "node scripts/qa-visual-diff.js",
-    "test": "npm run qa:rundown-order && npm run qa:backup && npm run qa:pipeline-lock && npm run qa:render-close && npm run qa:takeover && npm run qa:templates && npm run qa:autofit && npm run qa:agenda && npm run qa:ui-copy && npm run qa:docs && npm run qa:e2e && npm run qa:visual:check"
+    "test": "npm run qa:rundown-order && npm run qa:rundown-preflight && npm run qa:backup && npm run qa:pipeline-lock && npm run qa:render-close && npm run qa:takeover && npm run qa:templates && npm run qa:autofit && npm run qa:agenda && npm run qa:ui-copy && npm run qa:docs && npm run qa:e2e && npm run qa:visual:check"
   },
   "devDependencies": {
     "@playwright/test": "^1.61.1",
