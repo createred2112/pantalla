@@ -122,6 +122,23 @@ async function runLocked(day, c, opts = {}) {
   }
   const r = require('./rundown').materialize({ date: day });
   audit.event('rundown.materialize', `Escaleta materializada: ${r.count || 0} cartela(s)`, { runId, ok: r.ok !== false, count: r.count });
+  if (r.ok === false) {
+    const error = r.error || 'la tanda automática está incompleta';
+    const result = { ok: false, day, cards: r.count || 0, published: false, prepared: false, error, blockers: r.blockers || [], runId };
+    if (opts.scheduled) {
+      const prev = state();
+      const attempts = (prev && prev.day === day ? Number(prev.attempts || 0) : 0) + 1;
+      status.set('autopilot', { ...result, attempts, mode: publishNow ? 'publish' : 'review' });
+    }
+    if (opts.sync || (opts.hourly && c.liveSync)) {
+      status.set('autopilot-sync', { ...result, mode: publishNow ? 'publish' : 'review', fromHourly: opts.hourly === true });
+    }
+    log.warn('autopilot', `${mode} detenido antes de generar o subir: ${error}`);
+    audit.event('autopilot.stop', `${mode} detenido: tanda incompleta`, {
+      runId, ok: false, source: uploadSource, day, error, blockers: r.blockers || [],
+    });
+    return result;
+  }
   const sig = sequenceSignature();
   if (opts.skipIfUnchanged) {
     const stages = status.read().stages || {};
@@ -131,8 +148,8 @@ async function runLocked(day, c, opts = {}) {
       audit.event('autopilot.skip', 'Sin cambios: se conservan los MP4 y no se sube al FTP', {
         runId, ok: true, source: uploadSource, day, count: r.count, signature: sig,
       });
-      if (opts.sync) {
-        status.set('autopilot-sync', { ok: true, day, cards: r.count, published: false, prepared: !publishNow, mode: publishNow ? 'publish' : 'review', signature: sig, unchanged: true });
+      if (opts.sync || (opts.hourly && c.liveSync)) {
+        status.set('autopilot-sync', { ok: true, day, cards: r.count, published: false, prepared: !publishNow, mode: publishNow ? 'publish' : 'review', signature: sig, unchanged: true, fromHourly: opts.hourly === true });
       }
       return { ok: true, day, cards: r.count, unchanged: true, published: false, prepared: !publishNow, signature: sig };
     }
@@ -166,6 +183,11 @@ async function runLocked(day, c, opts = {}) {
   if (opts.sync) {
     status.set('autopilot-sync', { ok, day, cards: r.count, published: Boolean(pub && pub.ok), prepared: !publishNow, mode: publishNow ? 'publish' : 'review', signature: sig });
   }
+  if (opts.hourly && c.liveSync) {
+    // El pase de la hora también satisface la vigilancia viva; así no se hace
+    // una segunda comprobación idéntica treinta segundos después.
+    status.set('autopilot-sync', { ok, day, cards: r.count, published: Boolean(pub && pub.ok), prepared: !publishNow, mode: publishNow ? 'publish' : 'review', signature: sig, fromHourly: true });
+  }
   log[ok ? 'info' : 'warn']('autopilot',
     `${mode} ${ok ? 'OK' : 'con fallos'}: ${r.count} cartela(s)` +
     (pub ? (pub.ok ? ' · publicado en pantalla' : ' · FALLO al publicar (mira el log)') : ' · pendiente de revisión y publicación manual'));
@@ -197,6 +219,26 @@ async function run(day, c, opts = {}) {
   }
 }
 
+function hourlySlotsFor(day) {
+  try {
+    const rd = require('./rundown').read({ date: day });
+    return (rd.rundown.slots || []).some((s) =>
+      s.enabled !== false && (s.rotation === 'hora' || (s.source === 'worker' && ['weather', 'airQuality'].includes(s.workerKey)))
+    );
+  } catch {
+    return false;
+  }
+}
+
+function hourKeyFor(now, day = localDay(now)) {
+  return `${day}T${String(now.getHours()).padStart(2, '0')}`;
+}
+
+function stageAgeMs(stage) {
+  const ts = Date.parse(stage && stage.ts || '');
+  return Number.isFinite(ts) ? Date.now() - ts : Infinity;
+}
+
 async function tick() {
   const c = conf();
   if (!c.enabled || _running) return;
@@ -215,7 +257,10 @@ async function tick() {
     }
     _running = true;
     try {
-      await run(day, c, { publish: c.publish !== false, scheduled: true });
+      const r = await run(day, c, { publish: c.publish !== false, scheduled: true });
+      if (r.ok && hourlySlotsFor(day)) {
+        status.set('autopilot-hora', { ok: true, hourKey: hourKeyFor(now, day), signature: r.signature || null, unchanged: false, fromScheduled: true });
+      }
     } catch (e) {
       const prev = state();
       const attempts = (prev && prev.day === day ? Number(prev.attempts || 0) : 0) + 1;
@@ -227,13 +272,21 @@ async function tick() {
     return;
   }
 
-  if (c.liveSync && Number(c.syncEveryMinutes || 0) > 0) {
+  // La hora de reloj manda sobre la vigilancia genérica. El pase se hace una
+  // vez por cada hora local y realiza una subida REAL aunque el valor visible
+  // coincida; la caché de render evita volver a fabricar los MP4 sin cambios.
+  if (hourlySlotsFor(day)) {
     const st = status.read().stages || {};
-    const sync = st['autopilot-sync'] || null;
-    if (!sync || Date.now() - Date.parse(sync.ts || 0) >= Number(c.syncEveryMinutes) * 60000) {
+    const hs = st['autopilot-hora'] || null;
+    const hourKey = hourKeyFor(now, day);
+    if (!hs || hs.hourKey !== hourKey || hs.ok === false) {
       _running = true;
       try {
-        await run(day, c, { publish: c.publish !== false, sync: true, skipIfUnchanged: true });
+        const r = await run(day, c, { publish: c.publish !== false, hourly: true });
+        status.set('autopilot-hora', { ok: r.ok, hourKey, signature: r.signature || null, unchanged: false, error: r.error || null });
+      } catch (e) {
+        status.set('autopilot-hora', { ok: false, hourKey, error: e.message });
+        log.warn('autopilot', 'Pase horario: ' + e.message);
       } finally {
         _running = false;
       }
@@ -241,27 +294,23 @@ async function tick() {
     }
   }
 
-  // Pase HORARIO: si el guion tiene bloques horarios o datos que deben respirar
-  // cada hora, se prepara al cambiar la hora (el caché evita trabajo de más).
-  try {
-    const rd = require('./rundown').read({ date: day });
-    const hasHourly = (rd.rundown.slots || []).some((s) =>
-      s.enabled !== false && (s.rotation === 'hora' || (s.source === 'worker' && ['weather', 'airQuality'].includes(s.workerKey)))
-    );
-    if (!hasHourly) return;
-    const hourKey = `${day}T${String(now.getHours()).padStart(2, '0')}`;
+  if (c.liveSync && Number(c.syncEveryMinutes || 0) > 0) {
     const st = status.read().stages || {};
-    const hs = st['autopilot-hora'] || null;
-    if (hs && hs.hourKey === hourKey) return; // esta hora ya está emitida
-    _running = true;
-    try {
-      const r = await run(day, c, { publish: c.publish !== false, hourly: true, skipIfUnchanged: true });
-      status.set('autopilot-hora', { ok: r.ok, hourKey, signature: r.signature || null, unchanged: r.unchanged === true });
-    } finally {
-      _running = false;
+    const sync = st['autopilot-sync'] || null;
+    const regularMinutes = Number(c.syncEveryMinutes);
+    const retryMinutes = Math.max(5, Math.min(regularMinutes, Number(c.retryMinutes) || 30));
+    const dueMinutes = sync && sync.ok === false ? retryMinutes : regularMinutes;
+    if (!sync || stageAgeMs(sync) >= dueMinutes * 60000) {
+      _running = true;
+      try {
+        await run(day, c, { publish: c.publish !== false, sync: true, skipIfUnchanged: true });
+      } catch (e) {
+        status.set('autopilot-sync', { ok: false, day, error: e.message, mode: c.publish ? 'publish' : 'review' });
+        log.warn('autopilot', 'Sincronización viva: ' + e.message);
+      } finally {
+        _running = false;
+      }
     }
-  } catch (e) {
-    log.warn('autopilot', 'Pase horario: ' + e.message);
   }
 }
 
@@ -276,6 +325,9 @@ async function runNow(opts = {}) {
 
 function start() {
   if (_timer) return;
+  // Un reinicio del servicio no espera al siguiente intervalo para recuperar
+  // una hora pendiente.
+  tick().catch((e) => log.warn('autopilot', 'Arranque del piloto: ' + e.message));
   _timer = setInterval(() => { tick().catch(() => {}); }, 30000);
   if (_timer.unref) _timer.unref();
   const c = conf();

@@ -3,6 +3,15 @@
 Cambios relevantes desde la serie 0.100. Se agrupan por entregas de producto;
 las correcciones pequeñas intermedias quedan en el historial Git.
 
+## 1.0.1 — 2026-07-19
+
+- Una Agenda sin eventos activos ya no genera `EVENTO / SIN EVENTOS`: repite
+  automáticamente la promo disponible —u otra pieza válida— y mantiene 8/8.
+- El pase horario se ejecuta por hora de reloj, realiza una subida FTP real y
+  reintenta las horas que coincidieron con otra publicación o fallaron.
+- Una tanda incompleta detiene el piloto antes de generar o subir, sin ocultar
+  el fallo como una ejecución «sin cambios».
+
 ## 1.0.0 — Primera versión estable
 
 - Recorrido diario consolidado alrededor de ocho huecos visibles: Agenda,

@@ -62,6 +62,17 @@ const generic = agenda.parseAgendaLine('Mercado de la Almendra | Casco Viejo');
 assert.strictEqual(generic.signal, 'EVENTO', 'un evento manual sin hora necesita igualmente un rótulo grande');
 assert.strictEqual(generic.venue, 'CASCO VIEJO');
 
+assert.deepStrictEqual(agenda.videoScenes({ title: 'Agenda', body: '' }), [], 'una agenda vacía no puede inventar EVENTO / SIN EVENTOS');
+assert.throws(
+  () => agenda.build({ title: 'Agenda', body: '' }, {
+    W: 1920, H: 1080,
+    theme: { accent: '#ef2b2d', accentText: '#fff', bg: '#f4f3ef', text: '#111', textMuted: '#777' },
+    brand: { website: 'GasteizBerri.com' },
+  }),
+  /Agenda sin eventos/,
+  'la última defensa de render tampoco debe producir la cartela EVENTO'
+);
+
 console.log('OK: Agenda LED usa una escena por evento, HORA/EXPO gigantes y conserva el tipo de Kulturklik');
 
 if (process.argv.includes('--render')) {

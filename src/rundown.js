@@ -4,7 +4,7 @@
 const fs = require('fs');
 const path = require('path');
 const store = require('./store');
-const { cfg } = require('./config');
+const { cfg, abs } = require('./config');
 
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const RUNDOWN_FILE = path.join(DATA_DIR, 'rundown.json');
@@ -312,7 +312,10 @@ function resolveAgendaItem(item, library) {
       return agendaEventLine(showEventDates ? dated : { ...dated, date: '' });
     })
     .filter(Boolean);
-  return { ...item, body: lines.join('\n') || item.body || '' };
+  // Si todos los eventos han caducado, la pieza queda realmente vacía. No se
+  // conserva el body materializado en una pasada anterior: hacerlo resucitaba
+  // eventos viejos y, en el peor caso, acababa generando «EVENTO / SIN EVENTOS».
+  return { ...item, body: lines.join('\n') };
 }
 
 function libraryItems(library, key, date) {
@@ -1012,7 +1015,9 @@ function shouldMaterialize(slot, library, date, pickMap = {}, autoPickMap = {}) 
   if (isEmptyManualNewsSlot(s)) return false;
   if (s.source === 'library' && s.libraryKey === 'agendaEventos') {
     const p = slotPayload(s, library, date, { pickIndex: pickMap[s.id], autoPick: autoPickMap[s.id] });
-    return Boolean(!p.missing && (p.title || p.body));
+    // «Agenda» es solo la cabecera. Para emitirla tiene que existir al menos
+    // una línea de evento real; el título por sí solo nunca completa el bloque.
+    return Boolean(!p.missing && String(p.body || '').trim());
   }
   // Foto GasteizBerri: sin foto elegida no hay nada que emitir (nada de
   // cartelas "pendiente" en pantalla).
@@ -1023,23 +1028,74 @@ function shouldMaterialize(slot, library, date, pickMap = {}, autoPickMap = {}) 
   return true;
 }
 
+function agendaFallbackSlot(rundown, library, date, pickMap = {}, autoPickMap = {}, skip = new Set()) {
+  const candidates = (rundown.slots || [])
+    .map(normalizeSlot)
+    .filter((s) => s.enabled !== false && !skip.has(String(s.id)))
+    .filter((s) => !(s.source === 'library' && s.libraryKey === 'agendaEventos'))
+    .filter((s) => shouldMaterialize(s, library, date, pickMap, autoPickMap))
+    .map((s) => {
+      const p = slotPayload(s, library, date, { pickIndex: pickMap[s.id], autoPick: autoPickMap[s.id] });
+      if (p.missing && s.source !== 'worker') return null;
+      if (s.source === 'file') {
+        if (!p.file) return null;
+        try { if (!fs.existsSync(abs(p.file))) return null; } catch { return null; }
+      }
+      const words = `${s.id} ${s.label} ${s.title} ${p.title}`;
+      const score = s.source === 'file' && /promo|cortes[ií]a|spot|video/i.test(words)
+        ? 100
+        : (s.source === 'file' ? 80 : (/promo|cortes[ií]a|cierre|intro/i.test(words) ? 60 : 20));
+      return { slot: s, payload: p, score };
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.score - a.score);
+  return candidates.length ? candidates[0] : null;
+}
+
+function agendaIsEmpty(slot, library, date, pickMap = {}, autoPickMap = {}) {
+  const s = normalizeSlot(slot);
+  if (s.enabled === false || !(s.source === 'library' && s.libraryKey === 'agendaEventos')) return false;
+  const p = slotPayload(s, library, date, { pickIndex: pickMap[s.id], autoPick: autoPickMap[s.id] });
+  return Boolean(p.missing || !String(p.body || '').trim());
+}
+
+function fallbackCardForAgenda(agendaSlot, fallback, library, order, date, pickMap, autoPickMap) {
+  const agenda = normalizeSlot(agendaSlot);
+  const base = toCard(fallback.slot, library, order, date, pickMap, '', autoPickMap);
+  return store.normalize({
+    ...base,
+    id: `rd_${agenda.id}_fallback`,
+    order,
+    enabled: true,
+    // La pieza repetida ocupa la posición de Agenda, pero conserva la
+    // presentación y el archivo de la promo elegida.
+    slug: `${agenda.id}-fallback`,
+    rundownSlot: agenda.id,
+  });
+}
+
 function report(rundown, library, date) {
   const skip = skipSetFor(rundown, date);
   const pick = pickMapFor(rundown, date);
   const autoPick = autoPickMapFor(rundown, date);
+  const agendaFallback = agendaFallbackSlot(rundown, library, date, pick, autoPick, skip);
   const limit = emissionLimit();
   let emissionOrder = 0;
   return (rundown.slots || []).map((slot, i) => {
     const s = normalizeSlot(slot);
-    const p = slotPayload(s, library, date, { pickIndex: pick[s.id], autoPick: autoPick[s.id] });
+    const originalPayload = slotPayload(s, library, date, { pickIndex: pick[s.id], autoPick: autoPick[s.id] });
+    const emptyAgenda = agendaIsEmpty(s, library, date, pick, autoPick);
+    const usesAgendaFallback = emptyAgenda && Boolean(agendaFallback);
+    const p = usesAgendaFallback ? agendaFallback.payload : originalPayload;
     const plan = libraryPlanForSlot(s, library, date, pick[s.id], autoPick[s.id]);
     const skippedToday = skip.has(s.id);
     const emptyManualNews = isEmptyManualNewsSlot(s);
-    const agendaSkipped = s.source === 'library' && s.libraryKey === 'agendaEventos' && (p.missing || (!p.title && !p.body));
+    const agendaSkipped = emptyAgenda && !usesAgendaFallback;
     const fotoSkipped = s.source === 'library' && s.libraryKey === 'fotosGasteizberri' && (p.missing || !p.photo);
     const autoSkipped = emptyManualNews || agendaSkipped || fotoSkipped;
-    const missing = s.enabled && !skippedToday && !autoSkipped && (p.missing || !p.title);
-    const eligible = !skippedToday && shouldMaterialize(s, library, date, pick, autoPick);
+    const cleanPhotoReady = s.source === 'library' && s.libraryKey === 'fotosGasteizberri' && Boolean(p.photo);
+    const missing = s.enabled && !skippedToday && !autoSkipped && (p.missing || (!p.title && !cleanPhotoReady));
+    const eligible = !skippedToday && (usesAgendaFallback || shouldMaterialize(s, library, date, pick, autoPick));
     let inEmission = false;
     let slotEmissionOrder = null;
     if (eligible) {
@@ -1066,9 +1122,10 @@ function report(rundown, library, date) {
       skippedToday,
       note: emptyManualNews
         ? 'Noticia vacia: anade contenido para incluirla'
-        : (agendaSkipped ? 'Sin agenda activa para este momento'
+        : (usesAgendaFallback ? `Sin eventos: se repite ${agendaFallback.slot.label || agendaFallback.payload.title || 'una promo'}`
+        : (agendaSkipped ? 'Sin agenda activa ni otra pieza disponible para sustituirla'
         : (fotoSkipped ? 'Sin fotos en el banco: elige fotos de la web'
-        : (missing ? (s.source === 'worker' ? `Pendiente worker: ${s.workerKey}` : (s.source === 'file' ? 'Falta seleccionar el archivo MP4' : 'Pendiente de contenido')) : ''))),
+        : (missing ? (s.source === 'worker' ? `Pendiente worker: ${s.workerKey}` : (s.source === 'file' ? 'Falta seleccionar el archivo MP4' : 'Pendiente de contenido')) : '')))),
       chosenIndex: plan ? plan.chosenIndex : null,
       manualPick: Object.prototype.hasOwnProperty.call(pick, s.id),
       autoPick: Object.prototype.hasOwnProperty.call(autoPick, s.id),
@@ -1157,13 +1214,21 @@ function materialize(options = {}) {
   const skip = skipSetFor(rundown, activeDate);
   const pick = pickMapFor(rundown, activeDate);
   const autoPick = autoPickMapFor(rundown, activeDate);
-  const eligible = (rundown.slots || []).filter((s) => !skip.has(String(s.id)) && shouldMaterialize(s, library, activeDate, pick, autoPick));
+  const agendaFallback = agendaFallbackSlot(rundown, library, activeDate, pick, autoPick, skip);
+  const eligible = (rundown.slots || [])
+    .filter((s) => !skip.has(String(s.id)))
+    .map((slot) => agendaIsEmpty(slot, library, activeDate, pick, autoPick) && agendaFallback
+      ? { slot, fallback: agendaFallback }
+      : { slot, fallback: null })
+    .filter((entry) => entry.fallback || shouldMaterialize(entry.slot, library, activeDate, pick, autoPick));
   const limit = emissionLimit();
   const active = limit ? eligible.slice(0, limit) : eligible;
   const omitted = limit && eligible.length > limit
-    ? eligible.slice(limit).map((s) => ({ id: String(s.id), label: String(s.label || s.id || '') }))
+    ? eligible.slice(limit).map(({ slot: s }) => ({ id: String(s.id), label: String(s.label || s.id || '') }))
     : [];
-  const generated = active.map((slot, i) => toCard(slot, library, i + 1, activeDate, pick, '', autoPick));
+  const generated = active.map((entry, i) => entry.fallback
+    ? fallbackCardForAgenda(entry.slot, entry.fallback, library, i + 1, activeDate, pick, autoPick)
+    : toCard(entry.slot, library, i + 1, activeDate, pick, '', autoPick));
   if (!plan.ok) {
     return {
       ok: false,

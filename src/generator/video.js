@@ -358,6 +358,7 @@ async function renderAgendaSlideshow(card, prep, deadline) {
   const { ctx, tpl } = prep;
   const { W, H } = ctx;
   const scenes = tpl.videoScenes(card);
+  if (!scenes.length) throw new Error('Agenda sin eventos: se conserva otra pieza en su lugar');
   const configuredFps = Number(cfg.video && cfg.video.fps) || 25;
   const fps = Math.min(Math.max(8, configuredFps), MAX_FULL_FPS);
   const secondsPerScene = Math.max(5, (Number(card.duration) || 10) / Math.max(1, scenes.length));

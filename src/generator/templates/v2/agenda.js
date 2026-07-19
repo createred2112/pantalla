@@ -77,11 +77,11 @@ function parseItems(card) {
 
 function videoScenes(card) {
   const lines = String(card && card.body || '').split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
-  return (lines.length ? lines : ['EVENTO | SIN EVENTOS']).map((line, index) => ({
+  return lines.map((line, index) => ({
     ...card,
     body: line,
     _agendaSceneIndex: index,
-    _agendaSceneCount: Math.max(1, lines.length),
+    _agendaSceneCount: lines.length,
   }));
 }
 
@@ -100,7 +100,8 @@ module.exports = {
     const topH = K.r(H * 0.17);
     const botH = K.r(H * 0.13);
     const els = [];
-    const item = parseItems(card)[0] || { signal: 'EVENTO', kind: 'event', name: 'SIN EVENTOS', venue: '', date: '' };
+    const item = parseItems(card)[0];
+    if (!item) throw new Error('Agenda sin eventos: no se genera una cartela de relleno');
     const cleanTitle = String(card.title || '').trim();
     const title = (!cleanTitle || cleanTitle.length < 3) ? 'AGENDA' : cleanTitle;
     const subtitle = String(card.subtitle || item.date || '').trim();

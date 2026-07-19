@@ -110,7 +110,7 @@ test('agenda exprés: guardar hoy y mañana y releerlas', async () => {
 });
 
 // ---------- 3. PRÓXIMA TANDA: OCHO POSICIONES Y PENDIENTES RESOLUBLES ----------
-test('preflight: Agenda y Foto vacías son 6/8 sin modificar la tanda', async () => {
+test('preflight: Agenda vacía usa promo y Foto vacía deja 7/8 sin modificar la tanda', async () => {
   const current = await (await page.request.get('/api/rundown')).json();
   const cardsBefore = await (await page.request.get('/api/cards')).json();
   const library = structuredClone(current.library);
@@ -123,8 +123,9 @@ test('preflight: Agenda y Foto vacías son 6/8 sin modificar la tanda', async ()
   expect(response.ok()).toBeTruthy();
   const result = await response.json();
   expect(result.structuralCount).toBe(8);
-  expect(result.readyCount).toBe(6);
-  expect(result.blockers.map((item) => item.code)).toEqual(['agenda-empty', 'photo-empty']);
+  expect(result.readyCount).toBe(7);
+  expect(result.blockers.map((item) => item.code)).toEqual(['photo-empty']);
+  expect(result.report.find((item) => item.libraryKey === 'agendaEventos').note).toMatch(/se repite/i);
 
   const rejected = await page.request.post('/api/rundown/prepare', {
     data: { date: current.activeDate, rundown: current.rundown, library, agendaQuick: { text: '' } },

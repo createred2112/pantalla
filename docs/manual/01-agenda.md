@@ -13,5 +13,7 @@
 Usa `EXPO` en exposiciones sin hora. Cada evento saldrá como una escena propia,
 con hora o `EXPO`, título y lugar en tamaño grande.
 
-Si no hay eventos, la cartela de Agenda no se emite ese día. **Modo avanzado**
-solo hace falta para programaciones excepcionales.
+Si no hay eventos, nunca se muestra una cartela `EVENTO` vacía. Esa posición
+repite automáticamente el vídeo promo disponible —u otra pieza válida— para
+mantener completa la tanda. **Modo avanzado** solo hace falta para
+programaciones excepcionales.

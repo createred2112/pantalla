@@ -104,6 +104,8 @@ EXPO | Mirar el agua | Montehermoso
 También ofrece sugerencias de Kulturklik. Una exposición sin hora conserva su
 tipo `EXPO`; no recibe una hora inventada. En el vídeo, cada evento es una
 escena independiente con hora/tipo, título y lugar a tamaño de panel LED.
+Si no hay eventos activos, Agenda no inventa una cartela vacía: su posición
+repite automáticamente el vídeo promo disponible (u otra pieza válida).
 
 ## Plantillas y editor
 

@@ -31,6 +31,10 @@ module.exports = async () => {
   if (fs.existsSync(path.join(SNAP, 'manifest.json'))) {
     await require('./global-teardown')();
   }
+  // Un takeover asíncrono puede seguir renderizando cuando Playwright apaga el
+  // servidor de la pasada anterior. Al morir deja un candado cuyo PID ya no
+  // existe; se retira con las mismas comprobaciones seguras de producción.
+  try { require(path.join(ROOT, 'src', 'util', 'pipelineLock')).cleanup(); } catch {}
   fs.rmSync(SNAP, { recursive: true, force: true });
   fs.mkdirSync(SNAP, { recursive: true });
   const present = [];
