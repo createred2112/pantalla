@@ -98,6 +98,9 @@ async function suggest(key, existingTitles = []) {
 const KK_CACHE = path.join(path.dirname(paths.data), 'kulturklik-cache.json');
 const KK_MAX_PAGES = 6;
 const KK_CACHE_VERSION = 2;
+const MUNICIPAL_CACHE = path.join(path.dirname(paths.data), 'agenda-municipal-cache.json');
+const MUNICIPAL_CACHE_VERSION = 1;
+const MUNICIPAL_AGENDA_URL = 'https://www.vitoria-gasteiz.org/wb021/was/we001Action.do?idioma=es&accionWe001=ficha&accion=calMunicipales&primeraVezCalen=true';
 
 function kkTime(hours) {
   const m = String(hours || '').match(/(\d{1,2})[:.](\d{2})/);
@@ -116,6 +119,88 @@ function normalizeKulturklikEvent(ev) {
     place: clean(ev.establishmentEs || ev.establishmentEu || '', 60),
     type,
   };
+}
+
+function decodeHtmlAttribute(value) {
+  const named = { quot: '"', apos: "'", amp: '&', lt: '<', gt: '>' };
+  return String(value || '')
+    .replace(/&#x([0-9a-f]+);/gi, (_, code) => String.fromCodePoint(parseInt(code, 16)))
+    .replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(Number(code)))
+    .replace(/&(quot|apos|amp|lt|gt);/gi, (_, name) => named[name.toLowerCase()]);
+}
+
+function municipalCalendarData(html) {
+  const source = String(html || '');
+  const marker = source.search(/\bname\s*=\s*["']jsonCalendarioCompleto["']/i);
+  if (marker < 0) throw new Error('La agenda municipal no incluye sus datos estructurados');
+  const start = source.lastIndexOf('<input', marker);
+  const end = source.indexOf('>', marker);
+  if (start < 0 || end < 0) throw new Error('No se pudo leer el bloque de la agenda municipal');
+  const tag = source.slice(start, end + 1);
+  const value = tag.match(/\bvalue\s*=\s*"([\s\S]*)"\s+id\s*=/i);
+  if (!value) throw new Error('La agenda municipal ha cambiado el formato de sus datos');
+  try {
+    return JSON.parse(decodeHtmlAttribute(value[1]));
+  } catch {
+    throw new Error('La agenda municipal devolvió datos no válidos');
+  }
+}
+
+function normalizeMunicipalEvent(ev) {
+  return {
+    time: kkTime(ev.horaInicio),
+    title: clean(ev.titulo, 110),
+    place: clean(ev.localizacion, 60),
+    type: clean(ev.tipo, 30) || 'Agenda municipal',
+    url: decodeHtmlAttribute(ev.url || ''),
+  };
+}
+
+function parseMunicipalAgendaHtml(html, dateStr) {
+  const day = String(dateStr || '').slice(0, 10) || new Date().toLocaleDateString('sv-SE');
+  const compactDay = day.replace(/-/g, '');
+  const data = municipalCalendarData(html);
+  const rows = data && data.actividades && Array.isArray(data.actividades.resultados)
+    ? data.actividades.resultados
+    : [];
+  const seen = new Set();
+  const items = [];
+  for (const ev of rows) {
+    if (!ev || ev.isCancelado === true || String(ev.fechaInicio || '') !== compactDay) continue;
+    const item = normalizeMunicipalEvent(ev);
+    const key = `${item.time}|${item.title}|${item.place}`.toLocaleLowerCase('es');
+    if (!item.title || seen.has(key)) continue;
+    seen.add(key);
+    items.push(item);
+  }
+  items.sort((a, b) => String(a.time || '99:99').localeCompare(String(b.time || '99:99')) || a.title.localeCompare(b.title, 'es'));
+  return items.slice(0, 40);
+}
+
+// Agenda oficial del Ayuntamiento. La página ya incluye un JSON estructurado
+// con fecha, hora, título y lugar; se consulta solo al abrir Agenda exprés y se
+// conserva en disco durante el resto del día.
+async function municipalAgenda(dateStr) {
+  const day = String(dateStr || '').slice(0, 10) || new Date().toLocaleDateString('sv-SE');
+  const today = new Date().toLocaleDateString('sv-SE');
+  let cache = {};
+  try { cache = JSON.parse(fs.readFileSync(MUNICIPAL_CACHE, 'utf8')) || {}; } catch {}
+  const hit = cache[day];
+  if (hit && hit.version === MUNICIPAL_CACHE_VERSION && hit.fetchedOn === today && Array.isArray(hit.items)) {
+    return { ok: true, cached: true, date: day, items: hit.items };
+  }
+  const r = await fetch(MUNICIPAL_AGENDA_URL, {
+    headers: { accept: 'text/html', 'user-agent': 'la-pantalla-gasteizberri/1.0' },
+    signal: AbortSignal.timeout(15000),
+  });
+  if (!r.ok) throw new Error('Agenda municipal respondió ' + r.status);
+  const items = parseMunicipalAgendaHtml(await r.text(), day);
+  const next = {};
+  next[day] = { version: MUNICIPAL_CACHE_VERSION, fetchedOn: today, items };
+  for (const [key, value] of Object.entries(cache)) if (key >= today && key !== day) next[key] = value;
+  try { fs.writeFileSync(MUNICIPAL_CACHE, JSON.stringify(next)); } catch {}
+  log.info('suggest', `Agenda municipal ${day}: ${items.length} evento(s) cacheados`);
+  return { ok: true, cached: false, date: day, items };
 }
 
 async function kulturklik(dateStr) {
@@ -155,4 +240,13 @@ async function kulturklik(dateStr) {
   return { ok: true, cached: false, date: day, items: top };
 }
 
-module.exports = { suggest, kulturklik, normalizeKulturklikEvent, SEEDS };
+module.exports = {
+  suggest,
+  kulturklik,
+  municipalAgenda,
+  parseMunicipalAgendaHtml,
+  normalizeKulturklikEvent,
+  normalizeMunicipalEvent,
+  MUNICIPAL_AGENDA_URL,
+  SEEDS,
+};

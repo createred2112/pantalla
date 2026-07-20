@@ -562,8 +562,8 @@ app.get('/api/agenda/quick', (req, res) => {
   res.json(rundown.quickAgenda(req.query.date));
 });
 
-// Sugerencias de eventos desde la propia web (fuente verificada): prueba
-// The Events Calendar, luego tipos de contenido tipo agenda/evento del WP.
+// Sugerencias de eventos desde fuentes verificadas: agenda oficial municipal,
+// Kulturklik y, como respaldo, calendarios/contenidos de la propia web.
 function stripHtml(s) {
   return String(s || '')
     .replace(/<[^>]+>/g, '')
@@ -576,7 +576,7 @@ app.get('/api/agenda/web', async (req, res) => {
   const day = String(req.query.date || '').slice(0, 10) || new Date().toISOString().slice(0, 10);
   const base = wpBase();
   const items = [];
-  let source = '';
+  const sources = [];
   const seen = new Set();
   const push = (it) => {
     const title = stripHtml(it.title);
@@ -592,17 +592,29 @@ app.get('/api/agenda/web', async (req, res) => {
       url: it.url || '',
     });
   };
-  // 0) KULTURKLIK (Open Data Euskadi): agenda cultural de Vitoria-Gasteiz.
+  // 0) AYUNTAMIENTO: agenda pública oficial, con hora y ubicación. La página
+  //    contiene JSON estructurado y se consulta como máximo una vez al día.
+  try {
+    const before = items.length;
+    const municipal = await require('./suggestions').municipalAgenda(day);
+    for (const ev of (municipal.items || []).slice(0, 20)) push(ev);
+    if (items.length > before) sources.push('Ayuntamiento de Vitoria-Gasteiz' + (municipal.cached ? ' (actualizado hoy)' : ''));
+  } catch (e) {
+    log.warn('agenda', 'Agenda municipal no disponible: ' + e.message);
+  }
+  // 1) KULTURKLIK (Open Data Euskadi): agenda cultural de Vitoria-Gasteiz.
   //    Una descarga al día por fecha, cacheada; el resto del día sale de disco.
   try {
+    const before = items.length;
     const kk = await require('./suggestions').kulturklik(day);
-    for (const ev of kk.items || []) push({ title: ev.title, time: ev.time, place: ev.place, type: ev.type });
-    if (items.length) source = 'Kulturklik / Euskadi.eus' + (kk.cached ? ' (actualizado hoy)' : '');
+    for (const ev of (kk.items || []).slice(0, 20)) push({ title: ev.title, time: ev.time, place: ev.place, type: ev.type });
+    if (items.length > before) sources.push('Kulturklik / Euskadi.eus' + (kk.cached ? ' (actualizado hoy)' : ''));
   } catch (e) {
     log.warn('agenda', 'Kulturklik no disponible: ' + e.message);
   }
-  // 1) The Events Calendar (plugin de eventos más común en WordPress)
+  // 2) The Events Calendar (plugin de eventos más común en WordPress)
   try {
+    const before = items.length;
     const u = new URL(base + '/wp-json/tribe/events/v1/events');
     u.searchParams.set('start_date', `${day} 00:00:00`);
     u.searchParams.set('end_date', `${day} 23:59:59`);
@@ -613,10 +625,10 @@ app.get('/api/agenda/web', async (req, res) => {
       for (const ev of j.events || []) {
         push({ title: ev.title, time: String(ev.start_date || '').slice(11, 16), place: ev.venue && (ev.venue.venue || ev.venue.address), url: ev.url });
       }
-      if (items.length && !source) source = 'calendario de eventos de la web';
+      if (items.length > before) sources.push('calendario de eventos de la web');
     }
   } catch {}
-  // 2) Tipos de contenido personalizados que suenen a agenda/evento
+  // 3) Tipos de contenido personalizados que suenen a agenda/evento
   if (!items.length) {
     try {
       const r = await fetch(base + '/wp-json/wp/v2/types', { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(12000) });
@@ -626,22 +638,22 @@ app.get('/api/agenda/web', async (req, res) => {
           const rr = await fetch(base + `/wp-json/wp/v2/${t.rest_base}?per_page=20&orderby=date&order=desc`, { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(12000) });
           if (!rr.ok) continue;
           for (const p of await rr.json()) push({ title: p.title && p.title.rendered, url: p.link });
-          if (items.length) { source = `contenido "${t.slug}" de la web`; break; }
+          if (items.length) { sources.push(`contenido "${t.slug}" de la web`); break; }
         }
       }
     } catch {}
   }
-  // 3) Últimas entradas que mencionen agenda (mejor que nada)
+  // 4) Últimas entradas que mencionen agenda (mejor que nada)
   if (!items.length) {
     try {
       const r = await fetch(base + '/wp-json/wp/v2/posts?search=agenda&per_page=10&orderby=date&order=desc', { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(12000) });
       if (r.ok) {
         for (const p of await r.json()) push({ title: p.title && p.title.rendered, url: p.link });
-        if (items.length) source = 'entradas recientes con "agenda"';
+        if (items.length) sources.push('entradas recientes con "agenda"');
       }
     } catch {}
   }
-  res.json({ ok: true, date: day, base, source, items: items.slice(0, 30) });
+  res.json({ ok: true, date: day, base, source: sources.join(' + '), items: items.slice(0, 30) });
 });
 
 app.post('/api/agenda/quick', (req, res) => {

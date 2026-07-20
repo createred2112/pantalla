@@ -1,7 +1,7 @@
 'use strict';
 
 const assert = require('assert');
-const { normalizeKulturklikEvent } = require('../src/suggestions');
+const { normalizeKulturklikEvent, parseMunicipalAgendaHtml } = require('../src/suggestions');
 const agenda = require('../src/generator/templates/v2/agenda');
 
 const exhibition = normalizeKulturklikEvent({
@@ -21,6 +21,26 @@ const concert = normalizeKulturklikEvent({
   establishmentEs: 'Teatro Principal',
 });
 assert.strictEqual(concert.time, '21:30', 'un concierto sí debe conservar su hora de inicio');
+
+const municipalPayload = {
+  actividades: {
+    resultados: [
+      { fechaInicio: '20260720', horaInicio: '19:30', titulo: 'Circo: "Mute"', localizacion: 'Centro cívico Hegoalde', url: 'https://example.test/evento?a=1&b=2', isCancelado: false },
+      { fechaInicio: '20260720', horaInicio: '11:00', titulo: 'Visita guiada', localizacion: 'Catedral Nueva', url: 'https://example.test/visita', isCancelado: false },
+      { fechaInicio: '20260720', horaInicio: '10:00', titulo: 'Evento cancelado', localizacion: 'Plaza Nueva', isCancelado: true },
+      { fechaInicio: '20260721', horaInicio: '12:00', titulo: 'Evento de mañana', localizacion: 'Ataria', isCancelado: false },
+    ],
+  },
+};
+const municipalEncoded = JSON.stringify(municipalPayload)
+  .replace(/&/g, '&amp;')
+  .replace(/"/g, '&quot;');
+const municipalHtml = `<input type="hidden" name="jsonCalendarioCompleto" value="${municipalEncoded}" id="jsonCalendarioCompleto_qa">`;
+const municipal = parseMunicipalAgendaHtml(municipalHtml, '2026-07-20');
+assert.deepStrictEqual(municipal.map((ev) => ev.time), ['11:00', '19:30'], 'la agenda municipal debe filtrar el día, omitir cancelados y ordenar por hora');
+assert.strictEqual(municipal[1].title, 'Circo: "Mute"', 'las comillas del JSON municipal deben conservarse');
+assert.strictEqual(municipal[1].place, 'Centro cívico Hegoalde');
+assert.strictEqual(municipal[1].url, 'https://example.test/evento?a=1&b=2', 'los parámetros del enlace municipal deben decodificarse');
 
 const longTitle = 'Naturaleza y cultura: las montañas como fuente de inspiración para una exposición extraordinariamente larga';
 const longVenue = 'Ataria - Centro de interpretación de los humedales de Salburua';
@@ -73,7 +93,7 @@ assert.throws(
   'la última defensa de render tampoco debe producir la cartela EVENTO'
 );
 
-console.log('OK: Agenda LED usa una escena por evento, HORA/EXPO gigantes y conserva el tipo de Kulturklik');
+console.log('OK: Agenda combina fuentes municipal/Kulturklik y usa una escena gigante por evento');
 
 if (process.argv.includes('--render')) {
   const fs = require('fs');

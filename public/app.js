@@ -4211,7 +4211,7 @@ function wizardAgendaHtml() {
     </label>
     <div class="hint">${events.length ? `<b>${events.length} evento(s) elegidos.</b>` : 'Añade al menos un evento.'} Una línea por evento.</div>
     <div class="wz-agenda-suggestions">
-      ${WZ.agendaSuggestionsLoading ? '<span class="hint">Buscando propuestas de Kulturklik…</span>' : suggestions.map((event, index) => `<button type="button" class="ghost" data-wz-agenda-suggestion="${index}" data-wz-agenda-line="${esc(wizardAgendaLine(event))}">+ ${esc(event.title || '')}${event.time ? ` · ${esc(event.time)}` : ''}</button>`).join('')}
+      ${WZ.agendaSuggestionsLoading ? '<span class="hint">Buscando propuestas del Ayuntamiento y Kulturklik…</span>' : suggestions.map((event, index) => `<button type="button" class="ghost" data-wz-agenda-suggestion="${index}" data-wz-agenda-line="${esc(wizardAgendaLine(event))}">+ ${esc(event.title || '')}${event.time ? ` · ${esc(event.time)}` : ''}</button>`).join('')}
       ${!WZ.agendaSuggestionsLoading && !suggestions.length ? '<span class="hint">No quedan propuestas por añadir.</span>' : ''}
     </div>
   </div>`;

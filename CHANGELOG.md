@@ -3,6 +3,13 @@
 Cambios relevantes desde la serie 0.100. Se agrupan por entregas de producto;
 las correcciones pequeñas intermedias quedan en el historial Git.
 
+## 1.0.2 — 2026-07-20
+
+- Agenda exprés incorpora eventos de la agenda oficial del Ayuntamiento de
+  Vitoria-Gasteiz, con fecha, hora, lugar y enlace estructurados.
+- Las propuestas municipales se combinan con Kulturklik, se deduplican y se
+  cachean durante el día; los eventos cancelados quedan fuera.
+
 ## 1.0.1 — 2026-07-19
 
 - Una Agenda sin eventos activos ya no genera `EVENTO / SIN EVENTOS`: repite
